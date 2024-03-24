@@ -28,6 +28,12 @@ If not I try to keep everything in one section by general functionality area. Al
 to a series of smaller ones for both reading and modifying. This may shift in the future but currently I only move code out to
 a new file if it reaches a "sufficiently" large size.
 
+Style-wise I prefer a fairly minimal design theme. I'm currently using the solarized light theme  and have changed most faces to just
+use the same  gray color or a bolder one for emphasis. I really only want color in critical locations. However that's mostly not seen here
+since I use the customization mechanism and all of those tweaks are in the custom.el file.
+
+![sample screen](./sample-screen.png)
+
 I have a work style where I want to have a manageable small set of files open in a tabbed format. I'll save
 these to a desktop and reload them when I start things up again. I've plumbed save/load desktop into the system menus
 and also extensively modified tab-line to fit my work flow.
