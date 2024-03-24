@@ -9,8 +9,9 @@
  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
 ```
 
-Emacs configuration file
-Author: Benjamin 
+My emacs configuration file
+
+Author: Benjamin Leis
 
 # Commentary:
 
