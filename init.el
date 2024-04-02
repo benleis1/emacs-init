@@ -9,7 +9,8 @@
 ;;  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
 ;; ```
 
-;; Emacs configuration file
+;; My emacs configuration file
+
 ;; Author: Benjamin Leis
 
 ;;; Commentary:
@@ -75,6 +76,9 @@
 (eval-when-compile
   (require 'use-package))
 
+;; early on setup follow-symlinks to true for loaded files
+(setq vc-follow-symlinks t)
+
 ;;; Customizations
 
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -118,13 +122,12 @@
   ;; handle case where buffer is totally empty
   (unless (= (buffer-size) 0)
     (progn
-      (message "start %s window-start %s bufsize %s point %s"
-	       start (window-start) (buffer-size) (point))
+      (my-ignore (message "start %s window-start %s bufsize %s point %s"
+	       start (window-start) (buffer-size) (point)))
       (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
             (lines-to-end (count-lines (point) (buffer-size))))
 	(when (< visible-lines (window-text-height))
 	  (progn
-	    (message "chk recentering: %d" lines-to-end)
 	    (recenter (- lines-to-end))))))))
   
 ;; Only install the limit scrolling hook on gui modes where scrolling is enabled
@@ -158,9 +161,6 @@
 
 ;; Revert buffers when the underlying file has changed
 (global-auto-revert-mode 1)
-
-;; Load all of my custom tab-line config.
-(load "~/.emacs.d/tab-config.el")
 
 ;; Enable mouse in text mode
 ;; Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring 
@@ -215,6 +215,9 @@
   (doom-themes-treemacs-config)
   ))
 
+;; Load all of my custom tab-line config.
+(load "~/.emacs.d/tab-config.el")
+
 ;;; Global key bindings
 ;; I try to keep this minimally different from stock emacs.
 ;; my preference is for short key strokes and to usually bind global things to
@@ -267,6 +270,7 @@
 (setq sqlformat-args '("-s2" "-g"))
 
 ;;; flyspell config
+
 ;; currently not bound to a key. I use the context menu instead.
 (defun flyspell-on-for-buffer-type ()
       "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
@@ -446,7 +450,7 @@
 (use-package dap-java :after lsp)
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 (add-hook 'java-mode-hook (lambda ()
-			    (lsp)
+;;			    (lsp)
                             (setq c-basic-offset 4
                                   tab-width 4
                                   indent-tabs-mode t
@@ -463,6 +467,11 @@
 
 ;; python - turn on lsp integration
 (use-package lsp-mode
+  :ensure t
+  :config
+  ;; try no file watchers
+  (setq lsp-enable-file-watchers nil)
+;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
 

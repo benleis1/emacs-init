@@ -1,10 +1,12 @@
 ;;; tab-config.el --- my overrides to tab-line -*- lexical-binding: t; -*-
 
+;; ```
 ;; | |_ __ _| |__         ___ ___  _ __  / _(_) __ _
 ;; | __/ _` | '_ \ _____ / __/ _ \| '_ \| |_| |/ _` |
 ;; | || (_| | |_) |_____| (_| (_) | | | |  _| | (_| |
 ;;  \__\__,_|_.__/       \___\___/|_| |_|_| |_|\__, |
 ;;                                             |___/
+;; ```
 ;; Commentary:
 ;;
 ;; tab-line configuration
@@ -244,7 +246,8 @@
 	(tab2-save-view-state)
 	;; can we swap without adding a buffer to the list?
 	(setq tab2-current-view new-view-pos)
-	(set-window-configuration (tab2-view-wc new-view))))))
+	(when (tab2-view-wc new-view)
+	  (set-window-configuration (tab2-view-wc new-view)))))))
 
 ;; Close a view and revert back to default
 (defun tab2-close-view-by-name (name)
@@ -691,20 +694,47 @@ at the mouse-down event to the position at mouse-up event."
 ;; Set the list-function to use the same one I'm overriding in basic mode
 (setq tab-line-tabs-buffer-list-function 'tab2-get-filtered-buffer-list)
 
+;;; Serialization 
+(cl-defstruct tab2-persist-view name buffernames)
+
+;; serialize a view
+(defun tab2-convert-to-persist-format (view)
+  (let ((name (tab2-view-name view))
+	(buffers (mapcar (lambda (it) (buffer-name it)) (tab2-view-buffers view))))
+
+    (make-tab2-persist-view :name name :buffernames buffers)))
+
+;; serialize all views
+(defun tab2-serialize-views ()
+  (mapcar (lambda (it) (tab2-convert-to-persist-format it)) tab2-views))
+
+;; Deserialize a view
+(defun tab2-convert-from-persist-format (view)
+  (let ((name (tab2-persist-view-name view))
+	(buffers (mapcar (lambda (it) (get-buffer it)) (tab2-persist-view-buffernames view))))
+    (message "deserialized %s" name)
+    (make-tab2-view :name name :buffers buffers)))
+
+(defun tab2-deserialize-views (views)
+  (mapcar (lambda (it) (tab2-convert-from-persist-format it)) views))
+
 ;; persist bufnames to frame in order for reload
 (defun tab2-save-to-frame ()
-  (let ((bufnames (mapcar (lambda (buffer) (buffer-name buffer)) (tab2-get-filtered-buffer-list))))
-    (set-frame-parameter nil 'tab-ordered-buffers bufnames)))
+  (set-frame-parameter nil 'tab2-views (tab2-serialize-views)))
 
 ;; process the tab-buffer list in the frame parameters and set up to match
 (defun tab2-rebuild-buffer-list-from-frame-params ()
-  (let ((bufnames (frame-parameter nil 'tab-ordered-buffers)))
-    (tab2-set-buffer-list (mapcar (lambda (bufname) (get-buffer bufname)) bufnames))
+  (let* ((serialized-views (frame-parameter nil 'tab2-views))
+	 (views (tab2-deserialize-views serialized-views)))
+    (when views
+      (setq tab2-views views))
     (force-mode-line-update)))
 
 ;; hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
 (add-hook 'desktop-save-hook 'tab2-save-to-frame)
+
+;;(remove-hook 'desktop-save-hook 'tab2-save-to-frame)
 
 ;; Preserve the directory where the script was loaded from for
 ;; use in doing relative open of resource files
@@ -772,7 +802,6 @@ at the mouse-down event to the position at mouse-up event."
   (propertize (concat 
 	       "    "
 	       (window-parameter nil 'tab-line-sel-view))
-
 	      'help-echo "Current tab view"
 	      ))
 
@@ -780,11 +809,13 @@ at the mouse-down event to the position at mouse-up event."
   '(bar matches buffer-info remote-host buffer-position parrot selection-info)
   '(misc-info minor-modes input-method buffer-encoding major-mode process vcs checker tab2-view-segment))
 
-;; Set default mode-line
+;; Set once on start
+(doom-modeline-set-modeline 'tab2-aware-modeline 'default)
+
+;; Hook in after that.
 (add-hook 'doom-modeline-mode-hook
           (lambda ()
             (doom-modeline-set-modeline 'tab2-aware-modeline 'default)))
-
 
 ;; bunch of code from nicolas rougier adapted to use the header-line
 (defface quick-command-face
@@ -804,11 +835,6 @@ at the mouse-down event to the position at mouse-up event."
              :color ,(face-foreground 'default)
              :style none)))
   "Face for prompt")
-
-;; (defface quick-command-region-face
-;;   `((t :foreground ,(face-foreground 'region nil t)
-;;        :background ,(face-background 'region nil t)))
-;;   "Face for active region")
 
 (defface quick-command-cursor-face
   `((t :foreground ,(face-background 'default)
@@ -844,13 +870,6 @@ at the mouse-down event to the position at mouse-up event."
   
   (interactive)
   (let* ((saved-mode-line header-line-format)
-
-         ;; (cookie (face-remap-add-relative 'header-line
-         ;;     :foreground (face-attribute 'quick-command-face :foreground nil 'default)
-         ;;     :background (face-attribute 'quick-command-face :background nil 'default)
-         ;;     :height (face-attribute 'quick-command-face :height nil 'default)
-         ;;     :weight (face-attribute 'quick-command-face :weight nil 'default)
-         ;;     :box (face-attribute 'quick-command-face :box nil 'default)))
          (command nil)
          (current-buffer (current-buffer))
          (current-window (selected-window))
@@ -915,8 +934,7 @@ at the mouse-down event to the position at mouse-up event."
       ;; Command entered or aborted: restore mode line
       (with-current-buffer current-buffer
         (setq-local header-line-format saved-mode-line)
-;;        (face-remap-remove-relative cookie)
         (force-mode-line-update))
       (kill-buffer command-buffer)
       (switch-to-buffer current-buffer))))
-
+    
