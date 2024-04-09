@@ -113,7 +113,7 @@
   (context-menu-mode)
   ;;(scroll-bar-mode))
 )
- 
+
 (my-ignore (setq scroll-conservatively 10))
 
 ;; WIP: Scroll only to the last line
@@ -129,13 +129,13 @@
 	(when (< visible-lines (window-text-height))
 	  (progn
 	    (recenter (- lines-to-end))))))))
-  
+
 ;; Only install the limit scrolling hook on gui modes where scrolling is enabled
 (when window-system
   (add-hook 'post-command-hook #'limit-scrolling))
 
 ;; Auto complete on tab if not at start of line in modes
-;; where tab auto indents 
+;; where tab auto indents
 (setq tab-always-indent 'complete)
 (add-to-list 'completion-styles 'initials t)
 
@@ -163,21 +163,21 @@
 (global-auto-revert-mode 1)
 
 ;; Enable mouse in text mode
-;; Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring 
+;; Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring
 (unless window-system
   (require 'mouse)
-  (xterm-mouse-mode t) 
+  (xterm-mouse-mode t)
   (defun track-mouse (e))
   (setq mouse-sel-mode t))
 
-;; Setup recent files mode 
+;; Setup recent files mode
 (recentf-mode 1)
 (setq recentf-max-menu-items 25)
 (setq recentf-max-saved-items 25)
 
 ;; Try out undo-tree - if its useful enable persistent storage of the tree
 (use-package undo-tree
-  :ensure t) 
+  :ensure t)
 
 ;;; backup and autosave - put everything in ~/.saves
 
@@ -286,7 +286,7 @@
 	      (message "Flyspell on (text)")
 	      (flyspell-mode 1)))
 	  )))
-    
+
 (defun flyspell-toggle ()
   "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
   (interactive)
@@ -310,19 +310,19 @@
 ;; My typical usage of Org includes a main work tracking file, org-agenda, integration with my exchange calendar
 ;; and simple daily journal for which I have a capture template to add standup entries
 
-;; mouse support 
+;; mouse support
 (require 'org-mouse)
 
 ;; hide emphasis markers
 (setq org-hide-emphasis-markers t)
 
 ;; word wrap for normal text and stripe mode for tables
-(with-eval-after-load 'org       
+(with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
 
 ;; TODO: come back to the font setup after looking at things
-;; That Tex Gyre font isn't installed for instance 
+;; That Tex Gyre font isn't installed for instance
 
 ;; set fixed-width font
 ;;(set-face-font 'default "Source Code Pro-12")
@@ -374,7 +374,7 @@
   (tags  . " %i %-12:c")
   (search . " %i %-12:c")))
 
-;; 3 States for TODO 
+;; 3 States for TODO
 (setq org-todo-keywords
       '((sequence "TODO" "BLOCKED" "|" "DONE" )))
 
@@ -411,7 +411,7 @@
 
 ;; Older unused code to prettify check boxes to use Unicode characters.
 ;; Currently superseded by org-modern
-(my-ignore 
+(my-ignore
 (add-hook 'org-mode-hook (lambda ()
  "Beautify Org Checkbox Symbol"
  (push '("[ ]" .  "☐") prettify-symbols-alist)
@@ -450,11 +450,19 @@
 (use-package dap-java :after lsp)
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 (add-hook 'java-mode-hook (lambda ()
-;;			    (lsp)
+			    (lsp)
                             (setq c-basic-offset 4
                                   tab-width 4
                                   indent-tabs-mode t
 				  lsp-java-compile-null-analysis-mode "automatic")))
+;; Same hook for ts mode
+(add-hook 'java-ts-mode-hook (lambda ()
+			    (lsp)
+                            (setq c-basic-offset 4
+                                  tab-width 4
+                                  indent-tabs-mode t
+				  lsp-java-compile-null-analysis-mode "automatic")))
+
 
 ;; set java home
 (setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
@@ -470,10 +478,55 @@
   :ensure t
   :config
   ;; try no file watchers
-  (setq lsp-enable-file-watchers nil)
+  (setq lsp-enable-file-watchers nil
+	;; recommendations lsp optimization on gc and read output sizes
+	gc-cons-threshold 100000000
+	read-process-output-max (* 1024 1024)
+	)
 ;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
+
+;; A combo sort that organizes into groups by type and within it alphabetically
+;; The numbers assigned to type work more naturally sorted high to low
+(defun my-treemacs-sort-by-kind-alphabetically (left right)
+  (-let (((&plist :kind left-kind) left)
+         ((&plist :kind right-kind) right)
+	 ((&plist :label left-name) left)
+         ((&plist :label right-name) right))
+
+    (if (equal left-kind right-kind)
+	(string> right-name left-name)
+      (and left-kind right-kind (> left-kind right-kind)))))
+
+(setq lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
+
+;; WIP interactive command to make it easy to swap how the symbols are sorted
+(defun lsp-treemacs-symbols-switch-sort (type)
+  (interactive
+   (let ((choices '(("alphabetize"  . (my-treemacs-sort-by-kind-alphabetically))
+                    ("by position" . (lsp-treemacs-sort-by-position)))))
+     (list (alist-get
+      (completing-read "Choose: " choices)
+      choices nil nil 'equal))))
+
+  (setq lsp-treemacs-symbols-sort-functions type)
+  (lsp-treemacs-symbols)
+  (with-current-buffer "*LSP Symbols List*"
+    (let ((name (cond ((equal type 'my-treemacs-sort-by-kind-alphabetically) "alphabetical")
+		      (t "position"))))
+      (message "setting to %s" name)
+      (setq mode-name (format "Symbols - %s" name))))
+  )
+
+(define-advice lsp-treemacs--set-mode-line-format (:override (buffer title))
+  (with-current-buffer buffer
+    (let ((name (cond ((equal lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
+		     "alphabetical")
+		    (t "position"))))
+      (message "setting to %s" name)
+      (setq mode-name (format "Symbols - %s" name)))))
+
 
 (use-package lsp-ui
   :commands lsp-ui-mode)
@@ -486,7 +539,7 @@
   )
 
 ;; Do all dired ops in a single window
-(setq dired-kill-when-opening-new-dired-buffer t) 
+(setq dired-kill-when-opening-new-dired-buffer t)
 ;; allow find-alternate-file i.e. open and kill dired
 (put 'dired-find-alternate-file 'disabled nil)
 
@@ -538,6 +591,37 @@
   :config
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil))
+
+;; Custom sorting function that alphabetizes per imenu object type
+(defun my-imenu-list-sort ()
+  (interactive)
+  (let ((entries imenu--index-alist)
+	(funcs nil)
+	(sorted-entries nil))
+
+    (dolist (entry entries)
+
+      ;; if its a container sort the entries within it o/w add to a temp list to be sorted below
+      (if (not (listp (cdr entry)))
+	  (setq funcs (cons entry funcs))
+	(let* ((objects (cdr entry))
+	       (type (car entry))
+	       (sorted-objects (sort objects
+				     (lambda (left right)
+				       (string-lessp (car left) (car right))))))
+
+	  (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
+	  )))
+
+    ;; Sort the top level functions
+    (setq sorted-entries (append sorted-entries
+	    (sort funcs
+		  (lambda (left right)
+		    (string-lessp (car left) (car right))))))
+    ))
+
+(define-advice imenu-list-rescan-imenu (:after ())
+  (setq imenu--index-alist (my-imenu-list-sort)))
 
 ;;; System Menu configuration.
 
@@ -603,7 +687,7 @@
   (when (get-buffer "diary-excorporate-today")
     (kill-buffer "diary-excorporate-today"))
   (org-agenda-maybe-redo)
-  (message "Cleaned up diary buffers"))  
+  (message "Cleaned up diary buffers"))
 
 ;; TODO - advice after exco-diary--fix-percent-signs to redo org agenda?
 ;; We should probably just ignore the diaries in tab-line because we can't tell
@@ -626,7 +710,7 @@
       (excorporate)
       (message "excorporate setup done")
       (setq my-calendar-init t))
-  
+
     ;; skip if the file was updated within the last minute
     (message "my diary update started %s" (current-time-string))
     (let* ((time-list (decode-time (current-time)))
@@ -644,7 +728,7 @@
 
 ;;; ediff
 
-;; Capture window state and turn off doom mode line 
+;; Capture window state and turn off doom mode line
 (defun my-ediff-bsh ()
   "Function to be called before any buffers or window setup for
     ediff."
@@ -655,7 +739,7 @@
 
 ;; Create a mode-line-buffer that prints the filename and contains a
 ;; static hint about the full filename
-(defun simple-mode-line-buffer () 
+(defun simple-mode-line-buffer ()
   (list (propertize
          "%12b"
          'face 'mode-line-buffer-id
@@ -722,7 +806,7 @@
 ;; WIP: experiment with widgets in the control frame
 (defun ediff-add-buttons ()
   (message "setting up buttons")
-  
+
   (widget-create 'push-button
                  :tag "next"
                  :help-echo "Ediff next"
@@ -735,7 +819,7 @@
                  :tag-glyph "back-arrow"
                  :action (lambda (widget &optional event)
                            (ediff-previous-difference)))
-   
+
   (widget-create 'push-button
                  :tag "quit"
                  :help-echo "Ediff quit"
@@ -743,7 +827,7 @@
                  :action (lambda (widget &optional event)
                            (ediff-quit nil)))
 					;(ediff-previous-difference)))
-  
+
   (widget-setup))
 
 ;; Adds widgets but they they don't work yet - probably need to set the keymap
@@ -793,4 +877,4 @@
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
-(add-hook 'custom-mode-hook 'add-complete-font-name) 
+(add-hook 'custom-mode-hook 'add-complete-font-name)

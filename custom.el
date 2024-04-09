@@ -26,6 +26,7 @@
      (:eval
       (buffer-name imenu-list--displayed-buffer))
      " outline " mode-line-end-spaces))
+ '(lsp-treemacs-symbols-sort-functions '(lsp-treemacs-sort-by-name))
  '(markdown-header-scaling-values '(1.5 1.3 1.2 1.1 1.0 1.0))
  '(org-agenda-files
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
@@ -40,7 +41,8 @@
  ;; If there is more than one, they won't work right.
  '(default ((t (:inherit nil :extend nil :stipple nil :background "#FDF6E3" :foreground "#556b72" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight regular :height 170 :width normal :foundry "nil" :family "DejaVu Sans Mono for Powerline"))))
  '(doom-modeline ((t (:family "Helvetica"))))
- '(doom-modeline-buffer-major-mode ((t (:inherit (doom-modeline-emphasis bold) :background "wheat2" :foreground "gray45"))))
+ '(doom-modeline-buffer-major-mode ((t (:inherit (doom-modeline-emphasis bold) :background "dark gray" :foreground "gray0"))))
+ '(doom-modeline-project-dir ((t (:inherit (doom-modeline font-lock-string-face bold) :foreground "gray52"))))
  '(imenu-list-entry-face ((t (:family "DejaVu Sans Mono for Powerline"))))
  '(imenu-list-entry-face-0 ((t (:inherit imenu-list-entry-face :foreground "#556B72"))))
  '(imenu-list-entry-face-1 ((t (:inherit imenu-list-entry-face :foreground "#556B72"))))

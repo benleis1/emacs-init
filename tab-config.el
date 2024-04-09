@@ -37,7 +37,7 @@
 ;; then bind to an icon on the lower right side of the mode-bar
 ;; doom-modeline-def-modeline and doom-modeline-def-segment
 ;;
-;; TODO: 
+;; TODO:
 ;;       persist to view file
 
 ;; TODO: key bindings
@@ -62,7 +62,7 @@
 ;; Unused: another svg version
 (my-ignore (setq tab-line-close-button3
   (propertize " x "
-              'display '(image :type xpm 
+              'display '(image :type xpm
                                :file "tabs/close.xpm" ;; "symbols/cross_16.svg"
 			       :height (0.8 . em)
 			       :face shadow
@@ -72,7 +72,7 @@
               'mouse-face 'tab-line-close-highlight
               'help-echo "Click to close tab")))
 
-;; Another close button I'm not using 
+;; Another close button I'm not using
 (my-ignore (setq tab-line-close-button4
   (propertize "  " ;; only displays in symbols nerd font
 	      'font-lock-face '(:height 1.1  :family "Symbols Nerd Font Mono")
@@ -119,9 +119,10 @@
               'help-echo "Click to scroll right"))
 
 ;; simple unicode button for the modified marker
-(defvar tab2-modified-marker "◎")
+;;(defvar tab2-modified-marker "◎")
+(defvar tab2-modified-marker "⏺")
 
-;; Space the tabs out a bit 
+;; Space the tabs out a bit
 (defun tab2-space-tab-name (buffer &optional _buffers)
   ;;  (format " %s %s " (buffer-name buffer) (if  (buffer-modified-p buffer) tab2-modified-marker "")))
   (format " %s " (buffer-name buffer)))
@@ -143,15 +144,17 @@
 ;; Maintain a global list of views
 ;; TODO: we don't really need to capture the wc until a swap
 (setq tab2-views (list (make-tab2-view :name "default" :wc (current-window-configuration))))
-(setq tab2-current-view 0)
+;;(setq tab2-current-view 0)
+(set-window-parameter nil 'tab-line-sel-view 0)
 
 ;; Return the current view
 (defun tab2-get-current-view ()
-  (nth tab2-current-view tab2-views))
+  (let ((pos (window-parameter nil 'tab-line-sel-view)))
+    (nth (or pos 0) tab2-views)))
 
-;; Return if this is the current view
+;; Return if the current view is the default view
 (defun tab2-default-view-p ()
-  (equal tab2-current-view 0))
+  (equal (window-parameter nul 'tab-line-sel-view)  0))
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
@@ -199,7 +202,8 @@
   ;; Save the current wc
   (tab2-save-view-state)
   ;; Switch over
-  (setq tab2-current-view (- (length tab2-views) 1))
+  (set-window-parameter nil 'tab2-linesel-view (- (length tab2-views) 1))
+;;  (setq tab2-current-view (- (length tab2-views) 1))
   ;; Switch to an initial scratch buffer
   (switch-to-buffer "*scratch*")
   (delete-other-windows)
@@ -234,18 +238,19 @@
 (defun tab2-switch-view-by-name (name)
   (interactive (list (completing-read "Switch to view: " (tab2-list-views))))
   (let* ((new-view (tab2-get-view-by-name name))
-	(new-view-pos (cl-position new-view tab2-views)) 
+	(new-view-pos (cl-position new-view tab2-views))
 	(old-view (tab2-get-current-view)))
 
     (when (not new-view)
       (error (format "No view was found named %s" name)))
-    
+
     (when (and new-view (not (equal new-view old-view)))
       (progn
 	(message "switch to %s" name)
 	(tab2-save-view-state)
 	;; can we swap without adding a buffer to the list?
-	(setq tab2-current-view new-view-pos)
+;;	(setq tab2-current-view new-view-pos)
+	(set-window-parameter nil 'tab-line-sel-view new-view-pos)
 	(when (tab2-view-wc new-view)
 	  (set-window-configuration (tab2-view-wc new-view)))))))
 
@@ -262,16 +267,36 @@
 
     ;; temptemp
     (message "Closing view %s" name)
-    
+
     ;; switch to default if current is closing
     (when (equal closing-view current-view)
       (progn
 	(tab2-switch-view-by-name "default")
-	(set-window-parameter nil 'tab-line-sel-view "default")))
+	(set-window-parameter nil 'tab-line-sel-view 0)))
 
     ;; Finally remove the closing-view from the view list
     (setq tab2-views (remove closing-view tab2-views))
   ))
+
+;; Switch to the next view in the list
+(defun tab2-next-view()
+  (interactive)
+  (let* ((oldpos (or (window-parameter nil 'tab-line-sel-view) 0))
+	 (newpos (mod (+ 1 oldpos) (length tab2-views)))
+	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
+
+    (message "next %s to %s:%s" oldpos newpos  new-view-name)
+    (tab2-switch-view-by-name  new-view-name)))
+
+;; Switch to the prev view in the list
+(defun tab2-prev-view()
+  (interactive)
+  (let* ((oldpos (or (window-parameter nil 'tab-line-sel-view) 0))
+	 (newpos (mod (- 1 oldpos) (length tab2-views)))
+	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
+
+    (message "prev %s to %s:%s" oldpos newpos new-view-name)
+    (tab2-switch-view-by-name  new-view-name)))
 
 ;; categorize a buffer's mode
 (defun tab2-buffer-mode (buffer-or-string)
@@ -293,7 +318,7 @@
       (member (tab2-buffer-mode buffer) tab2-white-list-modes)
       (member (buffer-name buffer) tab2-white-list-buffer-names)))
 
-;; Function that returns the current buffer-list. 
+;; Function that returns the current buffer-list.
 ;; This filters out all special buffers and leaves only files and whitelisted buffers by mode
 ;; Adds on the current buffer its filters and isn't in the list
 (defun tab2-get-filtered-buffer-list ()
@@ -302,7 +327,7 @@
 	 (new-tab (when (and (not (member (current-buffer) (tab2-get-buffer-list)))
 			     (member (current-buffer) current-bufs))
 		    (current-buffer))))
-    (if new-tab 
+    (if new-tab
 	(tab2-set-buffer-list (append intersect-tabs (list new-tab)))
       (tab2-set-buffer-list intersect-tabs))))
 
@@ -397,7 +422,7 @@
 	 (buffer (tab2-get-buffer-from-tab tab)))
 
     (message "Closing tab %s" buffer)
-    
+
     (with-selected-window window
       (let ((tab-list (tab-line-tabs-window-buffers))
             (buffer-list (flatten-list
@@ -418,7 +443,7 @@
 	  (progn
             (and (kill-buffer buffer)
 		 (unless (cdr tab-list)
-                   (ignore-errors (delete-window window))))))))))   
+                   (ignore-errors (delete-window window))))))))))
 
 (define-advice tab-line-close-tab (:override (&optional e))
   "Close the selected tab.
@@ -433,7 +458,7 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 	 (close (unless (bufferp tab) (alist-get 'close tab))))
 
     ;; User the specified close function if specified or default to tab2-close-tab
-    (if (functionp close) (funcall close e) (tab2-close-tab e))    
+    (if (functionp close) (funcall close e) (tab2-close-tab e))
     (force-mode-line-update)))
 
 ;; todo may need to force update more expansively for multiple windows when split
@@ -465,7 +490,7 @@ at the mouse-down event to the position at mouse-up event."
 			     (setq value (cons elt value)))
 			 ;; add the element in its new position moving rightwards
 			 (if (and (equal elt (tab2-get-buffer-from-tab to)) (>= (car to-rowcol) (car from-rowcol)))
-			     (setq value (cons (tab2-get-buffer-from-tab from) value)))			 
+			     (setq value (cons (tab2-get-buffer-from-tab from) value)))
 			 ))))
       (force-mode-line-update))))
 
@@ -473,7 +498,7 @@ at the mouse-down event to the position at mouse-up event."
 (keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab2-mouse-move-tab)
 
 
-;; Advice to add on add-new view button in the view view 
+;; Advice to add on add-new view button in the view view
 (define-advice tab-line-format (:filter-return (format))
   (if (window-parameter nil 'tab-line-views)
       (append format (list tab2-new-view-button))
@@ -517,10 +542,10 @@ at the mouse-down event to the position at mouse-up event."
                                'follow-link 'ignore)
 
 	    ;; Modified marker - TODO - move to custom faces
-	    (when (and buffer (buffer-modified-p buffer))
-	      (if selected-p 
-		  (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 ))
-		(propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 ))))
+	    (when (and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
+	      (if selected-p
+		  (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
+		(propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -541,7 +566,7 @@ at the mouse-down event to the position at mouse-up event."
              mouse-face tab-line-highlight))
     ))
 
-;; Group of tab constructors 
+;; Group of tab constructors
 
 (defun tab2-make-group-tab (selected-group groupname)
   (let ((formatted-name   (format " %s " groupname)))
@@ -563,14 +588,17 @@ at the mouse-down event to the position at mouse-up event."
                    (set-window-parameter nil 'tab-line-hscroll nil))))))
 
 (defun tab2-make-view-tab (selected-view viewname)
-  (let ((formatted-name (format " %s " viewname)))
+  (let* ((formatted-name (format " %s " viewname))
+	 (new-view (tab2-get-view-by-name viewname))
+	 (new-view-pos (cl-position new-view tab2-views)))
+
     (if (equal viewname "default")
 	`(tab
 	  (name . ,formatted-name)
 	  (selected . ,(equal selected-view viewname))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view viewname)
+		       (set-window-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil))))
 
 	`(tab
@@ -580,9 +608,8 @@ at the mouse-down event to the position at mouse-up event."
 		      (tab2-close-view-by-name viewname)))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view viewname)
+		       (set-window-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil)))))))
-
 
 ;; Return a list of the buffers opened in the current project
 ;; or nil if we're not in a project
@@ -617,10 +644,10 @@ at the mouse-down event to the position at mouse-up event."
   (cond
    ;; views view
    ((window-parameter nil 'tab-line-views)
-    (let* ((selected-view (window-parameter nil 'tab-line-sel-view))
-	  (tabs (mapcar (lambda (view)
-			  (tab2-make-view-tab selected-view (tab2-view-name view)))
-			tab2-views)))
+    (let* ((selected-view (tab2-view-name (tab2-get-current-view)))
+	   (tabs (mapcar (lambda (view)
+			   (tab2-make-view-tab selected-view (tab2-view-name view)))
+			 tab2-views)))
       tabs))
 
    ;; groups view
@@ -660,7 +687,7 @@ at the mouse-down event to the position at mouse-up event."
 			   sorted-buffers)))
 
 ;;	(message "chk g:%s b:%s" selected-group buffers)
-	
+
 	tabs))))
 
 ;; If the current window is in a valid group that is not currently
@@ -673,7 +700,7 @@ at the mouse-down event to the position at mouse-up event."
 	(selected-group (window-parameter nil 'tab-line-group)))
 
 ;;    (message "autotrack: %s %s %s %s" bufgroup filep valid selected-group)
-    
+
     (when (or (and (not selected-group) valid)
 	      (and selected-group
 		   valid
@@ -694,7 +721,7 @@ at the mouse-down event to the position at mouse-up event."
 ;; Set the list-function to use the same one I'm overriding in basic mode
 (setq tab-line-tabs-buffer-list-function 'tab2-get-filtered-buffer-list)
 
-;;; Serialization 
+;;; Serialization
 (cl-defstruct tab2-persist-view name buffernames)
 
 ;; serialize a view
@@ -749,7 +776,7 @@ at the mouse-down event to the position at mouse-up event."
 	 (viewp (window-parameter nil 'tab-line-views))
 	 (icon-file (if viewp "desktop2.png" "funnel4.png"))
 	 (icon-name (format "%s%s" tab2-load-dir icon-file)))
-    
+
     ;; Only prepend the filter button when in buffer-groups mode
     (if (eq  tab-line-tabs-function 'tab2-get-tabs)
 	(cons
@@ -768,6 +795,7 @@ at the mouse-down event to the position at mouse-up event."
 				      ))
 	 tabs)
       tabs)))
+
 
 ;; keymap action for when the filter button is selected
 ;; Swaps between group and file mode
@@ -797,12 +825,17 @@ at the mouse-down event to the position at mouse-up event."
 
 ;;; Doom modeline integration
 
+(defvar-keymap tab2-mode-line-view-map
+  "<mode-line> <mouse-3>" #'tab2-next-view
+  "<mode-line> <mouse-1>" #'tab2-prev-view)
+
 (doom-modeline-def-segment tab2-view-segment
   "show the current tab2 view"
-  (propertize (concat 
+  (propertize (concat
 	       "    "
-	       (window-parameter nil 'tab-line-sel-view))
-	      'help-echo "Current tab view"
+	       (tab2-view-name (tab2-get-current-view)))
+	      'help-echo "Current tab view - click to switch to the next one"
+	      'local-map tab2-mode-line-view-map
 	      ))
 
 (doom-modeline-def-modeline 'tab2-aware-modeline
@@ -847,7 +880,7 @@ at the mouse-down event to the position at mouse-up event."
 
 (defun quick-command--update (current-buffer command-buffer)
   "Update header-line with current command"
-  
+
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
            (point (point))
@@ -867,7 +900,7 @@ at the mouse-down event to the position at mouse-up event."
 
 (defun quick-command (&optional prompt)
   "Read user-input from the header-line using the given PROMPT."
-  
+
   (interactive)
   (let* ((saved-mode-line header-line-format)
          (command nil)
@@ -877,7 +910,7 @@ at the mouse-down event to the position at mouse-up event."
          (prompt (concat (propertize prompt 'face 'quick-command-prompt-face)
                          " "))
          (command-buffer (get-buffer-create " *quick-command*")))
-    
+
     ;; To make sure to remove the relative face
     (unwind-protect
 
@@ -925,7 +958,7 @@ at the mouse-down event to the position at mouse-up event."
                   ((beginning-of-buffer end-of-buffer text-read-only)))
                 ;; Make sure to not go into prompt area
                 (goto-char (max (+ (length prompt) 1) (point)))
-                
+
                 (set-window-buffer current-window current-buffer t)
 
                 ;; Update mode line
@@ -937,4 +970,4 @@ at the mouse-down event to the position at mouse-up event."
         (force-mode-line-update))
       (kill-buffer command-buffer)
       (switch-to-buffer current-buffer))))
-    
+
