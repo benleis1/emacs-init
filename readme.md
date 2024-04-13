@@ -28,12 +28,6 @@ If not I try to keep everything in one section by general functionality area. Al
 to a series of smaller ones for both reading and modifying. This may shift in the future but currently I only move code out to
 a new file if it reaches a "sufficiently" large size.
 
-Style-wise I prefer a fairly minimal design theme. I'm currently using the solarized light theme  and have changed most faces to just
-use the same  gray color or a bolder one for emphasis. I really only want color in critical locations. However that's mostly not seen here
-since I use the customization mechanism and all of those tweaks are in the custom.el file.
-
-![sample screen](./sample-screen.png)
-
 I have a work style where I want to have a manageable small set of files open in a tabbed format. I'll save
 these to a desktop and reload them when I start things up again. I've plumbed save/load desktop into the system menus
 and also extensively modified tab-line to fit my work flow.
@@ -84,9 +78,16 @@ alias gemacs='start-emacs'
 - [Programming modes](#programming-modes)
     - [find-first](#find-first)
     - [java-file](#java-file)
+    - [my/get-constructor-name](#myget-constructor-name)
+    - [my/get-field-name](#myget-field-name)
+    - [my-treemacs-sort-by-kind-alphabetically](#my-treemacs-sort-by-kind-alphabetically)
+    - [lsp-treemacs-symbols-switch-sort](#lsp-treemacs-symbols-switch-sort)
 - [markdown mode](#markdown-mode)
     - [buffer-face-mode-helvetica](#buffer-face-mode-helvetica)
     - [use-outline-for-imenu](#use-outline-for-imenu)
+    - [my/imenu-list-sort-alphabetically](#myimenu-list-sort-alphabetically)
+    - [my/imenu-list-sort-advice](#myimenu-list-sort-advice)
+    - [imenu-list-switch-sort](#imenu-list-switch-sort)
 - [System Menu configuration.](#system-menu-configuration)
 - [Excorporate setup.](#excorporate-setup)
     - [my-diary-cleanup](#my-diary-cleanup)
@@ -138,6 +139,11 @@ use-package to simplify package loading.
   (require 'use-package))
 ```
 
+early on setup follow-symlinks to true for loaded files
+```
+(setq vc-follow-symlinks t)
+```
+
 # Customizations
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -181,7 +187,7 @@ Use the normal right click brings up a context menu
   (context-menu-mode)
   ;;(scroll-bar-mode))
 )
- 
+
 (my-ignore (setq scroll-conservatively 10))
 ```
 
@@ -193,16 +199,15 @@ this is still a bit buggy and not quite the right behavior.
   ;; handle case where buffer is totally empty
   (unless (= (buffer-size) 0)
     (progn
-      (message "start %s window-start %s bufsize %s point %s"
-	       start (window-start) (buffer-size) (point))
+      (my-ignore (message "start %s window-start %s bufsize %s point %s"
+	       start (window-start) (buffer-size) (point)))
       (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
             (lines-to-end (count-lines (point) (buffer-size))))
 	(when (< visible-lines (window-text-height))
 	  (progn
-	    (message "chk recentering: %d" lines-to-end)
 	    (recenter (- lines-to-end))))))))
 ```
-  
+
 Only install the limit scrolling hook on gui modes where scrolling is enabled
 ```
 (when window-system
@@ -210,7 +215,7 @@ Only install the limit scrolling hook on gui modes where scrolling is enabled
 ```
 
 Auto complete on tab if not at start of line in modes
-where tab auto indents 
+where tab auto indents
 ```
 (setq tab-always-indent 'complete)
 (add-to-list 'completion-styles 'initials t)
@@ -249,22 +254,17 @@ Revert buffers when the underlying file has changed
 (global-auto-revert-mode 1)
 ```
 
-Load all of my custom tab-line config.
-```
-(load "~/.emacs.d/tab-config.el")
-```
-
 Enable mouse in text mode
-Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring 
+Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring
 ```
 (unless window-system
   (require 'mouse)
-  (xterm-mouse-mode t) 
+  (xterm-mouse-mode t)
   (defun track-mouse (e))
   (setq mouse-sel-mode t))
 ```
 
-Setup recent files mode 
+Setup recent files mode
 ```
 (recentf-mode 1)
 (setq recentf-max-menu-items 25)
@@ -274,22 +274,24 @@ Setup recent files mode
 Try out undo-tree - if its useful enable persistent storage of the tree
 ```
 (use-package undo-tree
-  :ensure t) 
+  :ensure t)
 ```
 
 # backup and autosave - put everything in ~/.saves
 
 ```
 (setq
+ auto-save-default nil ;; disable auto save files
  auto-save-file-name-transforms `((".*" , "~/.save" t))
  backup-by-copying t      ; don't clobber symlinks
-   backup-directory-alist
-   '(("." . "~/.saves/"))    ; don't litter my fs tree
-   delete-old-versions t
-   kept-new-versions 6
-   kept-old-versions 2
-   version-control t)
+ backup-directory-alist
+ '(("." . "~/.saves/"))    ; don't litter my fs tree
+ delete-old-versions t
+ kept-new-versions 6
+ kept-old-versions 2
+ version-control t)
 ```
+
 
 doom-modeline setup
 Note: its important to have a nerd font installed for the icons to work properly
@@ -317,6 +319,11 @@ Phasing doom-themes out - for now just ignore them and confirm everything still 
   (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
   (doom-themes-treemacs-config)
   ))
+```
+
+Load all of my custom tab-line config.
+```
+(load "~/.emacs.d/tab-config.el")
 ```
 
 # Global key bindings
@@ -411,9 +418,8 @@ currently not bound to a key. I use the context menu instead.
 ```
 
 ## flyspell-toggle
-
 >Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately.
-    
+
 ```
 (defun flyspell-toggle ()
   "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
@@ -443,7 +449,7 @@ Enable which key
 My typical usage of Org includes a main work tracking file, org-agenda, integration with my exchange calendar
 and simple daily journal for which I have a capture template to add standup entries
 
-mouse support 
+mouse support
 ```
 (require 'org-mouse)
 ```
@@ -455,13 +461,13 @@ hide emphasis markers
 
 word wrap for normal text and stripe mode for tables
 ```
-(with-eval-after-load 'org       
+(with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
 ```
 
 TODO: come back to the font setup after looking at things
-That Tex Gyre font isn't installed for instance 
+That Tex Gyre font isn't installed for instance
 
 set fixed-width font
 (set-face-font 'default "Source Code Pro-12")
@@ -530,7 +536,7 @@ set the org-agenda prefix to skip printing the source files
   (search . " %i %-12:c")))
 ```
 
-3 States for TODO 
+3 States for TODO
 ```
 (setq org-todo-keywords
       '((sequence "TODO" "BLOCKED" "|" "DONE" )))
@@ -580,7 +586,7 @@ Show up to 4 levels of org headings in the imenu and imenu-list
 Older unused code to prettify check boxes to use Unicode characters.
 Currently superseded by org-modern
 ```
-(my-ignore 
+(my-ignore
 (add-hook 'org-mode-hook (lambda ()
  "Beautify Org Checkbox Symbol"
  (push '("[ ]" .  "☐") prettify-symbols-alist)
@@ -625,10 +631,20 @@ java
 always use lsp
 4 space tabs
 DISABLED - auto launch lsp-treemacs-symbols
+Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
 ```
-(use-package lsp-java :after lsp)
-(use-package dap-mode :after lsp)
-(use-package dap-java :after lsp)
+(use-package lsp-java
+  :ensure t
+  :after lsp)
+
+(use-package dap-mode
+  :ensure t
+  :after lsp
+  :config
+  (setq dap-auto-configure-features '(sessions locals controls tooltip)))
+
+(use-package lsp-treemacs :ensure t :after lsp)
+
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 (add-hook 'java-mode-hook (lambda ()
 			    (lsp)
@@ -638,22 +654,110 @@ DISABLED - auto launch lsp-treemacs-symbols
 				  lsp-java-compile-null-analysis-mode "automatic")))
 ```
 
-set java home
+## my/get-constructor-name
+Treesitter node name function for constructors
+```
+(defun my/get-constructor-name (node)
+  (treesit-node-text 
+   (treesit-node-child-by-field-name node "name")))
+```
+
+## my/get-field-name
+Treesitter node name function for class fields
+```
+(defun my/get-field-name (node)
+  (treesit-node-text
+   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name")))
+```
+
+Same hook for ts mode
+```
+(add-hook 'java-ts-mode-hook
+	  (lambda ()
+	    (setq-local lsp-enable-imenu nil)
+	    (lsp)
+            (setq c-basic-offset 4
+                  tab-width 4
+                  indent-tabs-mode t
+		  lsp-java-compile-null-analysis-mode "automatic")
+	    (setq-local treesit-simple-imenu-settings
+			'(("Class" "\\`class_declaration\\'" nil nil)
+			  ("Interface" "\\`interface_declaration\\'" nil nil)
+			  ("Enum" "\\`record_declaration\\'" nil nil)
+			  ("Constructor" "\\`constructor_declaration\\'" nil my/get-constructor-name)
+			  ("Field" "\\`field_declaration\\'" nil my/get-field-name)
+			  ("Method" "\\`method_declaration\\'" nil nil)))))
+```
+
+set java home for all the various components
 ```
 (setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
-(setq lsp-java-java-path "/Users/benjamin.leis/.jenv/versions/17.0.8.1/bin/java")
-(setq dap-java-java-command "/Users/benjamin.leis/.jenv/versions/17.0.8.1/bin/java")
+(setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
+(setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
-
-(use-package lsp-treemacs
-  :after lsp)
 ```
 
 python - turn on lsp integration
 ```
 (use-package lsp-mode
+  :ensure t
+  :config
+  ;; try no file watchers
+  (setq lsp-enable-file-watchers nil
+	;; recommendations lsp optimization on gc and read output sizes
+	gc-cons-threshold 100000000
+	read-process-output-max (* 1024 1024)
+	)
+;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
+```
+
+## my-treemacs-sort-by-kind-alphabetically
+A combo sort that organizes into groups by type and within it alphabetically
+The numbers assigned to type work more naturally sorted high to low
+```
+(defun my-treemacs-sort-by-kind-alphabetically (left right)
+  (-let (((&plist :kind left-kind) left)
+         ((&plist :kind right-kind) right)
+	 ((&plist :label left-name) left)
+         ((&plist :label right-name) right))
+
+    (if (equal left-kind right-kind)
+	(string> right-name left-name)
+      (and left-kind right-kind (> left-kind right-kind)))))
+
+(setq lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
+```
+
+## lsp-treemacs-symbols-switch-sort
+WIP interactive command to make it easy to swap how the symbols are sorted
+```
+(defun lsp-treemacs-symbols-switch-sort (type)
+  (interactive
+   (let ((choices '(("alphabetize"  . (my-treemacs-sort-by-kind-alphabetically))
+                    ("by position" . (lsp-treemacs-sort-by-position)))))
+     (list (alist-get
+      (completing-read "Choose: " choices)
+      choices nil nil 'equal))))
+
+  (setq lsp-treemacs-symbols-sort-functions type)
+  (lsp-treemacs-symbols)
+  (with-current-buffer "*LSP Symbols List*"
+    (let ((name (cond ((equal type 'my-treemacs-sort-by-kind-alphabetically) "alphabetical")
+		      (t "position"))))
+      (message "setting to %s" name)
+      (setq mode-name (format "Symbols - %s" name))))
+  )
+
+(define-advice lsp-treemacs--set-mode-line-format (:override (buffer title))
+  (with-current-buffer buffer
+    (let ((name (cond ((equal lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
+		     "alphabetical")
+		    (t "position"))))
+      (message "setting to %s" name)
+      (setq mode-name (format "Symbols - %s" name)))))
+
 
 (use-package lsp-ui
   :commands lsp-ui-mode)
@@ -670,7 +774,7 @@ Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 
 Do all dired ops in a single window
 ```
-(setq dired-kill-when-opening-new-dired-buffer t) 
+(setq dired-kill-when-opening-new-dired-buffer t)
 ```
 allow find-alternate-file i.e. open and kill dired
 ```
@@ -743,6 +847,75 @@ Note: C-\ is bound to smart toggle.
   :config
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil))
+```
+
+## my/imenu-list-sort-alphabetically
+Custom sorting function that alphabetizes per imenu object type.
+There is no built in facility to extend sorting so we have to wire this in via advice
+This is written generically to handle elisp which just inserts all the functions as leaf nodes
+and java lsp/treesitter which insert everything under categories.
+```
+(defun my/imenu-list-sort-alphabetically ()
+  (interactive)
+  (let ((entries imenu--index-alist)
+	(leaf-entries nil)
+	(sorted-entries nil))
+
+    (dolist (entry entries)
+
+      ;; if its a category container sort the entries within it
+      ;; o/w add to a temp list to be sorted below
+      (if (not (listp (cdr entry)))
+	  (setq leaf-entries (cons entry leaf-entries))
+	(let* ((objects (cdr entry))
+	       (type (car entry))
+	       (sorted-objects (sort objects
+				     (lambda (left right)
+				       (string-lessp (car left) (car right))))))
+
+	  (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
+	  )))
+
+    ;; Sort the top level leaf entries
+    (setq sorted-entries (append sorted-entries
+	    (sort leaf-entries
+		  (lambda (left right)
+		    (string-lessp (car left) (car right))))))
+    ))
+```
+
+Global variable to track sorting function
+which we'll set per buffer and then multiplex on
+```
+(defvar my/imenu-list-sort-function nil)
+```
+
+## my/imenu-list-sort-advice
+Multiplexer advice that inserts a sorting function if one is
+defined above.
+```
+(defun my/imenu-list-sort-advice ()
+  (when my/imenu-list-sort-function
+    (progn
+      (setq imenu--index-alist (funcall my/imenu-list-sort-function)))))
+
+(define-advice imenu-list-rescan-imenu (:after ())
+  (my/imenu-list-sort-advice))
+```
+
+## imenu-list-switch-sort
+WIP interactive command to make it easy to swap how the symbols are sorted
+Note: default is to go by position so we don't have to override for that
+```
+(defun imenu-list-switch-sort (type)
+  (interactive
+   (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
+                    ("by position" . nil )))) ;; default no override needed
+     (list (alist-get
+      (completing-read "Choose: " choices)
+      choices nil nil 'equal))))
+
+  (setq-local my/imenu-list-sort-function type))
 ```
 
 # System Menu configuration.
@@ -821,7 +994,7 @@ setup a callback to cleanup the diary buffers for use below
   (when (get-buffer "diary-excorporate-today")
     (kill-buffer "diary-excorporate-today"))
   (org-agenda-maybe-redo)
-  (message "Cleaned up diary buffers"))  
+  (message "Cleaned up diary buffers"))
 ```
 
 TODO - advice after exco-diary--fix-percent-signs to redo org agenda?
@@ -849,7 +1022,7 @@ The agenda itself loads the diary buffer - we should probably just leave it off 
       (excorporate)
       (message "excorporate setup done")
       (setq my-calendar-init t))
-  
+
     ;; skip if the file was updated within the last minute
     (message "my diary update started %s" (current-time-string))
     (let* ((time-list (decode-time (current-time)))
@@ -873,7 +1046,7 @@ the customizations done above
 ## my-ediff-bsh
 >Function to be called before any buffers or window setup for     ediff.
 
-Capture window state and turn off doom mode line 
+Capture window state and turn off doom mode line
 ```
 (defun my-ediff-bsh ()
   "Function to be called before any buffers or window setup for
@@ -888,7 +1061,7 @@ Capture window state and turn off doom mode line
 Create a mode-line-buffer that prints the filename and contains a
 static hint about the full filename
 ```
-(defun simple-mode-line-buffer () 
+(defun simple-mode-line-buffer ()
   (list (propertize
          "%12b"
          'face 'mode-line-buffer-id
@@ -981,7 +1154,7 @@ WIP: experiment with widgets in the control frame
 ```
 (defun ediff-add-buttons ()
   (message "setting up buttons")
-  
+
   (widget-create 'push-button
                  :tag "next"
                  :help-echo "Ediff next"
@@ -994,7 +1167,7 @@ WIP: experiment with widgets in the control frame
                  :tag-glyph "back-arrow"
                  :action (lambda (widget &optional event)
                            (ediff-previous-difference)))
-   
+
   (widget-create 'push-button
                  :tag "quit"
                  :help-echo "Ediff quit"
@@ -1002,7 +1175,7 @@ WIP: experiment with widgets in the control frame
                  :action (lambda (widget &optional event)
                            (ediff-quit nil)))
 					;(ediff-previous-difference)))
-  
+
   (widget-setup))
 ```
 
@@ -1068,7 +1241,7 @@ Hook completion in and setup M-<tab> binding for it.
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
-(add-hook 'custom-mode-hook 'add-complete-font-name) 
+(add-hook 'custom-mode-hook 'add-complete-font-name)
 ```
 
 > This file was auto-generated by elispdoc.el
