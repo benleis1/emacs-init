@@ -414,6 +414,14 @@
 
       (popup-menu menu))))
 
+(defun buffer-in-multiple-viewsp (buffer)
+  (let ((count 0))
+    (dolist (view tab2-views)
+      (when (member buffer (tab2-view-buffers view)) (setq count (+ 1 count))))
+
+    (> count 1)))
+
+
 ;; Logic to carefully close a tab. buffer is only killed if its the last one.
 (defun tab2-close-tab (&optional e)
   (let* ((posnp (event-start e))
@@ -421,29 +429,40 @@
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab2-get-buffer-from-tab tab)))
 
-    (message "Closing tab %s" buffer)
+    (if (buffer-in-multiple-viewsp buffer)
+	;; The buffer is in other views so only:
+	;; remove this buffer from the buffer list for this view and switch
+	(let* ((view (tab2-get-current-view))
+	      (new-buffers (remove buffer (tab2-view-buffers view))))
 
-    (with-selected-window window
-      (let ((tab-list (tab-line-tabs-window-buffers))
-            (buffer-list (flatten-list
-                          (seq-reduce (lambda (list window)
-                                        (select-window window t)
-                                        (cons (tab-line-tabs-window-buffers) list))
-                                      (window-list) nil))))
+	  (setf (tab2-view-buffers view) new-buffers)
 
-        (select-window window)
-        (if (> (seq-count (lambda (b) (eq b buffer)) buffer-list) 1)
-            (progn
-              (if (eq buffer (current-buffer))
-                  (bury-buffer)
-                (set-window-prev-buffers window (assq-delete-all buffer (window-prev-buffers)))
-                (set-window-next-buffers window (delq buffer (window-next-buffers))))
-              (unless (cdr tab-list)
-                (ignore-errors (delete-window window))))
-	  (progn
-            (and (kill-buffer buffer)
-		 (unless (cdr tab-list)
-                   (ignore-errors (delete-window window))))))))))
+	  (if new-buffers (switch-to-buffer (nth 0 new-buffers))
+	    (switch-to-buffer "*scratch*")))
+
+      ;; This buffer is only in this view
+      (with-selected-window window
+	(let ((tab-list (tab-line-tabs-window-buffers))
+              (buffer-list (flatten-list
+                            (seq-reduce (lambda (list window)
+                                          (select-window window t)
+                                          (cons (tab-line-tabs-window-buffers) list))
+					(window-list) nil))))
+
+          (select-window window)
+          (if (> (seq-count (lambda (b) (eq b buffer)) buffer-list) 1)
+              (progn
+		(if (eq buffer (current-buffer))
+                    (bury-buffer)
+                  (set-window-prev-buffers window (assq-delete-all buffer (window-prev-buffers)))
+                  (set-window-next-buffers window (delq buffer (window-next-buffers))))
+		(unless (cdr tab-list)
+                  (ignore-errors (delete-window window))))
+	    (progn
+              (and (kill-buffer buffer)
+		   (unless (cdr tab-list)
+                     (ignore-errors (delete-window window))))))))
+)))
 
 (define-advice tab-line-close-tab (:override (&optional e))
   "Close the selected tab.
@@ -496,7 +515,6 @@ at the mouse-down event to the position at mouse-up event."
 
 ;; Add on our extra key map for the drag event
 (keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab2-mouse-move-tab)
-
 
 ;; Advice to add on add-new view button in the view view
 (define-advice tab-line-format (:filter-return (format))
@@ -817,7 +835,7 @@ at the mouse-down event to the position at mouse-up event."
 
 (defvar-keymap tab-line-button-map
   :doc "Local keymap for `tab-line-mode' filter button."
-  "<tab-line> <down-mouse-1>" #'tab2-select-filter-button
+  "<tab-line> <mouse-1>" #'tab2-select-filter-button
   "RET" #'tab2-select-filter-button)
 
 ;; Via advice add on the filter button
@@ -970,4 +988,3 @@ at the mouse-down event to the position at mouse-up event."
         (force-mode-line-update))
       (kill-buffer command-buffer)
       (switch-to-buffer current-buffer))))
-
