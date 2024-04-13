@@ -182,14 +182,16 @@
 ;;; backup and autosave - put everything in ~/.saves
 
 (setq
+ auto-save-default nil ;; disable auto save files
  auto-save-file-name-transforms `((".*" , "~/.save" t))
  backup-by-copying t      ; don't clobber symlinks
-   backup-directory-alist
-   '(("." . "~/.saves/"))    ; don't litter my fs tree
-   delete-old-versions t
-   kept-new-versions 6
-   kept-old-versions 2
-   version-control t)
+ backup-directory-alist
+ '(("." . "~/.saves/"))    ; don't litter my fs tree
+ delete-old-versions t
+ kept-new-versions 6
+ kept-old-versions 2
+ version-control t)
+
 
 ;; doom-modeline setup
 ;; Note: its important to have a nerd font installed for the icons to work properly
@@ -445,9 +447,19 @@
 ;; always use lsp
 ;; 4 space tabs
 ;; DISABLED - auto launch lsp-treemacs-symbols
-(use-package lsp-java :after lsp)
-(use-package dap-mode :after lsp)
-(use-package dap-java :after lsp)
+;; Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
+(use-package lsp-java
+  :ensure t
+  :after lsp)
+
+(use-package dap-mode
+  :ensure t
+  :after lsp
+  :config
+  (setq dap-auto-configure-features '(sessions locals controls tooltip)))
+
+(use-package lsp-treemacs :ensure t :after lsp)
+
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 (add-hook 'java-mode-hook (lambda ()
 			    (lsp)
@@ -455,23 +467,39 @@
                                   tab-width 4
                                   indent-tabs-mode t
 				  lsp-java-compile-null-analysis-mode "automatic")))
+
+;; Treesitter node name function for constructors
+(defun my/get-constructor-name (node)
+  (treesit-node-text 
+   (treesit-node-child-by-field-name node "name")))
+
+;; Treesitter node name function for class fields
+(defun my/get-field-name (node)
+  (treesit-node-text
+   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name")))
+
 ;; Same hook for ts mode
-(add-hook 'java-ts-mode-hook (lambda ()
-			    (lsp)
-                            (setq c-basic-offset 4
-                                  tab-width 4
-                                  indent-tabs-mode t
-				  lsp-java-compile-null-analysis-mode "automatic")))
+(add-hook 'java-ts-mode-hook
+	  (lambda ()
+	    (setq-local lsp-enable-imenu nil)
+	    (lsp)
+            (setq c-basic-offset 4
+                  tab-width 4
+                  indent-tabs-mode t
+		  lsp-java-compile-null-analysis-mode "automatic")
+	    (setq-local treesit-simple-imenu-settings
+			'(("Class" "\\`class_declaration\\'" nil nil)
+			  ("Interface" "\\`interface_declaration\\'" nil nil)
+			  ("Enum" "\\`record_declaration\\'" nil nil)
+			  ("Constructor" "\\`constructor_declaration\\'" nil my/get-constructor-name)
+			  ("Field" "\\`field_declaration\\'" nil my/get-field-name)
+			  ("Method" "\\`method_declaration\\'" nil nil)))))
 
-
-;; set java home
+;; set java home for all the various components
 (setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
-(setq lsp-java-java-path "/Users/benjamin.leis/.jenv/versions/17.0.8.1/bin/java")
-(setq dap-java-java-command "/Users/benjamin.leis/.jenv/versions/17.0.8.1/bin/java")
+(setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
+(setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
-
-(use-package lsp-treemacs
-  :after lsp)
 
 ;; python - turn on lsp integration
 (use-package lsp-mode
@@ -592,18 +620,22 @@
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil))
 
-;; Custom sorting function that alphabetizes per imenu object type
-(defun my-imenu-list-sort ()
+;; Custom sorting function that alphabetizes per imenu object type.
+;; There is no built in facility to extend sorting so we have to wire this in via advice
+;; This is written generically to handle elisp which just inserts all the functions as leaf nodes
+;; and java lsp/treesitter which insert everything under categories.
+(defun my/imenu-list-sort-alphabetically ()
   (interactive)
   (let ((entries imenu--index-alist)
-	(funcs nil)
+	(leaf-entries nil)
 	(sorted-entries nil))
 
     (dolist (entry entries)
 
-      ;; if its a container sort the entries within it o/w add to a temp list to be sorted below
+      ;; if its a category container sort the entries within it
+      ;; o/w add to a temp list to be sorted below
       (if (not (listp (cdr entry)))
-	  (setq funcs (cons entry funcs))
+	  (setq leaf-entries (cons entry leaf-entries))
 	(let* ((objects (cdr entry))
 	       (type (car entry))
 	       (sorted-objects (sort objects
@@ -613,15 +645,38 @@
 	  (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
 	  )))
 
-    ;; Sort the top level functions
+    ;; Sort the top level leaf entries
     (setq sorted-entries (append sorted-entries
-	    (sort funcs
+	    (sort leaf-entries
 		  (lambda (left right)
 		    (string-lessp (car left) (car right))))))
     ))
 
+;; Global variable to track sorting function
+;; which we'll set per buffer and then multiplex on
+(defvar my/imenu-list-sort-function nil)
+
+;; Multiplexer advice that inserts a sorting function if one is
+;; defined above.
+(defun my/imenu-list-sort-advice ()
+  (when my/imenu-list-sort-function
+    (progn
+      (setq imenu--index-alist (funcall my/imenu-list-sort-function)))))
+
 (define-advice imenu-list-rescan-imenu (:after ())
-  (setq imenu--index-alist (my-imenu-list-sort)))
+  (my/imenu-list-sort-advice))
+
+;; WIP interactive command to make it easy to swap how the symbols are sorted
+;; Note: default is to go by position so we don't have to override for that
+(defun imenu-list-switch-sort (type)
+  (interactive
+   (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
+                    ("by position" . nil )))) ;; default no override needed
+     (list (alist-get
+      (completing-read "Choose: " choices)
+      choices nil nil 'equal))))
+
+  (setq-local my/imenu-list-sort-function type))
 
 ;;; System Menu configuration.
 
