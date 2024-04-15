@@ -124,7 +124,6 @@
 
 ;; Space the tabs out a bit
 (defun tab2-space-tab-name (buffer &optional _buffers)
-  ;;  (format " %s %s " (buffer-name buffer) (if  (buffer-modified-p buffer) tab2-modified-marker "")))
   (format " %s " (buffer-name buffer)))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
@@ -133,8 +132,7 @@
 (setq tab-line-close-button-show `selected)
 
 ;; But don't include in treemacs windows, doc-view or imenu-list
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode ))
-
+(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode end ))
 
 ;;; Structure for tracking the views
 ;; tab2 concept of virtual views is a window configuration + buffer list
@@ -248,8 +246,6 @@
       (progn
 	(message "switch to %s" name)
 	(tab2-save-view-state)
-	;; can we swap without adding a buffer to the list?
-;;	(setq tab2-current-view new-view-pos)
 	(set-window-parameter nil 'tab-line-sel-view new-view-pos)
 	(when (tab2-view-wc new-view)
 	  (set-window-configuration (tab2-view-wc new-view)))))))
@@ -292,7 +288,7 @@
 (defun tab2-prev-view()
   (interactive)
   (let* ((oldpos (or (window-parameter nil 'tab-line-sel-view) 0))
-	 (newpos (mod (- 1 oldpos) (length tab2-views)))
+	 (newpos (mod (- oldpos 1) (length tab2-views)))
 	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
 
     (message "prev %s to %s:%s" oldpos newpos new-view-name)
@@ -533,6 +529,7 @@ at the mouse-down event to the position at mouse-up event."
          (selected-p (if buffer
                          (eq buffer (window-buffer))
                        (cdr (assq 'selected tab))))
+
          (name (if buffer
                    (funcall tab-line-tab-name-function buffer tabs)
                  (cdr (assq 'name tab))))
@@ -560,10 +557,16 @@ at the mouse-down event to the position at mouse-up event."
                                'follow-link 'ignore)
 
 	    ;; Modified marker - TODO - move to custom faces
-	    (when (and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
-	      (if selected-p
-		  (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
-		(propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
+	    (cond ((and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
+		   (if selected-p
+		       (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
+		     (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
+
+		  ((and buffer (buffer-file-name buffer)
+			(string= (vc-state (buffer-file-name buffer)) "edited"))
+		    (if selected-p
+			(propertize (format "%s " "" ) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
+		      (propertize (format "%s " "") 'face `(:inherit ,face :height .9 :slant normal )))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -584,8 +587,8 @@ at the mouse-down event to the position at mouse-up event."
              mouse-face tab-line-highlight))
     ))
 
-;; Group of tab constructors
 
+;; Group of tab constructors
 (defun tab2-make-group-tab (selected-group groupname)
   (let ((formatted-name   (format " %s " groupname)))
     `(tab
@@ -629,6 +632,11 @@ at the mouse-down event to the position at mouse-up event."
 		       (set-window-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil)))))))
 
+
+;; predicate to determine if a buffer is modified and backed by a file
+(defun buffer-modified-file-p (buffer)
+  (and (buffer-file-name buffer) (buffer-modified-p buffer)))
+
 ;; Return a list of the buffers opened in the current project
 ;; or nil if we're not in a project
 (defun tab2-get-project-buffer-list ()
@@ -646,6 +654,9 @@ at the mouse-down event to the position at mouse-up event."
 
 	  ((equal curgroup "Project")
 	   (seq-filter (lambda (b) (member b project-buffers)) buffers))
+
+	  ((equal curgroup "Modified")
+	   (seq-filter (lambda (b) (buffer-modified-file-p b)) buffers))
 
 	  (t (seq-filter (lambda (b)
 			   (equal (tab-line-tabs-buffer-group-name b) curgroup))
@@ -683,7 +694,11 @@ at the mouse-down event to the position at mouse-up event."
       (append
        (when (project-current nil)
 	 (list (tab2-make-group-tab selected-group "Project")))
-       (cons (tab2-make-group-tab selected-group "Files") tabs)
+       (list (tab2-make-group-tab selected-group "Files"))
+       ;; Insert a modified group if any files are modified
+       (when (find-first 'buffer-modified-file-p buffers)
+	 (list (tab2-make-group-tab selected-group "Modified")))
+       tabs
        (list (tab2-make-view-category-tab
 	      (tab2-view-name (tab2-get-current-view)) "Views")))))
 
@@ -728,6 +743,9 @@ at the mouse-down event to the position at mouse-up event."
 
       (set-window-parameter nil 'tab-line-group bufgroup))))
 
+
+;; Setup the window buffer changes functions to monitor when a window is selected
+;; Hook that up to the auto-track function
 (setq window-buffer-change-functions (cons 'tab2-auto-track-selected-window window-buffer-change-functions))
 
 ;; Set the override tab name format function to the one I've defined

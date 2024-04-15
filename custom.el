@@ -25,7 +25,11 @@
    '("%e" mode-line-frame-identification "  "
      (:eval
       (buffer-name imenu-list--displayed-buffer))
-     " outline " mode-line-end-spaces))
+     " outline  sort:"
+     (:eval
+      (my/imenu-current-sort))
+     mode-line-end-spaces))
+ '(lsp-java-server-install-dir "/Users/benjamin.leis/.emacs.d/eclipse.jdt.ls/")
  '(lsp-treemacs-symbols-sort-functions '(lsp-treemacs-sort-by-name))
  '(markdown-header-scaling-values '(1.5 1.3 1.2 1.1 1.0 1.0))
  '(org-agenda-files
@@ -43,11 +47,18 @@
  '(doom-modeline ((t (:family "Helvetica"))))
  '(doom-modeline-buffer-major-mode ((t (:inherit (doom-modeline-emphasis bold) :background "dark gray" :foreground "gray0"))))
  '(doom-modeline-project-dir ((t (:inherit (doom-modeline font-lock-string-face bold) :foreground "gray52"))))
+ '(font-lock-function-call-face ((t (:inherit default))))
+ '(font-lock-variable-use-face ((t (:inherit nil))))
  '(imenu-list-entry-face ((t (:family "DejaVu Sans Mono for Powerline"))))
  '(imenu-list-entry-face-0 ((t (:inherit imenu-list-entry-face :foreground "#556B72"))))
  '(imenu-list-entry-face-1 ((t (:inherit imenu-list-entry-face :foreground "#556B72"))))
  '(imenu-list-entry-face-2 ((t (:inherit imenu-list-entry-face :foreground "#556B72"))))
  '(imenu-list-entry-face-3 ((t (:inherit imenu-list-entry-face))))
+ '(lsp-bridge-alive-mode-line ((t (:inherit doom-modeline :weight bold))))
+ '(lsp-face-semhl-class ((t (:inherit default))))
+ '(lsp-face-semhl-type ((t (:inherit default))))
+ '(lsp-headerline-breadcrumb-path-face ((t (:inherit default :family "Helvetica"))))
+ '(lsp-headerline-breadcrumb-symbols-face ((t (:inherit font-lock-doc-face :foreground "grey30" :weight bold))))
  '(marginalia-key ((t nil)))
  '(marginalia-size ((t (:inherit default :foreground "#556B72"))))
  '(markdown-bold-face ((t (:inherit bold :foreground "black"))))
@@ -73,7 +84,8 @@
  '(org-special-keyword ((t (:foreground "Black"))))
  '(org-table ((t (:inherit fixed-pitch :foreground "#6c71c4" :height 1.0 :family "DejaVu Sans Mono for Powerline"))))
  '(tab-line ((t (:background "#DED8C5" :foreground "#EEE8D5" :box (:line-width (4 . 4) :color "#ded8c5") :weight bold :height 1.3 :family "Helvetica"))))
- '(tab-line-tab-inactive ((t (:inherit tab-line-tab :background "#DED8C5" :foreground "#7B8787" :box nil))))
+ '(tab-line-tab-current ((t (:inherit tab-line-tab))))
+ '(tab-line-tab-inactive ((t (:inherit mode-line-default :box nil))))
  '(tab-line-tab-modified ((t (:inherit nil :foreground "#6b8787" :slant normal :weight bold :family "DejaVu "))))
  '(tooltip ((t (:background "#EEE8D5" :foreground "#556b72" :height 1.5))))
  '(treemacs-root-face ((t (:foreground "gray42" :weight bold :height 1.2 :family "Deja Vu Sans Mono")))))

@@ -99,6 +99,11 @@
 ;; Initial major mode is text for new buffers
 (setq-default major-mode 'text-mode)
 
+;; Use winner mode by default for managing window configurations
+;; particularly useful when popping up a 2nd or 3rd window and
+;; wanting to go back to the previous config.
+(winner-mode 1)
+
 ;; turn off menu mode in text mode to save space
 (unless window-system
   (menu-bar-mode 0))
@@ -463,6 +468,7 @@
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 (add-hook 'java-mode-hook (lambda ()
 			    (lsp)
+			    (lsp-bridge-mode)
                             (setq c-basic-offset 4
                                   tab-width 4
                                   indent-tabs-mode t
@@ -470,7 +476,7 @@
 
 ;; Treesitter node name function for constructors
 (defun my/get-constructor-name (node)
-  (treesit-node-text 
+  (treesit-node-text
    (treesit-node-child-by-field-name node "name")))
 
 ;; Treesitter node name function for class fields
@@ -483,6 +489,7 @@
 	  (lambda ()
 	    (setq-local lsp-enable-imenu nil)
 	    (lsp)
+	    (lsp-bridge-mode)
             (setq c-basic-offset 4
                   tab-width 4
                   indent-tabs-mode t
@@ -495,11 +502,15 @@
 			  ("Field" "\\`field_declaration\\'" nil my/get-field-name)
 			  ("Method" "\\`method_declaration\\'" nil nil)))))
 
-;; set java home for all the various components
+;; Set java home for all the various components that need it.
 (setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
 (setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
+
+;; Setup automatic mode remapping so we always use treesitter for java
+(setq major-mode-remap-alist
+      '((java-mode . java-ts-mode)))
 
 ;; python - turn on lsp integration
 (use-package lsp-mode
@@ -655,6 +666,14 @@
 ;; Global variable to track sorting function
 ;; which we'll set per buffer and then multiplex on
 (defvar my/imenu-list-sort-function nil)
+
+;; String for which sorting mode we're in for use in the mode-line
+(defun  my/imenu-current-sort (&optional buffer)
+  (if buffer
+      (with-current-buffer buffer
+	(if my/imenu-list-sort-function "alpha" "pos"))
+    (if my/imenu-list-sort-function "alpha" "pos")))
+
 
 ;; Multiplexer advice that inserts a sorting function if one is
 ;; defined above.
@@ -933,3 +952,15 @@
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
 (add-hook 'custom-mode-hook 'add-complete-font-name)
+
+;; Experiment with lsp-bridge
+(add-to-list 'load-path (expand-file-name "~/.emacs.d/lsp-bridge"))
+
+(use-package yasnippet
+  :ensure t
+  :init
+  (yas-global-mode 1))
+
+;; This is directly cloned
+(require 'lsp-bridge)
+(my-ignore (global-lsp-bridge-mode))
