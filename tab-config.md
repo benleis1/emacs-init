@@ -1,4 +1,4 @@
-# tab-config.el
+# tab-config
 
 ```
 | |_ __ _| |__         ___ ___  _ __  / _(_) __ _
@@ -28,17 +28,9 @@ functions that I add on. You'll also see original tab-line vars and funcs refere
 I've borrowed and modified some code from Nicolas Rougier to gather input on the header line
 which is less of a distracting jump away from the tabs when needed.
 
-WIP - view separation   (favicon)
-idea separate / switch views by function first - buffers and window configuration /window-state
-note unlike tab-bar we'll leave all the buffers open for now and preserved via the view
-Concern: will non file based buffers like lsp work?
-structure: list of views where view is a record containing the buffer-list and wc
-for the command use interactive (list (completing-read "Choose one: " '("foo" "bar" "baz"))))
-then bind to an icon on the lower right side of the mode-bar
-doom-modeline-def-modeline and doom-modeline-def-segment
 
-TODO: 
-      persist to view file
+TODO:
+      persist view  to file - tab / buffer separation is done but not window-state
 
 TODO: key bindings
 
@@ -63,6 +55,8 @@ TODO: key bindings
     - [tab2-list-views](#tab2-list-views)
     - [tab2-switch-view-by-name](#tab2-switch-view-by-name)
     - [tab2-close-view-by-name](#tab2-close-view-by-name)
+    - [tab2-next-view](#tab2-next-view)
+    - [tab2-prev-view](#tab2-prev-view)
     - [tab2-buffer-mode](#tab2-buffer-mode)
     - [tab2-buffer-filter](#tab2-buffer-filter)
     - [tab2-get-filtered-buffer-list](#tab2-get-filtered-buffer-list)
@@ -70,23 +64,31 @@ TODO: key bindings
     - [tab2-shift-tab-right](#tab2-shift-tab-right)
     - [tab2-shift-tab-left](#tab2-shift-tab-left)
     - [tab2-copy-current-filename-to-clipboard](#tab2-copy-current-filename-to-clipboard)
+    - [tab2-buffer-in-multiple-viewsp](#tab2-buffer-in-multiple-viewsp)
     - [tab2-close-tab](#tab2-close-tab)
     - [tab2-mouse-move-tab](#tab2-mouse-move-tab)
+    - [tab2-git-state](#tab2-git-state)
     - [tab2-format-tab](#tab2-format-tab)
     - [tab2-make-group-tab](#tab2-make-group-tab)
     - [tab2-make-view-category-tab](#tab2-make-view-category-tab)
     - [tab2-make-view-tab](#tab2-make-view-tab)
+    - [buffer-modified-file-p](#buffer-modified-file-p)
     - [tab2-get-project-buffer-list](#tab2-get-project-buffer-list)
     - [tab2-filter-buffers-by-group](#tab2-filter-buffers-by-group)
     - [tab2-get-tabs](#tab2-get-tabs)
     - [tab2-auto-track-selected-window](#tab2-auto-track-selected-window)
+- [Serialization](#serialization)
+    - [tab2-convert-to-persist-format](#tab2-convert-to-persist-format)
+    - [tab2-serialize-views](#tab2-serialize-views)
+    - [tab2-convert-from-persist-format](#tab2-convert-from-persist-format)
+    - [tab2-deserialize-views](#tab2-deserialize-views)
     - [tab2-save-to-frame](#tab2-save-to-frame)
     - [tab2-rebuild-buffer-list-from-frame-params](#tab2-rebuild-buffer-list-from-frame-params)
     - [tab2-add-on-filter-button](#tab2-add-on-filter-button)
     - [tab2-select-filter-button](#tab2-select-filter-button)
 - [Doom modeline integration](#doom-modeline-integration)
-    - [quick-command--update](#quick-command--update)
-    - [quick-command](#quick-command)
+    - [tab2-quick-command--update](#tab2-quick-command--update)
+    - [tab2-quick-command](#tab2-quick-command)
 
 <!-- markdown-toc end -->
 
@@ -100,40 +102,9 @@ Always suppress the tab line separator in both windows and term mode
 (setq tab-line-separator " ")
 ```
 
-Unused: A simple but readable close icon - use all-the-icons-insert to add a new one
+Unused: Some simple but readable close icons - use all-the-icons-insert to add a new one
 ```
-(my-ignore (setq tab-line-close-button2
-     (propertize  " ✖️ " ;;""
-             'xrear-nonsticky nil ;; important to not break auto-scroll
-             'keymap tab-line-tab-close-map
-             'mouse-face 'tab-line-close-highlight
-             'help-echo "Click to close tab"
-           )))
-```
-
-Unused: another svg version
-```
-(my-ignore (setq tab-line-close-button3
-  (propertize " x "
-              'display '(image :type xpm 
-                               :file "tabs/close.xpm" ;; "symbols/cross_16.svg"
-			       :height (0.8 . em)
-			       :face shadow
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-line-tab-close-map
-              'mouse-face 'tab-line-close-highlight
-              'help-echo "Click to close tab")))
-```
-
-Another close button I'm not using 
-```
-(my-ignore (setq tab-line-close-button4
-  (propertize "  " ;; only displays in symbols nerd font
-	      'font-lock-face '(:height 1.1  :family "Symbols Nerd Font Mono")
-	      'keymap tab-line-tab-close-map
-	      'mouse-face 'tab-line-close-highlight
-	      'help-echo "Click to close tab")))
+(setq tab-line-unused-close-icons '( "✖️" " "))
 ```
 
 Override the height on the all the button so they are properly sized on 4k display
@@ -177,15 +148,15 @@ Current modern style button I'm using
 ```
 
 simple unicode button for the modified marker
-```
 (defvar tab2-modified-marker "◎")
+```
+(defvar tab2-modified-marker "⏺")
 ```
 
 ## tab2-space-tab-name
-Space the tabs out a bit 
+Space the tabs out a bit
 ```
 (defun tab2-space-tab-name (buffer &optional _buffers)
-  ;;  (format " %s %s " (buffer-name buffer) (if  (buffer-modified-p buffer) tab2-modified-marker "")))
   (format " %s " (buffer-name buffer)))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
@@ -198,9 +169,8 @@ only put a close button on selected tabs - set to nil if totally unwanted
 
 But don't include in treemacs windows, doc-view or imenu-list
 ```
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode ))
+(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode end ))
 ```
-
 
 # Structure for tracking the views
 tab2 concept of virtual views is a window configuration + buffer list
@@ -213,21 +183,25 @@ Maintain a global list of views
 TODO: we don't really need to capture the wc until a swap
 ```
 (setq tab2-views (list (make-tab2-view :name "default" :wc (current-window-configuration))))
+```
 (setq tab2-current-view 0)
+```
+(set-frame-parameter nil 'tab-line-sel-view 0)
 ```
 
 ## tab2-get-current-view
 Return the current view
 ```
 (defun tab2-get-current-view ()
-  (nth tab2-current-view tab2-views))
+  (let ((pos (frame-parameter nil 'tab-line-sel-view)))
+    (nth (or pos 0) tab2-views)))
 ```
 
 ## tab2-default-view-p
-Return if this is the current view
+Return if the current view is the default view
 ```
 (defun tab2-default-view-p ()
-  (equal tab2-current-view 0))
+  (equal (frame-parameter nul 'tab-line-sel-view)  0))
 ```
 
 ## tab2-save-view-state
@@ -296,7 +270,8 @@ Create a new view and switch to it.
   ;; Save the current wc
   (tab2-save-view-state)
   ;; Switch over
-  (setq tab2-current-view (- (length tab2-views) 1))
+  (set-window-parameter nil 'tab2-linesel-view (- (length tab2-views) 1))
+;;  (setq tab2-current-view (- (length tab2-views) 1))
   ;; Switch to an initial scratch buffer
   (switch-to-buffer "*scratch*")
   (delete-other-windows)
@@ -307,7 +282,7 @@ Create a new view and switch to it.
 ```
 (defun tab2-prompt-new-view ()
   (interactive)
-  (let ((name (quick-command "New view name:")))
+  (let ((name (tab2-quick-command "New view name:")))
     (when name (tab2-new-view name))))
 
 (defvar-keymap tab2-new-view-keymap
@@ -340,19 +315,19 @@ Switch between views
 (defun tab2-switch-view-by-name (name)
   (interactive (list (completing-read "Switch to view: " (tab2-list-views))))
   (let* ((new-view (tab2-get-view-by-name name))
-	(new-view-pos (cl-position new-view tab2-views)) 
+	(new-view-pos (cl-position new-view tab2-views))
 	(old-view (tab2-get-current-view)))
 
     (when (not new-view)
       (error (format "No view was found named %s" name)))
-    
+
     (when (and new-view (not (equal new-view old-view)))
       (progn
 	(message "switch to %s" name)
 	(tab2-save-view-state)
-	;; can we swap without adding a buffer to the list?
-	(setq tab2-current-view new-view-pos)
-	(set-window-configuration (tab2-view-wc new-view))))))
+	(set-frame-parameter nil 'tab-line-sel-view new-view-pos)
+	(when (tab2-view-wc new-view)
+	  (set-window-configuration (tab2-view-wc new-view)))))))
 ```
 
 ## tab2-close-view-by-name
@@ -370,16 +345,42 @@ Close a view and revert back to default
 
     ;; temptemp
     (message "Closing view %s" name)
-    
+
     ;; switch to default if current is closing
     (when (equal closing-view current-view)
       (progn
 	(tab2-switch-view-by-name "default")
-	(set-window-parameter nil 'tab-line-sel-view "default")))
+	(set-frame-parameter nil 'tab-line-sel-view 0)))
 
     ;; Finally remove the closing-view from the view list
     (setq tab2-views (remove closing-view tab2-views))
   ))
+```
+
+## tab2-next-view
+Switch to the next view in the list
+```
+(defun tab2-next-view()
+  (interactive)
+  (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
+	 (newpos (mod (+ 1 oldpos) (length tab2-views)))
+	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
+
+    (message "next %s to %s:%s" oldpos newpos  new-view-name)
+    (tab2-switch-view-by-name  new-view-name)))
+```
+
+## tab2-prev-view
+Switch to the prev view in the list
+```
+(defun tab2-prev-view()
+  (interactive)
+  (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
+	 (newpos (mod (- oldpos 1) (length tab2-views)))
+	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
+
+    (message "prev %s to %s:%s" oldpos newpos new-view-name)
+    (tab2-switch-view-by-name  new-view-name)))
 ```
 
 ## tab2-buffer-mode
@@ -411,7 +412,7 @@ Filter which buffers we'll track in the tabs
 ```
 
 ## tab2-get-filtered-buffer-list
-Function that returns the current buffer-list. 
+Function that returns the current buffer-list.
 This filters out all special buffers and leaves only files and whitelisted buffers by mode
 Adds on the current buffer its filters and isn't in the list
 ```
@@ -421,7 +422,7 @@ Adds on the current buffer its filters and isn't in the list
 	 (new-tab (when (and (not (member (current-buffer) (tab2-get-buffer-list)))
 			     (member (current-buffer) current-bufs))
 		    (current-buffer))))
-    (if new-tab 
+    (if new-tab
 	(tab2-set-buffer-list (append intersect-tabs (list new-tab)))
       (tab2-set-buffer-list intersect-tabs))))
 ```
@@ -529,6 +530,17 @@ Bind custom actions into the context menu if we are not in group mode
       (popup-menu menu))))
 ```
 
+## tab2-buffer-in-multiple-viewsp
+```
+(defun tab2-buffer-in-multiple-viewsp (buffer)
+  (let ((count 0))
+    (dolist (view tab2-views)
+      (when (member buffer (tab2-view-buffers view)) (setq count (+ 1 count))))
+
+    (> count 1)))
+```
+
+
 ## tab2-close-tab
 Logic to carefully close a tab. buffer is only killed if its the last one.
 ```
@@ -538,29 +550,40 @@ Logic to carefully close a tab. buffer is only killed if its the last one.
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab2-get-buffer-from-tab tab)))
 
-    (message "Closing tab %s" buffer)
-    
-    (with-selected-window window
-      (let ((tab-list (tab-line-tabs-window-buffers))
-            (buffer-list (flatten-list
-                          (seq-reduce (lambda (list window)
-                                        (select-window window t)
-                                        (cons (tab-line-tabs-window-buffers) list))
-                                      (window-list) nil))))
+    (if (tab2-buffer-in-multiple-viewsp buffer)
+	;; The buffer is in other views so only:
+	;; remove this buffer from the buffer list for this view and switch
+	(let* ((view (tab2-get-current-view))
+	      (new-buffers (remove buffer (tab2-view-buffers view))))
 
-        (select-window window)
-        (if (> (seq-count (lambda (b) (eq b buffer)) buffer-list) 1)
-            (progn
-              (if (eq buffer (current-buffer))
-                  (bury-buffer)
-                (set-window-prev-buffers window (assq-delete-all buffer (window-prev-buffers)))
-                (set-window-next-buffers window (delq buffer (window-next-buffers))))
-              (unless (cdr tab-list)
-                (ignore-errors (delete-window window))))
-	  (progn
-            (and (kill-buffer buffer)
-		 (unless (cdr tab-list)
-                   (ignore-errors (delete-window window))))))))))   
+	  (setf (tab2-view-buffers view) new-buffers)
+
+	  (if new-buffers (switch-to-buffer (nth 0 new-buffers))
+	    (switch-to-buffer "*scratch*")))
+
+      ;; This buffer is only in this view
+      (with-selected-window window
+	(let ((tab-list (tab-line-tabs-window-buffers))
+              (buffer-list (flatten-list
+                            (seq-reduce (lambda (list window)
+                                          (select-window window t)
+                                          (cons (tab-line-tabs-window-buffers) list))
+					(window-list) nil))))
+
+          (select-window window)
+          (if (> (seq-count (lambda (b) (eq b buffer)) buffer-list) 1)
+              (progn
+		(if (eq buffer (current-buffer))
+                    (bury-buffer)
+                  (set-window-prev-buffers window (assq-delete-all buffer (window-prev-buffers)))
+                  (set-window-next-buffers window (delq buffer (window-next-buffers))))
+		(unless (cdr tab-list)
+                  (ignore-errors (delete-window window))))
+	    (progn
+              (and (kill-buffer buffer)
+		   (unless (cdr tab-list)
+                     (ignore-errors (delete-window window))))))))
+)))
 
 (define-advice tab-line-close-tab (:override (&optional e))
   "Close the selected tab.
@@ -575,7 +598,7 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 	 (close (unless (bufferp tab) (alist-get 'close tab))))
 
     ;; User the specified close function if specified or default to tab2-close-tab
-    (if (functionp close) (funcall close e) (tab2-close-tab e))    
+    (if (functionp close) (funcall close e) (tab2-close-tab e))
     (force-mode-line-update)))
 ```
 
@@ -612,7 +635,7 @@ at the mouse-down event to the position at mouse-up event."
 			     (setq value (cons elt value)))
 			 ;; add the element in its new position moving rightwards
 			 (if (and (equal elt (tab2-get-buffer-from-tab to)) (>= (car to-rowcol) (car from-rowcol)))
-			     (setq value (cons (tab2-get-buffer-from-tab from) value)))			 
+			     (setq value (cons (tab2-get-buffer-from-tab from) value)))
 			 ))))
       (force-mode-line-update))))
 ```
@@ -622,8 +645,7 @@ Add on our extra key map for the drag event
 (keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab2-mouse-move-tab)
 ```
 
-
-Advice to add on add-new view button in the view view 
+Advice to add on add-new view button in the view view
 ```
 (define-advice tab-line-format (:filter-return (format))
   (if (window-parameter nil 'tab-line-views)
@@ -631,6 +653,15 @@ Advice to add on add-new view button in the view view
     format))
 
 (my-ignore (advice-remove 'tab-line-format nil))
+```
+
+## tab2-git-state
+Convenience wrapper for getting the git state which needs to be done in buffer
+but is  more accurate than vc-state
+```
+(defun tab2-git-state (buffer)
+  (with-current-buffer buffer
+    (vc-git-state (buffer-file-name buffer))))
 ```
 
 ## tab2-format-tab
@@ -646,6 +677,7 @@ and filter icon to the first tab
          (selected-p (if buffer
                          (eq buffer (window-buffer))
                        (cdr (assq 'selected tab))))
+
          (name (if buffer
                    (funcall tab-line-tab-name-function buffer tabs)
                  (cdr (assq 'name tab))))
@@ -673,10 +705,19 @@ and filter icon to the first tab
                                'follow-link 'ignore)
 
 	    ;; Modified marker - TODO - move to custom faces
-	    (when (and buffer (buffer-modified-p buffer))
-	      (if selected-p 
-		  (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 ))
-		(propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 ))))
+	    (cond ((and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
+		   (if selected-p
+		       (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
+		     (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
+
+		  ((and buffer (buffer-file-name buffer)
+			(string= (tab2-git-state buffer) "edited"))
+		   (progn
+		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
+		   
+		    (if selected-p
+			(propertize (format "%s " "" ) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
+		      (propertize (format "%s " "") 'face `(:inherit ,face :height .9 :slant normal ))))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -695,12 +736,12 @@ and filter icon to the first tab
              tab ,tab
              ,@(if selected-p '(selected t))
              mouse-face tab-line-highlight))
-    ))
+    )) 
 ```
 
-Group of tab constructors 
 
 ## tab2-make-group-tab
+Group of tab constructors
 ```
 (defun tab2-make-group-tab (selected-group groupname)
   (let ((formatted-name   (format " %s " groupname)))
@@ -728,14 +769,17 @@ Group of tab constructors
 ## tab2-make-view-tab
 ```
 (defun tab2-make-view-tab (selected-view viewname)
-  (let ((formatted-name (format " %s " viewname)))
+  (let* ((formatted-name (format " %s " viewname))
+	 (new-view (tab2-get-view-by-name viewname))
+	 (new-view-pos (cl-position new-view tab2-views)))
+
     (if (equal viewname "default")
 	`(tab
 	  (name . ,formatted-name)
 	  (selected . ,(equal selected-view viewname))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view viewname)
+		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil))))
 
 	`(tab
@@ -745,10 +789,17 @@ Group of tab constructors
 		      (tab2-close-view-by-name viewname)))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view viewname)
+		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil)))))))
 ```
 
+
+## buffer-modified-file-p
+predicate to determine if a buffer is modified and backed by a file
+```
+(defun buffer-modified-file-p (buffer)
+  (and (buffer-file-name buffer) (buffer-modified-p buffer)))
+```
 
 ## tab2-get-project-buffer-list
 Return a list of the buffers opened in the current project
@@ -773,6 +824,9 @@ if Project then return all files in the curent project.
 	  ((equal curgroup "Project")
 	   (seq-filter (lambda (b) (member b project-buffers)) buffers))
 
+	  ((equal curgroup "Modified")
+	   (seq-filter (lambda (b) (buffer-modified-file-p b)) buffers))
+
 	  (t (seq-filter (lambda (b)
 			   (equal (tab-line-tabs-buffer-group-name b) curgroup))
 			 buffers)))))
@@ -793,10 +847,10 @@ tab2-format-tab is then responsible for formatting each one i.e faces / close ic
   (cond
    ;; views view
    ((window-parameter nil 'tab-line-views)
-    (let* ((selected-view (window-parameter nil 'tab-line-sel-view))
-	  (tabs (mapcar (lambda (view)
-			  (tab2-make-view-tab selected-view (tab2-view-name view)))
-			tab2-views)))
+    (let* ((selected-view (tab2-view-name (tab2-get-current-view)))
+	   (tabs (mapcar (lambda (view)
+			   (tab2-make-view-tab selected-view (tab2-view-name view)))
+			 tab2-views)))
       tabs))
 
    ;; groups view
@@ -814,7 +868,11 @@ tab2-format-tab is then responsible for formatting each one i.e faces / close ic
       (append
        (when (project-current nil)
 	 (list (tab2-make-group-tab selected-group "Project")))
-       (cons (tab2-make-group-tab selected-group "Files") tabs)
+       (list (tab2-make-group-tab selected-group "Files"))
+       ;; Insert a modified group if any files are modified
+       (when (find-first 'buffer-modified-file-p buffers)
+	 (list (tab2-make-group-tab selected-group "Modified")))
+       tabs
        (list (tab2-make-view-category-tab
 	      (tab2-view-name (tab2-get-current-view)) "Views")))))
 
@@ -836,7 +894,7 @@ tab2-format-tab is then responsible for formatting each one i.e faces / close ic
 			   sorted-buffers)))
 
 ;;	(message "chk g:%s b:%s" selected-group buffers)
-	
+
 	tabs))))
 ```
 
@@ -852,7 +910,7 @@ TODO: make configurable?
 	(selected-group (window-parameter nil 'tab-line-group)))
 
 ;;    (message "autotrack: %s %s %s %s" bufgroup filep valid selected-group)
-    
+
     (when (or (and (not selected-group) valid)
 	      (and selected-group
 		   valid
@@ -861,7 +919,12 @@ TODO: make configurable?
 		   (not (and filep (equal selected-group "Files")))))
 
       (set-window-parameter nil 'tab-line-group bufgroup))))
+```
 
+
+Setup the window buffer changes functions to monitor when a window is selected
+Hook that up to the auto-track function
+```
 (setq window-buffer-change-functions (cons 'tab2-auto-track-selected-window window-buffer-change-functions))
 ```
 
@@ -880,20 +943,59 @@ Set the list-function to use the same one I'm overriding in basic mode
 (setq tab-line-tabs-buffer-list-function 'tab2-get-filtered-buffer-list)
 ```
 
+# Serialization
+```
+(cl-defstruct tab2-persist-view name buffernames)
+```
+
+## tab2-convert-to-persist-format
+serialize a view
+```
+(defun tab2-convert-to-persist-format (view)
+  (let ((name (tab2-view-name view))
+	(buffers (mapcar (lambda (it) (buffer-name it)) (tab2-view-buffers view))))
+
+    (make-tab2-persist-view :name name :buffernames buffers)))
+```
+
+## tab2-serialize-views
+serialize all views
+```
+(defun tab2-serialize-views ()
+  (mapcar (lambda (it) (tab2-convert-to-persist-format it)) tab2-views))
+```
+
+## tab2-convert-from-persist-format
+Deserialize a view
+```
+(defun tab2-convert-from-persist-format (view)
+  (let ((name (tab2-persist-view-name view))
+	(buffers (mapcar (lambda (it) (get-buffer it)) (tab2-persist-view-buffernames view))))
+    (message "deserialized %s" name)
+    (make-tab2-view :name name :buffers buffers)))
+```
+
+## tab2-deserialize-views
+```
+(defun tab2-deserialize-views (views)
+  (mapcar (lambda (it) (tab2-convert-from-persist-format it)) views))
+```
+
 ## tab2-save-to-frame
 persist bufnames to frame in order for reload
 ```
 (defun tab2-save-to-frame ()
-  (let ((bufnames (mapcar (lambda (buffer) (buffer-name buffer)) (tab2-get-filtered-buffer-list))))
-    (set-frame-parameter nil 'tab-ordered-buffers bufnames)))
+  (set-frame-parameter nil 'tab2-views (tab2-serialize-views)))
 ```
 
 ## tab2-rebuild-buffer-list-from-frame-params
 process the tab-buffer list in the frame parameters and set up to match
 ```
 (defun tab2-rebuild-buffer-list-from-frame-params ()
-  (let ((bufnames (frame-parameter nil 'tab-ordered-buffers)))
-    (tab2-set-buffer-list (mapcar (lambda (bufname) (get-buffer bufname)) bufnames))
+  (let* ((serialized-views (frame-parameter nil 'tab2-views))
+	 (views (tab2-deserialize-views serialized-views)))
+    (when views
+      (setq tab2-views views))
     (force-mode-line-update)))
 ```
 
@@ -902,6 +1004,8 @@ hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
 (add-hook 'desktop-save-hook 'tab2-save-to-frame)
 ```
+
+(remove-hook 'desktop-save-hook 'tab2-save-to-frame)
 
 Preserve the directory where the script was loaded from for
 use in doing relative open of resource files
@@ -920,7 +1024,7 @@ tab-line-format-template
 	 (viewp (window-parameter nil 'tab-line-views))
 	 (icon-file (if viewp "desktop2.png" "funnel4.png"))
 	 (icon-name (format "%s%s" tab2-load-dir icon-file)))
-    
+
     ;; Only prepend the filter button when in buffer-groups mode
     (if (eq  tab-line-tabs-function 'tab2-get-tabs)
 	(cons
@@ -940,6 +1044,7 @@ tab-line-format-template
 	 tabs)
       tabs)))
 ```
+
 
 ## tab2-select-filter-button
 keymap action for when the filter button is selected
@@ -963,7 +1068,7 @@ Swaps between group and file mode
 
 (defvar-keymap tab-line-button-map
   :doc "Local keymap for `tab-line-mode' filter button."
-  "<tab-line> <down-mouse-1>" #'tab2-select-filter-button
+  "<tab-line> <mouse-1>" #'tab2-select-filter-button
   "RET" #'tab2-select-filter-button)
 ```
 
@@ -975,13 +1080,17 @@ Via advice add on the filter button
 # Doom modeline integration
 
 ```
+(defvar-keymap tab2-mode-line-view-map
+  "<mode-line> <mouse-3>" #'tab2-next-view
+  "<mode-line> <mouse-1>" #'tab2-prev-view)
+
 (doom-modeline-def-segment tab2-view-segment
   "show the current tab2 view"
-  (propertize (concat 
+  (propertize (concat
 	       "    "
-	       (window-parameter nil 'tab-line-sel-view))
-
-	      'help-echo "Current tab view"
+	       (tab2-view-name (tab2-get-current-view)))
+	      'help-echo "Current tab view - click to switch to the next one"
+	      'local-map tab2-mode-line-view-map
 	      ))
 
 (doom-modeline-def-modeline 'tab2-aware-modeline
@@ -989,13 +1098,17 @@ Via advice add on the filter button
   '(misc-info minor-modes input-method buffer-encoding major-mode process vcs checker tab2-view-segment))
 ```
 
-Set default mode-line
+Set once on start
+```
+(doom-modeline-set-modeline 'tab2-aware-modeline 'default)
+```
+
+Hook in after that.
 ```
 (add-hook 'doom-modeline-mode-hook
           (lambda ()
             (doom-modeline-set-modeline 'tab2-aware-modeline 'default)))
 ```
-
 
 bunch of code from nicolas rougier adapted to use the header-line
 ```
@@ -1016,14 +1129,7 @@ bunch of code from nicolas rougier adapted to use the header-line
              :color ,(face-foreground 'default)
              :style none)))
   "Face for prompt")
-```
 
-(defface quick-command-region-face
-  `((t :foreground ,(face-foreground 'region nil t)
-       :background ,(face-background 'region nil t)))
-  "Face for active region")
-
-```
 (defface quick-command-cursor-face
   `((t :foreground ,(face-background 'default)
        ;; :background "#d0d0d0"
@@ -1034,47 +1140,33 @@ bunch of code from nicolas rougier adapted to use the header-line
   "Face for cursor")
 ```
 
-## quick-command--update
+## tab2-quick-command--update
 >Update header-line with current command
 
 ```
-(defun quick-command--update (current-buffer command-buffer)
+(defun tab2-quick-command--update (current-buffer command-buffer)
   "Update header-line with current command"
-  
+
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
            (point (point))
            (region-beg (if (use-region-p) (- (region-beginning) 1)))
            (region-end (if (use-region-p) (region-end))))
       (add-face-text-property (- point 1) point 'quick-command-cursor-face t text)
-;;      (when (and region-beg region-end)
- ;;       (add-face-text-property region-beg region-end 'quick-command-region-face t text))
-
       (with-current-buffer current-buffer
-        (setq-local header-line-format
-		    text)
-	;;	    (propertize text 'display '(raise 0.15)))
-
-	)
+        (setq-local header-line-format text))
       (force-mode-line-update))))
 ```
 
-## quick-command
+## tab2-quick-command
 >Read user-input from the header-line using the given PROMPT.
 
 ```
-(defun quick-command (&optional prompt)
+(defun tab2-quick-command (&optional prompt)
   "Read user-input from the header-line using the given PROMPT."
-  
+
   (interactive)
   (let* ((saved-mode-line header-line-format)
-
-         ;; (cookie (face-remap-add-relative 'header-line
-         ;;     :foreground (face-attribute 'quick-command-face :foreground nil 'default)
-         ;;     :background (face-attribute 'quick-command-face :background nil 'default)
-         ;;     :height (face-attribute 'quick-command-face :height nil 'default)
-         ;;     :weight (face-attribute 'quick-command-face :weight nil 'default)
-         ;;     :box (face-attribute 'quick-command-face :box nil 'default)))
          (command nil)
          (current-buffer (current-buffer))
          (current-window (selected-window))
@@ -1082,7 +1174,7 @@ bunch of code from nicolas rougier adapted to use the header-line
          (prompt (concat (propertize prompt 'face 'quick-command-prompt-face)
                          " "))
          (command-buffer (get-buffer-create " *quick-command*")))
-    
+
     ;; To make sure to remove the relative face
     (unwind-protect
 
@@ -1101,7 +1193,7 @@ bunch of code from nicolas rougier adapted to use the header-line
                                                'read-only t
                                                'front-sticky nil
                                                'rear-nonsticky t)))
-            (quick-command--update current-buffer command-buffer)
+            (tab2-quick-command--update current-buffer command-buffer)
             (cursor-intangible-mode t)
 
             ;; Main loop where we read key sequences until RET or ESC is pressed
@@ -1130,20 +1222,18 @@ bunch of code from nicolas rougier adapted to use the header-line
                   ((beginning-of-buffer end-of-buffer text-read-only)))
                 ;; Make sure to not go into prompt area
                 (goto-char (max (+ (length prompt) 1) (point)))
-                
+
                 (set-window-buffer current-window current-buffer t)
 
                 ;; Update mode line
-                (quick-command--update current-buffer command-buffer)))))
+                (tab2-quick-command--update current-buffer command-buffer)))))
 
       ;; Command entered or aborted: restore mode line
       (with-current-buffer current-buffer
         (setq-local header-line-format saved-mode-line)
-;;        (face-remap-remove-relative cookie)
         (force-mode-line-update))
       (kill-buffer command-buffer)
       (switch-to-buffer current-buffer))))
 ```
-
 
 > This file was auto-generated by elispdoc.el

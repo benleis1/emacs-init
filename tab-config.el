@@ -28,17 +28,9 @@
 ;; I've borrowed and modified some code from Nicolas Rougier to gather input on the header line
 ;; which is less of a distracting jump away from the tabs when needed.
 ;;
-;; WIP - view separation   (favicon)
-;; idea separate / switch views by function first - buffers and window configuration /window-state
-;; note unlike tab-bar we'll leave all the buffers open for now and preserved via the view
-;; Concern: will non file based buffers like lsp work?
-;; structure: list of views where view is a record containing the buffer-list and wc
-;; for the command use interactive (list (completing-read "Choose one: " '("foo" "bar" "baz"))))
-;; then bind to an icon on the lower right side of the mode-bar
-;; doom-modeline-def-modeline and doom-modeline-def-segment
 ;;
 ;; TODO:
-;;       persist to view file
+;;       persist view  to file - tab / buffer separation is done but not window-state
 
 ;; TODO: key bindings
 ;;
@@ -50,35 +42,8 @@
 ;; Always suppress the tab line separator in both windows and term mode
 (setq tab-line-separator " ")
 
-;; Unused: A simple but readable close icon - use all-the-icons-insert to add a new one
-(my-ignore (setq tab-line-close-button2
-     (propertize  " ✖️ " ;;""
-             'xrear-nonsticky nil ;; important to not break auto-scroll
-             'keymap tab-line-tab-close-map
-             'mouse-face 'tab-line-close-highlight
-             'help-echo "Click to close tab"
-           )))
-
-;; Unused: another svg version
-(my-ignore (setq tab-line-close-button3
-  (propertize " x "
-              'display '(image :type xpm
-                               :file "tabs/close.xpm" ;; "symbols/cross_16.svg"
-			       :height (0.8 . em)
-			       :face shadow
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-line-tab-close-map
-              'mouse-face 'tab-line-close-highlight
-              'help-echo "Click to close tab")))
-
-;; Another close button I'm not using
-(my-ignore (setq tab-line-close-button4
-  (propertize "  " ;; only displays in symbols nerd font
-	      'font-lock-face '(:height 1.1  :family "Symbols Nerd Font Mono")
-	      'keymap tab-line-tab-close-map
-	      'mouse-face 'tab-line-close-highlight
-	      'help-echo "Click to close tab")))
+;; Unused: Some simple but readable close icons - use all-the-icons-insert to add a new one
+(setq tab-line-unused-close-icons '( "✖️" " "))
 
 ;; Override the height on the all the button so they are properly sized on 4k display
 ;; fixed in version 30
@@ -143,16 +108,16 @@
 ;; TODO: we don't really need to capture the wc until a swap
 (setq tab2-views (list (make-tab2-view :name "default" :wc (current-window-configuration))))
 ;;(setq tab2-current-view 0)
-(set-window-parameter nil 'tab-line-sel-view 0)
+(set-frame-parameter nil 'tab-line-sel-view 0)
 
 ;; Return the current view
 (defun tab2-get-current-view ()
-  (let ((pos (window-parameter nil 'tab-line-sel-view)))
+  (let ((pos (frame-parameter nil 'tab-line-sel-view)))
     (nth (or pos 0) tab2-views)))
 
 ;; Return if the current view is the default view
 (defun tab2-default-view-p ()
-  (equal (window-parameter nul 'tab-line-sel-view)  0))
+  (equal (frame-parameter nul 'tab-line-sel-view)  0))
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
@@ -209,7 +174,7 @@
 
 (defun tab2-prompt-new-view ()
   (interactive)
-  (let ((name (quick-command "New view name:")))
+  (let ((name (tab2-quick-command "New view name:")))
     (when name (tab2-new-view name))))
 
 (defvar-keymap tab2-new-view-keymap
@@ -246,7 +211,7 @@
       (progn
 	(message "switch to %s" name)
 	(tab2-save-view-state)
-	(set-window-parameter nil 'tab-line-sel-view new-view-pos)
+	(set-frame-parameter nil 'tab-line-sel-view new-view-pos)
 	(when (tab2-view-wc new-view)
 	  (set-window-configuration (tab2-view-wc new-view)))))))
 
@@ -268,7 +233,7 @@
     (when (equal closing-view current-view)
       (progn
 	(tab2-switch-view-by-name "default")
-	(set-window-parameter nil 'tab-line-sel-view 0)))
+	(set-frame-parameter nil 'tab-line-sel-view 0)))
 
     ;; Finally remove the closing-view from the view list
     (setq tab2-views (remove closing-view tab2-views))
@@ -277,21 +242,21 @@
 ;; Switch to the next view in the list
 (defun tab2-next-view()
   (interactive)
-  (let* ((oldpos (or (window-parameter nil 'tab-line-sel-view) 0))
+  (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (+ 1 oldpos) (length tab2-views)))
 	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
 
-    (message "next %s to %s:%s" oldpos newpos  new-view-name)
+;;    (message "next %s to %s:%s" oldpos newpos  new-view-name)
     (tab2-switch-view-by-name  new-view-name)))
 
 ;; Switch to the prev view in the list
 (defun tab2-prev-view()
   (interactive)
-  (let* ((oldpos (or (window-parameter nil 'tab-line-sel-view) 0))
+  (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (- oldpos 1) (length tab2-views)))
 	 (new-view-name (tab2-view-name (nth newpos tab2-views))))
 
-    (message "prev %s to %s:%s" oldpos newpos new-view-name)
+;;    (message "prev %s to %s:%s" oldpos newpos new-view-name)
     (tab2-switch-view-by-name  new-view-name)))
 
 ;; categorize a buffer's mode
@@ -410,7 +375,7 @@
 
       (popup-menu menu))))
 
-(defun buffer-in-multiple-viewsp (buffer)
+(defun tab2-buffer-in-multiple-viewsp (buffer)
   (let ((count 0))
     (dolist (view tab2-views)
       (when (member buffer (tab2-view-buffers view)) (setq count (+ 1 count))))
@@ -425,7 +390,7 @@
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab2-get-buffer-from-tab tab)))
 
-    (if (buffer-in-multiple-viewsp buffer)
+    (if (tab2-buffer-in-multiple-viewsp buffer)
 	;; The buffer is in other views so only:
 	;; remove this buffer from the buffer list for this view and switch
 	(let* ((view (tab2-get-current-view))
@@ -520,6 +485,12 @@ at the mouse-down event to the position at mouse-up event."
 
 (my-ignore (advice-remove 'tab-line-format nil))
 
+;; Convenience wrapper for getting the git state which needs to be done in buffer
+;; but is  more accurate than vc-state
+(defun tab2-git-state (buffer)
+  (with-current-buffer buffer
+    (vc-git-state (buffer-file-name buffer))))
+
 ;; Custom tab-line-name-format function to add on a face for the modified signifier
 ;; so it can be colored or not depending on being selected
 ;; and filter icon to the first tab
@@ -563,10 +534,12 @@ at the mouse-down event to the position at mouse-up event."
 		     (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
 
 		  ((and buffer (buffer-file-name buffer)
-			(string= (vc-state (buffer-file-name buffer)) "edited"))
+			(string= (tab2-git-state buffer) "edited"))
+		   (progn
+;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
 		    (if selected-p
 			(propertize (format "%s " "" ) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
-		      (propertize (format "%s " "") 'face `(:inherit ,face :height .9 :slant normal )))))
+		      (propertize (format "%s " "") 'face `(:inherit ,face :height .9 :slant normal ))))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -619,7 +592,7 @@ at the mouse-down event to the position at mouse-up event."
 	  (selected . ,(equal selected-view viewname))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view new-view-pos)
+		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil))))
 
 	`(tab
@@ -629,7 +602,7 @@ at the mouse-down event to the position at mouse-up event."
 		      (tab2-close-view-by-name viewname)))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
-		       (set-window-parameter nil 'tab-line-sel-view new-view-pos)
+		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil)))))))
 
 
@@ -720,7 +693,6 @@ at the mouse-down event to the position at mouse-up event."
 			   sorted-buffers)))
 
 ;;	(message "chk g:%s b:%s" selected-group buffers)
-
 	tabs))))
 
 ;; If the current window is in a valid group that is not currently
@@ -914,7 +886,7 @@ at the mouse-down event to the position at mouse-up event."
              :style none)))
   "Face for cursor")
 
-(defun quick-command--update (current-buffer command-buffer)
+(defun tab2-quick-command--update (current-buffer command-buffer)
   "Update header-line with current command"
 
   (with-current-buffer command-buffer
@@ -923,18 +895,11 @@ at the mouse-down event to the position at mouse-up event."
            (region-beg (if (use-region-p) (- (region-beginning) 1)))
            (region-end (if (use-region-p) (region-end))))
       (add-face-text-property (- point 1) point 'quick-command-cursor-face t text)
-;;      (when (and region-beg region-end)
- ;;       (add-face-text-property region-beg region-end 'quick-command-region-face t text))
-
       (with-current-buffer current-buffer
-        (setq-local header-line-format
-		    text)
-	;;	    (propertize text 'display '(raise 0.15)))
-
-	)
+        (setq-local header-line-format text))
       (force-mode-line-update))))
 
-(defun quick-command (&optional prompt)
+(defun tab2-quick-command (&optional prompt)
   "Read user-input from the header-line using the given PROMPT."
 
   (interactive)
@@ -965,7 +930,7 @@ at the mouse-down event to the position at mouse-up event."
                                                'read-only t
                                                'front-sticky nil
                                                'rear-nonsticky t)))
-            (quick-command--update current-buffer command-buffer)
+            (tab2-quick-command--update current-buffer command-buffer)
             (cursor-intangible-mode t)
 
             ;; Main loop where we read key sequences until RET or ESC is pressed
@@ -998,7 +963,7 @@ at the mouse-down event to the position at mouse-up event."
                 (set-window-buffer current-window current-buffer t)
 
                 ;; Update mode line
-                (quick-command--update current-buffer command-buffer)))))
+                (tab2-quick-command--update current-buffer command-buffer)))))
 
       ;; Command entered or aborted: restore mode line
       (with-current-buffer current-buffer
