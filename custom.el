@@ -27,7 +27,7 @@
       (buffer-name imenu-list--displayed-buffer))
      " outline  sort:"
      (:eval
-      (my/imenu-current-sort))
+      (my/imenu-current-sort imenu-list--displayed-buffer))
      mode-line-end-spaces))
  '(lsp-java-server-install-dir "/Users/benjamin.leis/.emacs.d/eclipse.jdt.ls/")
  '(lsp-treemacs-symbols-sort-functions '(lsp-treemacs-sort-by-name))

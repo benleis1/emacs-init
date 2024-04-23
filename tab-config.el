@@ -87,6 +87,9 @@
 ;;(defvar tab2-modified-marker "◎")
 (defvar tab2-modified-marker "⏺")
 
+;; git modified markers - I'm still looking for a better one to display in terminal mode
+(defvar tab2-git-modified-marker (if window-system "" "◨"))
+
 ;; Space the tabs out a bit
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (format " %s " (buffer-name buffer)))
@@ -538,8 +541,8 @@ at the mouse-down event to the position at mouse-up event."
 		   (progn
 ;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
 		    (if selected-p
-			(propertize (format "%s " "" ) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
-		      (propertize (format "%s " "") 'face `(:inherit ,face :height .9 :slant normal ))))))
+			(propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
+		      (propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -607,7 +610,7 @@ at the mouse-down event to the position at mouse-up event."
 
 
 ;; predicate to determine if a buffer is modified and backed by a file
-(defun buffer-modified-file-p (buffer)
+(defun tab2-buffer-modified-file-p (buffer)
   (and (buffer-file-name buffer) (buffer-modified-p buffer)))
 
 ;; Return a list of the buffers opened in the current project
@@ -629,7 +632,7 @@ at the mouse-down event to the position at mouse-up event."
 	   (seq-filter (lambda (b) (member b project-buffers)) buffers))
 
 	  ((equal curgroup "Modified")
-	   (seq-filter (lambda (b) (buffer-modified-file-p b)) buffers))
+	   (seq-filter (lambda (b) (tab2-buffer-modified-file-p b)) buffers))
 
 	  (t (seq-filter (lambda (b)
 			   (equal (tab-line-tabs-buffer-group-name b) curgroup))
@@ -669,7 +672,7 @@ at the mouse-down event to the position at mouse-up event."
 	 (list (tab2-make-group-tab selected-group "Project")))
        (list (tab2-make-group-tab selected-group "Files"))
        ;; Insert a modified group if any files are modified
-       (when (find-first 'buffer-modified-file-p buffers)
+       (when (find-first 'tab2-buffer-modified-file-p buffers)
 	 (list (tab2-make-group-tab selected-group "Modified")))
        tabs
        (list (tab2-make-view-category-tab
@@ -848,7 +851,9 @@ at the mouse-down event to the position at mouse-up event."
 
 (doom-modeline-def-modeline 'tab2-aware-modeline
   '(bar matches buffer-info remote-host buffer-position parrot selection-info)
-  '(misc-info minor-modes input-method buffer-encoding major-mode process vcs checker tab2-view-segment))
+  '(misc-info minor-modes input-method major-mode process vcs checker tab2-view-segment))
+
+;; TODO: move out into main init.el
 
 ;; Set once on start
 (doom-modeline-set-modeline 'tab2-aware-modeline 'default)
