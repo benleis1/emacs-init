@@ -139,6 +139,15 @@
 (when window-system
   (add-hook 'post-command-hook #'limit-scrolling))
 
+;;
+;; Generally remove trailing white space except on markdown
+;;
+(defun my-before-save-hook ()
+  (unless (equal major-mode 'markdown-mode)
+      (delete-trailing-whitespace)))
+
+(add-hook 'before-save-hook #'my-before-save-hook)
+
 ;; Auto complete on tab if not at start of line in modes
 ;; where tab auto indents
 (setq tab-always-indent 'complete)
@@ -451,7 +460,6 @@
 ;; java
 ;; always use lsp
 ;; 4 space tabs
-;; DISABLED - auto launch lsp-treemacs-symbols
 ;; Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
 (use-package lsp-java
   :ensure t
@@ -466,16 +474,19 @@
 (use-package lsp-treemacs :ensure t :after lsp)
 
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
-(add-hook 'java-mode-hook (lambda ()
-			    (lsp)
-			    (lsp-bridge-mode)
-                            (setq c-basic-offset 4
-                                  tab-width 4
-                                  indent-tabs-mode t
-				  lsp-java-compile-null-analysis-mode "automatic")))
 
-;; Treesitter node name function for constructors
-(defun my/get-constructor-name (node)
+;;
+;; Custom hierarchical parsing of the treesitter tree
+;;
+
+;; Generate a marker for the given node
+;; This can only be done while in the buffer
+(defun my/make-marker (buffer point)
+  (with-current-buffer buffer
+    (copy-marker point)))
+
+;; Treesitter node name function for most node types
+(defun my/get-def-name (node)
   (treesit-node-text
    (treesit-node-child-by-field-name node "name")))
 
@@ -484,23 +495,133 @@
   (treesit-node-text
    (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name")))
 
-;; Same hook for ts mode
-(add-hook 'java-ts-mode-hook
-	  (lambda ()
-	    (setq-local lsp-enable-imenu nil)
-	    (lsp)
-	    (lsp-bridge-mode)
-            (setq c-basic-offset 4
-                  tab-width 4
-                  indent-tabs-mode t
-		  lsp-java-compile-null-analysis-mode "automatic")
-	    (setq-local treesit-simple-imenu-settings
-			'(("Class" "\\`class_declaration\\'" nil nil)
-			  ("Interface" "\\`interface_declaration\\'" nil nil)
-			  ("Enum" "\\`record_declaration\\'" nil nil)
-			  ("Constructor" "\\`constructor_declaration\\'" nil my/get-constructor-name)
-			  ("Field" "\\`field_declaration\\'" nil my/get-field-name)
-			  ("Method" "\\`method_declaration\\'" nil nil)))))
+;; Simple wrapper to make an imenu leaf from a treesitter node
+(defun my/imenu-leaf (node buffer name-func)
+       (cons (funcall name-func node)
+	     (my/make-marker buffer (treesit-node-start node))))
+
+;; Walk the parent node class of an interface, class or enum and
+;; construct a list of all fields, constructors and methods.
+;; Recursion occurs when there is an inner class.
+(defun my/walk-object-declaration (classnode buffer)
+    (let ((constructors ())
+          (fields ())
+          (methods ())
+          (inner-classes ())
+          (result ()))
+      (dolist (node (treesit-node-children classnode))
+        (progn
+          (cond ((equal (treesit-node-type node) "constructor_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
+
+                ((equal (treesit-node-type node) "method_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
+
+                ((equal (treesit-node-type node) "class_declaration")
+                 (let* ((body (treesit-node-child-by-field-name node "body"))
+                        (classname (my/get-def-name node))
+                        (subleafs (my/walk-object-declaration body buffer)))
+
+                   (push (cons classname subleafs) inner-classes)))
+
+                ((equal (treesit-node-type node) "field_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
+
+      (when inner-classes (push (cons "Inner Classes" (reverse inner-classes)) result))
+      (when methods (push (cons "Methods" (reverse methods)) result))
+      (when fields (push (cons "Fields" (reverse fields)) result))
+      (when constructors (push (cons "Constructors" (reverse constructors)) result))
+      ;; final value
+      result))
+
+;; Main routine that walks top level of the grammar tree and constructs imenu nodes
+;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
+(defun my/generate-ts-imenu (&optional buffer)
+  (interactive)
+  (unless buffer (setq buffer (current-buffer)))
+  (message "buffer: %s" buffer)
+  (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
+    (let ((classes '())
+          (interfaces '())
+          (enums '())
+          (result '()))
+      (dolist (node (treesit-node-children (treesit-buffer-root-node)))
+        (let ((type (treesit-node-type node)))
+          (when (or (equal type "class_declaration")
+                    (equal type "interface_declaration")
+                    (equal type "enum_declaration"))
+            (let* ((body (treesit-node-child-by-field-name node "body"))
+                   (subleafs  (when body (my/walk-object-declaration body buffer)))
+                   (objectname (my/get-def-name node))
+                   (object-start (treesit-node-start node)))
+
+              (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
+              (cond ((equal type "class_declaration")
+                     (push (cons objectname subleafs) classes))
+                    ((equal type "enum_declaration")
+                     (push (cons objectname subleafs) enums))
+                    ((equal type "interface_declaration")
+                     (push (cons objectname subleafs) interfaces)))))))
+
+        (when enums (push (cons "Enums" (reverse enums)) result))
+        (when classes (push (cons "Classes" (reverse classes)) result))
+        (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
+        result)))
+
+;; Some custom font lock rules
+;; * Tone down colors on import statements
+(defun modify-java-ts-syntax-highlighting ()
+  (let ((new-rule  (treesit-font-lock-rules
+		    :language 'java
+		    :override t
+		    :feature 'import
+		    '((import_declaration (scoped_identifier) @default)))))
+
+    (setq-local treesit-font-lock-settings (append treesit-font-lock-settings new-rule))
+
+    ;; Setup the features to include import
+    (setq-local treesit-font-lock-feature-list
+		'(( comment definition import)  ;; level 1
+                  ( constant keyword string type)
+                  ( annotation expression literal)
+                  ( bracket delimiter operator)
+		  ))))
+
+;; Common hook. This sets some ts specific options that won't take effect in regular java
+;; mode
+(defun java-hook (use-ts)
+  ;; LSP config
+  (when use-ts (setq-local lsp-enable-imenu nil))
+  (lsp)
+  (lsp-bridge-mode 1)
+
+  ;; Basic config
+  (setq c-basic-offset 4
+        tab-width 4
+        indent-tabs-mode t
+	lsp-java-compile-null-analysis-mode "automatic")
+
+  (when use-ts
+    (progn
+      (modify-java-ts-syntax-highlighting)
+      (setq-local imenu-create-index-function 'my/generate-ts-imenu)
+      ;; Unused simple-imenu settings
+      (my-ignore
+       (setq-local treesit-simple-imenu-settings
+		   '(("Class" "\\`class_declaration\\'" nil nil)
+		     ("Interface" "\\`interface_declaration\\'" nil nil)
+		     ("Enum" "\\`record_declaration\\'" nil nil)
+		     ("Constructor" "\\`constructor_declaration\\'" nil my/get-def-name)
+		     ("Field" "\\`field_declaration\\'" nil my/get-field-name)
+		     ("Method" "\\`method_declaration\\'" nil nil)))))))
+
+;; Java mode hooks. Currently tree sitter java mode is the active one
+(add-hook 'java-mode-hook (apply-partially 'java-hook nil))
+(add-hook 'java-ts-mode-hook (apply-partially 'java-hook t))
+
+;; Setup automatic mode remapping so we always use treesitter for java
+(setq major-mode-remap-alist
+      '((java-mode . java-ts-mode)))
 
 ;; Set java home for all the various components that need it.
 (setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
@@ -508,9 +629,6 @@
 (setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
 
-;; Setup automatic mode remapping so we always use treesitter for java
-(setq major-mode-remap-alist
-      '((java-mode . java-ts-mode)))
 
 ;; python - turn on lsp integration
 (use-package lsp-mode
@@ -569,6 +687,12 @@
 
 (use-package lsp-ui
   :commands lsp-ui-mode)
+
+
+;; Test treesitter folding
+(my-ignore
+ (use-package ts-fold
+   :load-path "~/.emacs.d/ts-fold"))
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 (use-package all-the-icons-dired
@@ -671,9 +795,9 @@
 (defun  my/imenu-current-sort (&optional buffer)
   (if buffer
       (with-current-buffer buffer
-	(if my/imenu-list-sort-function "alpha" "pos"))
+	(progn
+	  (if my/imenu-list-sort-function "alpha" "pos")))
     (if my/imenu-list-sort-function "alpha" "pos")))
-
 
 ;; Multiplexer advice that inserts a sorting function if one is
 ;; defined above.
@@ -685,7 +809,7 @@
 (define-advice imenu-list-rescan-imenu (:after ())
   (my/imenu-list-sort-advice))
 
-;; WIP interactive command to make it easy to swap how the symbols are sorted
+;; Interactive command to make it easy to swap how the symbols are sorted
 ;; Note: default is to go by position so we don't have to override for that
 (defun imenu-list-switch-sort (type)
   (interactive
@@ -695,7 +819,8 @@
       (completing-read "Choose: " choices)
       choices nil nil 'equal))))
 
-  (setq-local my/imenu-list-sort-function type))
+  (setq-local my/imenu-list-sort-function type)
+  (force-mode-line-update))
 
 ;;; System Menu configuration.
 
@@ -948,10 +1073,12 @@
 
 ;; Hook completion in and setup M-<tab> binding for it.
 (defun add-complete-font-name()
+  (message "adding complete font hook")
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
-(add-hook 'custom-mode-hook 'add-complete-font-name)
+(add-hook 'Custom-mode-hook 'add-complete-font-name)
+
 
 ;; Experiment with lsp-bridge
 (add-to-list 'load-path (expand-file-name "~/.emacs.d/lsp-bridge"))
