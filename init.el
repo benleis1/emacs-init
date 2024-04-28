@@ -31,8 +31,14 @@
 ;; I have a work style where I want to have a manageable small set of files open in a tabbed format. I'll save
 ;; these to a desktop and reload them when I start things up again. I've plumbed save/load desktop into the system menus
 ;; and also extensively modified tab-line to fit my work flow.
-;; Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related sets of these files
-;; or perhaps integrate some of the code in tab-bar that saves and switches between window configurations sets.
+;; Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related sets of these files. For now I have customized tab-line with "views" to facilitate this. See tab-config.el for more details.
+;;
+;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the solarized light theme  and have changed most faces to just
+;; use the same  gray color or a bolder one for emphasis. I really only want color in critical locations. However that's mostly not seen here
+;; since I use the customization mechanism and all of those tweaks are in the custom.el file.
+;;
+;; Sample screen:
+;; ![sample screen](./sample-screen.png)
 ;;
 ;; Normally I run a gui standalone emacs as well as an emacs server for terminal mode editing
 ;; My typical alias setup
@@ -500,6 +506,14 @@
        (cons (funcall name-func node)
 	     (my/make-marker buffer (treesit-node-start node))))
 
+;; Compare two imenu nodes
+(defun my/imenu-compare (left right)
+  (string-lessp (car left) (car right)))
+
+;; Sort a list of imenu nodes
+(defun my/imenu-sort (seq)
+  (sort seq 'my/imenu-compare))
+
 ;; Walk the parent node class of an interface, class or enum and
 ;; construct a list of all fields, constructors and methods.
 ;; Recursion occurs when there is an inner class.
@@ -508,7 +522,8 @@
           (fields ())
           (methods ())
           (inner-classes ())
-          (result ()))
+          (result ())
+	  (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
       (dolist (node (treesit-node-children classnode))
         (progn
           (cond ((equal (treesit-node-type node) "constructor_declaration")
@@ -527,10 +542,10 @@
                 ((equal (treesit-node-type node) "field_declaration")
                  (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
 
-      (when inner-classes (push (cons "Inner Classes" (reverse inner-classes)) result))
-      (when methods (push (cons "Methods" (reverse methods)) result))
-      (when fields (push (cons "Fields" (reverse fields)) result))
-      (when constructors (push (cons "Constructors" (reverse constructors)) result))
+      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
+      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
+      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
+      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
       ;; final value
       result))
 
@@ -539,7 +554,6 @@
 (defun my/generate-ts-imenu (&optional buffer)
   (interactive)
   (unless buffer (setq buffer (current-buffer)))
-  (message "buffer: %s" buffer)
   (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
     (let ((classes '())
           (interfaces '())

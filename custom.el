@@ -36,7 +36,8 @@
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
  '(org-support-shift-select t)
  '(package-selected-packages
-   '(corfu marginalia vertico org-make-toc undo-tree outshine outorg vterm centaur-tabs windata tree-mode groovy-mode htmlize org-preview-html stripe-buffer org-modern org-side-tree org-autolist excorporate neotree imenu-list markdown-toc dashboard all-the-icons-dired doom-modeline esup spaceline yasnippet doom-themes lsp-java lsp-treemacs lsp-ui lsp-mode which-key latex-math-preview latex-preview-pane auctex markdown-mode company org-bullets mixed-pitch sqlformat))
+   '(## fringe-helper lsp-origami origami diff-hl corfu marginalia vertico org-make-toc undo-tree outshine outorg vterm centaur-tabs windata tree-mode groovy-mode htmlize org-preview-html stripe-buffer org-modern org-side-tree org-autolist excorporate neotree imenu-list markdown-toc dashboard all-the-icons-dired doom-modeline esup spaceline yasnippet doom-themes lsp-java lsp-treemacs lsp-ui lsp-mode which-key latex-math-preview latex-preview-pane auctex markdown-mode company org-bullets mixed-pitch sqlformat))
+ '(treesit-font-lock-level 3)
  '(use-system-tooltips nil))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
@@ -46,6 +47,8 @@
  '(default ((t (:inherit nil :extend nil :stipple nil :background "#FDF6E3" :foreground "#556b72" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight regular :height 170 :width normal :foundry "nil" :family "DejaVu Sans Mono for Powerline"))))
  '(doom-modeline ((t (:family "Helvetica"))))
  '(doom-modeline-buffer-major-mode ((t (:inherit (doom-modeline-emphasis bold) :background "dark gray" :foreground "gray0"))))
+ '(doom-modeline-buffer-modified ((t (:inherit (doom-modeline bold) :background unspecified))))
+ '(doom-modeline-buffer-path ((t (:inherit bold))))
  '(doom-modeline-project-dir ((t (:inherit (doom-modeline font-lock-string-face bold) :foreground "gray52"))))
  '(font-lock-function-call-face ((t (:inherit default))))
  '(font-lock-variable-use-face ((t (:inherit nil))))
