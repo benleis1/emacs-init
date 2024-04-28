@@ -212,6 +212,19 @@
  kept-old-versions 2
  version-control t)
 
+;;; Dired
+
+;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
+(use-package all-the-icons-dired
+  :if window-system
+  :ensure t
+  :hook ((dired-mode . all-the-icons-dired-mode))
+  )
+
+;; Do all dired ops in a single window
+(setq dired-kill-when-opening-new-dired-buffer t)
+;; allow find-alternate-file i.e. open and kill dired
+(put 'dired-find-alternate-file 'disabled nil)
 
 ;; doom-modeline setup
 ;; Note: its important to have a nerd font installed for the icons to work properly
@@ -220,22 +233,6 @@
 (use-package doom-modeline
   :ensure t
   :init (doom-modeline-mode 1))
-
-;; Phasing doom-themes out - for now just ignore them and confirm everything still looks good.
-(my-ignore
-(use-package doom-themes
-  :ensure t
-  :config
-  ;; Global settings (defaults)
-  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
-        doom-themes-enable-italic t) ; if nil, italics is universally disabled
-
-  ;; Enable custom neotree theme (all-the-icons must be installed!)
-  ;;  (doom-themes-neotree-config)
-  ;; or for treemacs users
-  (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
-  (doom-themes-treemacs-config)
-  ))
 
 ;; Load all of my custom tab-line config.
 (load "~/.emacs.d/tab-config.el")
@@ -708,18 +705,6 @@
  (use-package ts-fold
    :load-path "~/.emacs.d/ts-fold"))
 
-;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
-(use-package all-the-icons-dired
-  :if window-system
-  :ensure t
-  :hook ((dired-mode . all-the-icons-dired-mode))
-  )
-
-;; Do all dired ops in a single window
-(setq dired-kill-when-opening-new-dired-buffer t)
-;; allow find-alternate-file i.e. open and kill dired
-(put 'dired-find-alternate-file 'disabled nil)
-
 ;;; markdown mode
 
 (setq markdown-header-scaling t)
@@ -1093,15 +1078,17 @@
 
 (add-hook 'Custom-mode-hook 'add-complete-font-name)
 
-
 ;; Experiment with lsp-bridge
-(add-to-list 'load-path (expand-file-name "~/.emacs.d/lsp-bridge"))
+;; Note it requires yasnippet
 
 (use-package yasnippet
   :ensure t
   :init
   (yas-global-mode 1))
 
-;; This is directly cloned
-(require 'lsp-bridge)
-(my-ignore (global-lsp-bridge-mode))
+;; lsp-bridge is directly cloned into my emacs directory.
+;; For now its only enabled in java lsp sessions directly in their hook.
+(use-package lsp-bridge
+    :load-path "~/.emacs.d/lsp-bridge"
+    :config
+    (my-ignore (global-lsp-bridge-mode)))
