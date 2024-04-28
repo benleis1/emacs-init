@@ -453,9 +453,9 @@
 
 ;;; Java
 
-;; always use lsp
-;; 4 space tabs
-;; Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
+;; *  Always use lsp.
+;; * 4 space tabs
+;; **Note:** I customized the lsp-java-server-install-dir to be in a more discoverable location
 (use-package lsp-java
   :ensure t
   :after lsp)
