@@ -84,8 +84,7 @@ alias gemacs='start-emacs'
 - [org-mode](#org-mode)
     - [org-mode-fonts](#org-mode-fonts)
 - [Programming modes](#programming-modes)
-    - [find-first](#find-first)
-    - [java-file](#java-file)
+- [Java](#java)
     - [my/make-marker](#mymake-marker)
     - [my/get-def-name](#myget-def-name)
     - [my/get-field-name](#myget-field-name)
@@ -96,6 +95,7 @@ alias gemacs='start-emacs'
     - [my/generate-ts-imenu](#mygenerate-ts-imenu)
     - [modify-java-ts-syntax-highlighting](#modify-java-ts-syntax-highlighting)
     - [java-hook](#java-hook)
+- [Common LSP + python](#common-lsp--python)
     - [my-treemacs-sort-by-kind-alphabetically](#my-treemacs-sort-by-kind-alphabetically)
     - [lsp-treemacs-symbols-switch-sort](#lsp-treemacs-symbols-switch-sort)
 - [markdown mode](#markdown-mode)
@@ -649,22 +649,8 @@ Set display line number mode on
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 ```
 
-## find-first
-helper functions
-```
-(defun find-first (fn ls)
-  (cond ((null ls) nil)
-        ((funcall fn (car ls)) (car ls))
-        (t (find-first fn (cdr ls)))))
-```
+# Java
 
-## java-file
-```
-(defun java-file (buffer)
-  (string-match ".*\.java" (buffer-name buffer)))
-```
-
-java
 always use lsp
 4 space tabs
 Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
@@ -883,7 +869,8 @@ Set java home for all the various components that need it.
 ```
 
 
-python - turn on lsp integration
+# Common LSP + python
+
 ```
 (use-package lsp-mode
   :ensure t
@@ -1434,7 +1421,7 @@ Hook completion in and setup M-<tab> binding for it.
 ```
 
 Experiment with lsp-bridge
-(add-to-list 'load-path (expand-file-name "~/.emacs.d/lsp-bridge"))
+Note it requires yasnippet
 
 ```
 (use-package yasnippet
@@ -1444,6 +1431,7 @@ Experiment with lsp-bridge
 ```
 
 lsp-bridge is directly cloned into my emacs directory.
+For now its only enabled in java lsp sessions directly in their hook.
 ```
 (use-package lsp-bridge
     :load-path "~/.emacs.d/lsp-bridge"

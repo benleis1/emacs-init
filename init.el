@@ -451,16 +451,8 @@
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
-;; helper functions
-(defun find-first (fn ls)
-  (cond ((null ls) nil)
-        ((funcall fn (car ls)) (car ls))
-        (t (find-first fn (cdr ls)))))
+;;; Java
 
-(defun java-file (buffer)
-  (string-match ".*\.java" (buffer-name buffer)))
-
-;; java
 ;; always use lsp
 ;; 4 space tabs
 ;; Note: I customized the lsp-java-server-install-dir to be in a more discoverable location
@@ -641,7 +633,8 @@
 (setq lsp-java-vmargs '("-Xmx4g"))
 
 
-;; python - turn on lsp integration
+;;; Common LSP + python
+
 (use-package lsp-mode
   :ensure t
   :config
