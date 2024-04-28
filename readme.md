@@ -653,6 +653,7 @@ Set display line number mode on
 
 *  Always use lsp.
 * 4 space tabs
+
 **Note:** I customized the lsp-java-server-install-dir to be in a more discoverable location
 ```
 (use-package lsp-java
