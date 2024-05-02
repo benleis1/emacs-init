@@ -638,6 +638,11 @@ at the mouse-down event to the position at mouse-up event."
 			   (equal (tab-line-tabs-buffer-group-name b) curgroup))
 			 buffers)))))
 
+(defun find-first (fn ls)
+  (cond ((null ls) nil)
+        ((funcall fn (car ls)) (car ls))
+        (t (find-first fn (cdr ls)))))
+
 ;; Setup the list of tabs to be displayed.
 ;; Note: these will returned in the tab list format
 ;; tab2-format-tab is then responsible for formatting each one i.e faces / close icons etc.
@@ -672,6 +677,7 @@ at the mouse-down event to the position at mouse-up event."
 	 (list (tab2-make-group-tab selected-group "Project")))
        (list (tab2-make-group-tab selected-group "Files"))
        ;; Insert a modified group if any files are modified
+
        (when (find-first 'tab2-buffer-modified-file-p buffers)
 	 (list (tab2-make-group-tab selected-group "Modified")))
        tabs

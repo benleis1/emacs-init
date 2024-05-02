@@ -196,8 +196,8 @@
 (setq recentf-max-saved-items 25)
 
 ;; Try out undo-tree - if its useful enable persistent storage of the tree
-(use-package undo-tree
-  :ensure t)
+(my-ignore (use-package undo-tree
+  :ensure t))
 
 ;;; backup and autosave - put everything in ~/.saves
 
@@ -216,6 +216,7 @@
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 (use-package all-the-icons-dired
+  :defer t
   :if window-system
   :ensure t
   :hook ((dired-mode . all-the-icons-dired-mode))
@@ -298,11 +299,9 @@
 	(progn
 	  (if (derived-mode-p 'prog-mode)
 	    (progn
-	      (message "Flyspell on (code)")
 	      (flyspell-prog-mode))
 	    ;; else
 	    (progn
-	      (message "Flyspell on (text)")
 	      (flyspell-mode 1)))
 	  )))
 
@@ -330,7 +329,11 @@
 ;; and simple daily journal for which I have a capture template to add standup entries
 
 ;; mouse support
-(require 'org-mouse)
+;; This is fairly expensive so we defer it until idle
+(use-package emacs
+  :defer 2
+  :config
+  (require 'org-mouse))
 
 ;; hide emphasis markers
 (setq org-hide-emphasis-markers t)
@@ -339,25 +342,6 @@
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
-
-;; TODO: come back to the font setup after looking at things
-;; That Tex Gyre font isn't installed for instance
-
-;; set fixed-width font
-;;(set-face-font 'default "Source Code Pro-12")
-
-;; set variable-width font
-;;(set-face-font 'variable-pitch "TeX Gyre Pagella-13")
-
-;; Use monospaced font faces in current buffer
-(defun org-mode-fonts ()
-  "Sets up display fonts for org-mode"
-  (interactive)
-  (setq buffer-face-mode-face '(:family "TeX Gyre Pagella-13" :height 100))
-  (buffer-face-mode))
-
-;; Set default font faces for Info and ERC modes
-(my-ignore (add-hook 'org-mode-hook 'org-mode-fonts))
 
 ;; set org-mode to use variable width fonts smartly
 (use-package mixed-pitch
@@ -401,10 +385,10 @@
 (use-package org-autolist
   :hook (org-mode . org-autolist-mode))
 
-
 ;; org-modern styling - handles bullets, checkboxes, styling of todo, timestamps etc.
 ;; disable table formatting in favor of org-pretty-table because of header rendering issues
 (use-package org-modern
+  :defer t
   :ensure t
   :hook (org-mode . org-modern-mode)
   :config (setq org-modern-table nil) )
@@ -458,16 +442,16 @@
 ;;
 ;; **Note:** I customized the lsp-java-server-install-dir to be in a more discoverable location
 (use-package lsp-java
+  :defer t
   :ensure t
   :after lsp)
 
 (use-package dap-mode
+  :defer t
   :ensure t
   :after lsp
   :config
   (setq dap-auto-configure-features '(sessions locals controls tooltip)))
-
-(use-package lsp-treemacs :ensure t :after lsp)
 
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 
@@ -549,6 +533,7 @@
           (interfaces '())
           (enums '())
           (result '()))
+
       (dolist (node (treesit-node-children (treesit-buffer-root-node)))
         (let ((type (treesit-node-type node)))
           (when (or (equal type "class_declaration")
@@ -637,7 +622,9 @@
 ;;; Common LSP + python
 
 (use-package lsp-mode
+  :defer t
   :ensure t
+  :after lsp-bridge
   :config
   ;; try no file watchers
   (setq lsp-enable-file-watchers nil
@@ -648,6 +635,13 @@
 ;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
+
+;; Pretty UI for several different views of data i.e. symbols or build issues
+;; but I'm moving away from it towards other options like ts + imenu.
+(use-package lsp-treemacs
+  :defer t
+  :ensure t
+  :after lsp)
 
 ;; A combo sort that organizes into groups by type and within it alphabetically
 ;; The numbers assigned to type work more naturally sorted high to low
@@ -691,6 +685,7 @@
 
 
 (use-package lsp-ui
+  :defer t
   :commands lsp-ui-mode)
 
 
@@ -859,6 +854,7 @@
 ;; I've modified this quite a bit to directly generate org files.
 
 (use-package excorporate :after org-agenda
+  :defer t
   :init
   (setq excorporate-update-diary nil
 	excorporate-update-org t
@@ -1066,7 +1062,6 @@
 
 ;; Hook completion in and setup M-<tab> binding for it.
 (defun add-complete-font-name()
-  (message "adding complete font hook")
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
@@ -1076,6 +1071,7 @@
 ;; Note it requires yasnippet
 
 (use-package yasnippet
+  :defer t
   :ensure t
   :init
   (yas-global-mode 1))
@@ -1083,6 +1079,14 @@
 ;; lsp-bridge is directly cloned into my emacs directory.
 ;; For now its only enabled in java lsp sessions directly in their hook.
 (use-package lsp-bridge
-    :load-path "~/.emacs.d/lsp-bridge"
-    :config
-    (my-ignore (global-lsp-bridge-mode)))
+  :load-path "~/.emacs.d/lsp-bridge"
+  :config
+  (my-ignore (global-lsp-bridge-mode)))
+
+;;; Garbage Collection
+;; Turn GC on that was disabled in early-init
+;; this should stay at the end of the file
+;;
+
+(setq gc-cons-threshold  67108864) ;; check with lsp-mode settings to make sure they win
+(garbage-collect)
