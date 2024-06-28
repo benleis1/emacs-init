@@ -72,7 +72,9 @@
 ;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
 ;; and `package-pinned-packages`. Most users will not need or want to do this.
 (my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
-(package-initialize)
+
+;; WIP: Very expensive do we need it?
+;;(package-initialize)
 
 ;; use-package to simplify package loading.
 (unless (package-installed-p `use-package)
@@ -195,9 +197,15 @@
 (setq recentf-max-menu-items 25)
 (setq recentf-max-saved-items 25)
 
+;; Every 10 minutes up date the list since I usually either run the server or keep
+;; the gui app open for long periods of time
+(run-at-time nil 600 'recentf-save-list)
+
 ;; Try out undo-tree - if its useful enable persistent storage of the tree
 (my-ignore (use-package undo-tree
   :ensure t))
+
+(setq vertico-sort-function 'vertico-sort-history-length-alpha)
 
 ;;; backup and autosave - put everything in ~/.saves
 
@@ -383,6 +391,7 @@
 
 ;; Autolist completion
 (use-package org-autolist
+  :ensure t
   :hook (org-mode . org-autolist-mode))
 
 ;; org-modern styling - handles bullets, checkboxes, styling of todo, timestamps etc.
@@ -496,7 +505,7 @@
           (fields ())
           (methods ())
           (inner-classes ())
-          (result ())
+	  (result ())
 	  (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
       (dolist (node (treesit-node-children classnode))
         (progn
@@ -523,6 +532,10 @@
       ;; final value
       result))
 
+(setq my/first-level-ts-filters '(("Classes" "class_declaration")
+				  ("Interfaces" "interface_declaration")
+				  ("Records" "record_declaration")))
+
 ;; Main routine that walks top level of the grammar tree and constructs imenu nodes
 ;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
 (defun my/generate-ts-imenu (&optional buffer)
@@ -532,6 +545,8 @@
     (let ((classes '())
           (interfaces '())
           (enums '())
+	  (class_declaration '())
+	  (subresults '())
           (result '()))
 
       (dolist (node (treesit-node-children (treesit-buffer-root-node)))
@@ -545,19 +560,28 @@
                    (object-start (treesit-node-start node)))
 
               (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
+	      (unless (assoc type subresults) (push (cons type nil) subresults))
+	      (push (cons objectname subleafs) (cdr (assoc type subresults)))
+
               (cond ((equal type "class_declaration")
-                     (push (cons objectname subleafs) classes))
+		     (push (cons objectname subleafs) classes))
                     ((equal type "enum_declaration")
                      (push (cons objectname subleafs) enums))
                     ((equal type "interface_declaration")
                      (push (cons objectname subleafs) interfaces)))))))
 
-        (when enums (push (cons "Enums" (reverse enums)) result))
-        (when classes (push (cons "Classes" (reverse classes)) result))
-        (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
-        result)))
+;;      (dolist ("enum_declaration" "class_declaration" "interface_declaration"))
 
-;; Some custom font lock rules
+      (when enums (push (cons "Enums" (reverse enums)) result))
+      (when (assoc "class_declaration" subresults)
+	(push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
+
+;;      (when classes (push (cons "Classes" (reverse classes)) result))
+      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
+      result)))
+
+
+;; Some custom font lock rule
 ;; * Tone down colors on import statements
 (defun modify-java-ts-syntax-highlighting ()
   (let ((new-rule  (treesit-font-lock-rules
@@ -685,6 +709,7 @@
 
 
 (use-package lsp-ui
+  :ensure t
   :defer t
   :commands lsp-ui-mode)
 
@@ -854,6 +879,7 @@
 ;; I've modified this quite a bit to directly generate org files.
 
 (use-package excorporate :after org-agenda
+  :ensure t
   :defer t
   :init
   (setq excorporate-update-diary nil
@@ -1080,6 +1106,7 @@
 ;; For now its only enabled in java lsp sessions directly in their hook.
 (use-package lsp-bridge
   :load-path "~/.emacs.d/lsp-bridge"
+  :defer 2
   :config
   (my-ignore (global-lsp-bridge-mode)))
 
