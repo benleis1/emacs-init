@@ -43,12 +43,13 @@
 ;; Normally I run a gui standalone emacs as well as an emacs server for terminal mode editing
 ;; My typical alias setup
 ;;  ```
+;;  # launcher for terminal emacs
 ;;  alias emacs='emacsclient -t -s default --alternate-editor=`
 ;;
-;; start-emacs() {
-;;    /opt/homebrew/bin/emacs $* &
-;; }
-;; alias gemacs='start-emacs'
+;;  # launcher for gui emacs
+;;  function gemacs() {
+;;     /opt/homebrew/bin/emacs $* &
+;;  }
 ;; ```
 ;;
 ;; ## Major modes configured
@@ -88,6 +89,14 @@
 (setq vc-follow-symlinks t)
 
 ;;; Customizations
+
+;;
+;; Color name redirection for use with custom faces
+;; requires manual editing of custom-set-faces to use ` back tick operator.
+;;
+
+(defvar my-code-bright "goldenrod3")
+(defvar my-code-dark "goldenrod4")
 
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 ;; All customizations are stored on the side in custom.el
@@ -441,6 +450,11 @@
 
 ;;; Programming modes
 
+;; Install magit for git
+
+(use-package magit
+  :ensure t)
+
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
@@ -637,7 +651,7 @@
       '((java-mode . java-ts-mode)))
 
 ;; Set java home for all the various components that need it.
-(setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
+(setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0")
 (setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
@@ -707,7 +721,6 @@
       (message "setting to %s" name)
       (setq mode-name (format "Symbols - %s" name)))))
 
-
 (use-package lsp-ui
   :ensure t
   :defer t
@@ -720,13 +733,16 @@
    :load-path "~/.emacs.d/ts-fold"))
 
 ;;; markdown mode
+(use-package stripe-buffer
+  :ensure t)
 
 (setq markdown-header-scaling t)
+
 ;; Use helvetica for the current mode when hooked
 (defun buffer-face-mode-helvetica ()
   "Set default font to helvetica in current buffer"
   (interactive)
-  (setq buffer-face-mode-face '(:family "helvetica"))
+  (setq buffer-face-mode-face '(:family "helvetica" :height 180))
   (buffer-face-mode))
 
 ;; render remote images

@@ -43,12 +43,13 @@ Sample screen:
 Normally I run a gui standalone emacs as well as an emacs server for terminal mode editing
 My typical alias setup
  ```
+ # launcher for terminal emacs
  alias emacs='emacsclient -t -s default --alternate-editor=`
 
-start-emacs() {
-   /opt/homebrew/bin/emacs $* &
-}
-alias gemacs='start-emacs'
+ # launcher for gui emacs
+ function gemacs() {
+    /opt/homebrew/bin/emacs $* &
+ }
 ```
 
 ## Major modes configured
@@ -82,7 +83,6 @@ alias gemacs='start-emacs'
     - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
     - [flyspell-toggle](#flyspell-toggle)
 - [org-mode](#org-mode)
-    - [org-mode-fonts](#org-mode-fonts)
 - [Programming modes](#programming-modes)
 - [Java](#java)
     - [my/make-marker](#mymake-marker)
@@ -123,6 +123,7 @@ alias gemacs='start-emacs'
     - [font-family-widget-p](#font-family-widget-p)
     - [complete-font-name](#complete-font-name)
     - [add-complete-font-name](#add-complete-font-name)
+- [Garbage Collection](#garbage-collection)
 
 <!-- markdown-toc end -->
 
@@ -143,8 +144,10 @@ Comment/uncomment this line to enable MELPA Stable if desired.  See `package-arc
 and `package-pinned-packages`. Most users will not need or want to do this.
 ```
 (my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
-(package-initialize)
 ```
+
+WIP: Very expensive do we need it?
+(package-initialize)
 
 use-package to simplify package loading.
 ```
@@ -162,6 +165,16 @@ early on setup follow-symlinks to true for loaded files
 ```
 
 # Customizations
+
+
+Color name redirection for use with custom faces
+requires manual editing of custom-set-faces to use ` back tick operator.
+
+
+```
+(defvar my-code-bright "goldenrod3")
+(defvar my-code-dark "goldenrod4")
+```
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 All customizations are stored on the side in custom.el
@@ -307,10 +320,18 @@ Setup recent files mode
 (setq recentf-max-saved-items 25)
 ```
 
+Every 10 minutes up date the list since I usually either run the server or keep
+the gui app open for long periods of time
+```
+(run-at-time nil 600 'recentf-save-list)
+```
+
 Try out undo-tree - if its useful enable persistent storage of the tree
 ```
-(use-package undo-tree
-  :ensure t)
+(my-ignore (use-package undo-tree
+  :ensure t))
+
+(setq vertico-sort-function 'vertico-sort-history-length-alpha)
 ```
 
 # backup and autosave - put everything in ~/.saves
@@ -333,6 +354,7 @@ Try out undo-tree - if its useful enable persistent storage of the tree
 Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 ```
 (use-package all-the-icons-dired
+  :defer t
   :if window-system
   :ensure t
   :hook ((dired-mode . all-the-icons-dired-mode))
@@ -445,11 +467,9 @@ currently not bound to a key. I use the context menu instead.
 	(progn
 	  (if (derived-mode-p 'prog-mode)
 	    (progn
-	      (message "Flyspell on (code)")
 	      (flyspell-prog-mode))
 	    ;; else
 	    (progn
-	      (message "Flyspell on (text)")
 	      (flyspell-mode 1)))
 	  )))
 ```
@@ -487,8 +507,12 @@ My typical usage of Org includes a main work tracking file, org-agenda, integrat
 and simple daily journal for which I have a capture template to add standup entries
 
 mouse support
+This is fairly expensive so we defer it until idle
 ```
-(require 'org-mouse)
+(use-package emacs
+  :defer 2
+  :config
+  (require 'org-mouse))
 ```
 
 hide emphasis markers
@@ -501,32 +525,6 @@ word wrap for normal text and stripe mode for tables
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
-```
-
-TODO: come back to the font setup after looking at things
-That Tex Gyre font isn't installed for instance
-
-set fixed-width font
-(set-face-font 'default "Source Code Pro-12")
-
-set variable-width font
-(set-face-font 'variable-pitch "TeX Gyre Pagella-13")
-
-## org-mode-fonts
->Sets up display fonts for org-mode
-
-Use monospaced font faces in current buffer
-```
-(defun org-mode-fonts ()
-  "Sets up display fonts for org-mode"
-  (interactive)
-  (setq buffer-face-mode-face '(:family "TeX Gyre Pagella-13" :height 100))
-  (buffer-face-mode))
-```
-
-Set default font faces for Info and ERC modes
-```
-(my-ignore (add-hook 'org-mode-hook 'org-mode-fonts))
 ```
 
 set org-mode to use variable width fonts smartly
@@ -582,14 +580,15 @@ set the org-agenda prefix to skip printing the source files
 Autolist completion
 ```
 (use-package org-autolist
+  :ensure t
   :hook (org-mode . org-autolist-mode))
 ```
-
 
 org-modern styling - handles bullets, checkboxes, styling of todo, timestamps etc.
 disable table formatting in favor of org-pretty-table because of header rendering issues
 ```
 (use-package org-modern
+  :defer t
   :ensure t
   :hook (org-mode . org-modern-mode)
   :config (setq org-modern-table nil) )
@@ -644,6 +643,13 @@ because it works better
 
 # Programming modes
 
+Install magit for git
+
+```
+(use-package magit
+  :ensure t)
+```
+
 Set display line number mode on
 ```
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
@@ -657,16 +663,16 @@ Set display line number mode on
 **Note:** I customized the lsp-java-server-install-dir to be in a more discoverable location
 ```
 (use-package lsp-java
+  :defer t
   :ensure t
   :after lsp)
 
 (use-package dap-mode
+  :defer t
   :ensure t
   :after lsp
   :config
   (setq dap-auto-configure-features '(sessions locals controls tooltip)))
-
-(use-package lsp-treemacs :ensure t :after lsp)
 
 (setq dap-auto-configure-features '(sessions locals controls tooltip))
 ```
@@ -732,7 +738,7 @@ Recursion occurs when there is an inner class.
           (fields ())
           (methods ())
           (inner-classes ())
-          (result ())
+	  (result ())
 	  (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
       (dolist (node (treesit-node-children classnode))
         (progn
@@ -758,6 +764,10 @@ Recursion occurs when there is an inner class.
       (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
       ;; final value
       result))
+
+(setq my/first-level-ts-filters '(("Classes" "class_declaration")
+				  ("Interfaces" "interface_declaration")
+				  ("Records" "record_declaration")))
 ```
 
 ## my/generate-ts-imenu
@@ -771,7 +781,10 @@ to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
     (let ((classes '())
           (interfaces '())
           (enums '())
+	  (class_declaration '())
+	  (subresults '())
           (result '()))
+
       (dolist (node (treesit-node-children (treesit-buffer-root-node)))
         (let ((type (treesit-node-type node)))
           (when (or (equal type "class_declaration")
@@ -783,21 +796,30 @@ to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
                    (object-start (treesit-node-start node)))
 
               (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
+	      (unless (assoc type subresults) (push (cons type nil) subresults))
+	      (push (cons objectname subleafs) (cdr (assoc type subresults)))
+
               (cond ((equal type "class_declaration")
-                     (push (cons objectname subleafs) classes))
+		     (push (cons objectname subleafs) classes))
                     ((equal type "enum_declaration")
                      (push (cons objectname subleafs) enums))
                     ((equal type "interface_declaration")
                      (push (cons objectname subleafs) interfaces)))))))
 
-        (when enums (push (cons "Enums" (reverse enums)) result))
-        (when classes (push (cons "Classes" (reverse classes)) result))
-        (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
-        result)))
+;;      (dolist ("enum_declaration" "class_declaration" "interface_declaration"))
+
+      (when enums (push (cons "Enums" (reverse enums)) result))
+      (when (assoc "class_declaration" subresults)
+	(push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
+
+;;      (when classes (push (cons "Classes" (reverse classes)) result))
+      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
+      result)))
 ```
 
+
 ## modify-java-ts-syntax-highlighting
-Some custom font lock rules
+Some custom font lock rule
 * Tone down colors on import statements
 ```
 (defun modify-java-ts-syntax-highlighting ()
@@ -863,7 +885,7 @@ Setup automatic mode remapping so we always use treesitter for java
 
 Set java home for all the various components that need it.
 ```
-(setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0.8.1")
+(setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0")
 (setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
 (setq lsp-java-vmargs '("-Xmx4g"))
@@ -874,7 +896,9 @@ Set java home for all the various components that need it.
 
 ```
 (use-package lsp-mode
+  :defer t
   :ensure t
+  :after lsp-bridge
   :config
   ;; try no file watchers
   (setq lsp-enable-file-watchers nil
@@ -885,6 +909,15 @@ Set java home for all the various components that need it.
 ;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
+```
+
+Pretty UI for several different views of data i.e. symbols or build issues
+but I'm moving away from it towards other options like ts + imenu.
+```
+(use-package lsp-treemacs
+  :defer t
+  :ensure t
+  :after lsp)
 ```
 
 ## my-treemacs-sort-by-kind-alphabetically
@@ -932,8 +965,9 @@ WIP interactive command to make it easy to swap how the symbols are sorted
       (message "setting to %s" name)
       (setq mode-name (format "Symbols - %s" name)))))
 
-
 (use-package lsp-ui
+  :ensure t
+  :defer t
   :commands lsp-ui-mode)
 ```
 
@@ -946,20 +980,22 @@ Test treesitter folding
 ```
 
 # markdown mode
-
 ```
+(use-package stripe-buffer
+  :ensure t)
+
 (setq markdown-header-scaling t)
 ```
 
 ## buffer-face-mode-helvetica
-
 >Set default font to helvetica in current buffer
+
 Use helvetica for the current mode when hooked
 ```
 (defun buffer-face-mode-helvetica ()
   "Set default font to helvetica in current buffer"
   (interactive)
-  (setq buffer-face-mode-face '(:family "helvetica"))
+  (setq buffer-face-mode-face '(:family "helvetica" :height 180))
   (buffer-face-mode))
 ```
 
@@ -1145,6 +1181,8 @@ I've modified this quite a bit to directly generate org files.
 
 ```
 (use-package excorporate :after org-agenda
+  :ensure t
+  :defer t
   :init
   (setq excorporate-update-diary nil
 	excorporate-update-org t
@@ -1414,7 +1452,6 @@ need to return a list (start end collection) if this matches or nil if not
 Hook completion in and setup M-<tab> binding for it.
 ```
 (defun add-complete-font-name()
-  (message "adding complete font hook")
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
   (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
 
@@ -1426,6 +1463,7 @@ Note it requires yasnippet
 
 ```
 (use-package yasnippet
+  :defer t
   :ensure t
   :init
   (yas-global-mode 1))
@@ -1435,9 +1473,22 @@ lsp-bridge is directly cloned into my emacs directory.
 For now its only enabled in java lsp sessions directly in their hook.
 ```
 (use-package lsp-bridge
-    :load-path "~/.emacs.d/lsp-bridge"
-    :config
-    (my-ignore (global-lsp-bridge-mode)))
+  :load-path "~/.emacs.d/lsp-bridge"
+  :defer 2
+  :config
+  (my-ignore (global-lsp-bridge-mode)))
+```
+
+# Garbage Collection
+Turn GC on that was disabled in early-init
+this should stay at the end of the file
+
+
+```
+(setq gc-cons-threshold  67108864) ;; check with lsp-mode settings to make sure they win
+```
+```
+(garbage-collect)
 ```
 
 > This file was auto-generated by elispdoc.el

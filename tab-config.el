@@ -1,4 +1,4 @@
-;;; tab-config.el --- my overrides to tab-line -*- lexical-binding: t; -*-
+;; tab-config.el --- my overrides to tab-line -*- lexical-binding: t; -*-
 
 ;; ```
 ;; | |_ __ _| |__         ___ ___  _ __  / _(_) __ _
@@ -857,7 +857,7 @@ at the mouse-down event to the position at mouse-up event."
 
 (doom-modeline-def-modeline 'tab2-aware-modeline
   '(bar matches buffer-info remote-host buffer-position parrot selection-info)
-  '(misc-info minor-modes input-method major-mode process vcs checker tab2-view-segment))
+  '(misc-info minor-modes input-method major-mode process vcs tab2-view-segment))
 
 ;; TODO: move out into main init.el
 
@@ -874,9 +874,9 @@ at the mouse-down event to the position at mouse-up event."
   `((t :foreground ,(face-foreground 'default)
        :background ,(face-background 'highlight nil t)
        :height ,(face-attribute 'default :height)
-       :box '(:line-width (1 . 1)
-              :color ,(face-foreground 'default)
-              :style none)))
+       :box (:line-width (1 . 1)
+              :color ,(face-foreground 'default))
+       ))
   "Face for quick command")
 
 (defface quick-command-prompt-face
@@ -884,8 +884,8 @@ at the mouse-down event to the position at mouse-up event."
        :background ,(face-foreground 'default)
        :weight ,(face-attribute 'bold :weight nil 'default)
        :box (:line-width (1 . 1)
-             :color ,(face-foreground 'default)
-             :style none)))
+             :color ,(face-foreground 'default))
+       ))
   "Face for prompt")
 
 (defface quick-command-cursor-face
@@ -893,8 +893,8 @@ at the mouse-down event to the position at mouse-up event."
        ;; :background "#d0d0d0"
        :background ,(face-foreground 'default)
        :box (:line-width (1 . 1)
-             :color ,(face-foreground 'default)
-             :style none)))
+             :color ,(face-foreground 'default))
+       ))
   "Face for cursor")
 
 (defun tab2-quick-command--update (current-buffer command-buffer)
