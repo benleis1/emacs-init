@@ -187,9 +187,6 @@
 ;; Use short y or no prompts.
 (setopt use-short-answers t)
 
-;; Revert Dired and other buffers
-(customize-set-variable 'global-auto-revert-non-file-buffers t)
-
 ;; Revert buffers when the underlying file has changed
 (global-auto-revert-mode 1)
 
@@ -303,8 +300,11 @@
   (setq interprogram-cut-function 'paste-for-osx))
 
 ;;; sql formatting setup for sqlformat-* functions.
-(setq sqlformat-command 'pgformatter)
-(setq sqlformat-args '("-s2" "-g"))
+(use-package sqlformat
+  :defer t
+  :ensure t
+  :config (setq sqlformat-command 'pgformatter
+		sqlformat-args '("-s2" "-g")))
 
 ;;; flyspell config
 
@@ -772,7 +772,8 @@
 
 (my-ignore (add-hook 'markdown-mode-hook 'use-outline-for-imenu))
 
-;; try barebones  version
+;; Automatically add the index menu entry for org and markdown modes. This will
+;; also be available via the context menus
 (add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
 (add-hook 'orgmode-mode-hook 'imenu-add-menubar-index)
 (setq imenu-auto-rescan t)
@@ -1133,3 +1134,16 @@
 
 (setq gc-cons-threshold  67108864) ;; check with lsp-mode settings to make sure they win
 (garbage-collect)
+
+
+;;
+;; Testing Imenu option with headings in it.
+;; TODO: it would be cool to break down functions under the headings.
+;;
+
+(setq-local imenu-generic-expression `(("transients" "^\(transient-define-prefix \\([^ 	\n]+\\)" 1)
+				      ("functions" "^\(defun \\([^	\n]+\\)" 1)
+				      ("options" "^ \\([-a-z]+\\)" 1)
+				      ("variables" "^\(defvar \\([^ 	\n]+\\)" 1)
+				      ("keymaps" ":keymap \\([^ 	\n]+\\)" 1)
+				      ("headings" "^;;; \\([^	\n]+\\)" 1)))

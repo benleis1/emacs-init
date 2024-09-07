@@ -36,7 +36,7 @@
      (:eval (my/imenu-current-sort imenu-list--displayed-buffer))
      mode-line-end-spaces))
  '(lsp-java-server-install-dir "/Users/benjamin.leis/.emacs.d/eclipse.jdt.ls/")
- '(lsp-treemacs-symbols-sort-functions '(lsp-treemacs-sort-by-name))
+ '(lsp-treemacs-symbols-sort-functions '(lsp-treemacs-sort-by-name) t)
  '(markdown-header-scaling-values '(1.5 1.3 1.2 1.1 1.0 1.0))
  '(org-agenda-files
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
@@ -44,7 +44,7 @@
  '(package-selected-packages
    '(## all-the-icons-dired auctex centaur-tabs company corfu dashboard
 	diff-hl doom-modeline doom-themes esup excorporate
-	fringe-helper groovy-mode htmlize imenu-list
+	fringe-helper groovy-mode htmlize imenu-list json-mode
 	latex-math-preview latex-preview-pane lsp-java lsp-mode
 	lsp-origami lsp-treemacs lsp-ui magit marginalia markdown-mode
 	markdown-toc mixed-pitch neotree org-autolist org-bullets
