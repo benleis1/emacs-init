@@ -782,9 +782,10 @@
 (use-package imenu-list
   :ensure t
   :config
+  ;; Some built in default around resizing and window focus I prefer.
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil)
-  ;; Simplified buffer name with icon
+  ;; Simplified buffer name with icon for the menu bar.
   (setq imenu-list-mode-line-format
 	'("%e" mode-line-frame-identification
 	  (:propertize "󰉹" face mode-line-buffer-id) " "
@@ -805,23 +806,24 @@
 
   ;; I need a more visible highlight for the current block
   (defface my-hl-imenu-face
-  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
+    '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
   "A new custom face for highlighting."
   :group 'my-custom-group)
 
   (defun my-imenu-list--hide-ellipsis (ov)
-    "Suppress hideshow's default \"...\" indicator on OV.
-The leading arrow marker already conveys fold state, so the ellipsis
-would just be redundant clutter."
+    "Suppress hideshow's default \"...\" indicator on OV. The leading arrow marker already conveys fold state, so the ellipsis would just be redundant clutter."
     (when (eq (overlay-get ov 'invisible) 'hs)
       (overlay-put ov 'display "")))
 
+  ;; Hook for setup of the mode,
   (add-hook 'imenu-list-major-mode-hook
-            (lambda ()
+	    (lambda ()
+	      ;; Wire in my custom highlight face.
 	      (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
 	      ;; High enough priority for this face so it takes precedence
 	      ;; unlike normal I don't want to preserve the underlying foreground color
 	      (setq-local hl-line-overlay-priority 10)
+	      ;; Wire in the ellipsis twiddling.
               (setq-local hs-set-up-overlay #'my-imenu-list--hide-ellipsis)))
 
   (defun my-imenu-list-fold-below-depth (&optional depth)
@@ -834,8 +836,7 @@ would just be redundant clutter."
 	  (hs-hide-level depth)))))
 
   (defun my-imenu-list--set-marker-at-point ()
-    "Make the fold marker on the current line display as an arrow
-reflecting whether the block starting here is currently hidden."
+    "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
     (save-excursion
       (beginning-of-line)
       (when (looking-at "^ *\\(\\+\\) ")
@@ -847,8 +848,7 @@ reflecting whether the block starting here is currently hidden."
                                 my-imenu-list-expanded-marker))))))
 
   (defun my-imenu-list-update-fold-markers ()
-    "Update every foldable entry's marker in the *Ilist* buffer to match
-its current hidden/shown state."
+    "Update every foldable entry's marker in the *Ilist* buffer to match its current hidden/shown state."
     (when (get-buffer imenu-list-buffer-name)
       (with-current-buffer imenu-list-buffer-name
         (save-excursion
