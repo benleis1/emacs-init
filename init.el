@@ -783,7 +783,109 @@
   :ensure t
   :config
   (setq imenu-list-focus-after-activation t
-        imenu-list-auto-resize nil))
+        imenu-list-auto-resize nil)
+  ;; Simplified buffer name with icon
+  (setq imenu-list-mode-line-format
+	'("%e" mode-line-frame-identification
+	  (:propertize "󰉹" face mode-line-buffer-id) " "
+	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+	  mode-line-end-spaces))
+
+  (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
+
+  ;; Track whether we autofolded per buffer.
+  (defvar-local imenu-list--folded-once nil
+    "`my-imenu-list-fold-below-depth' has folded this buffer's imenu-list.")
+
+  (defconst my-imenu-list-collapsed-marker "▶"
+    "Marker shown before a folded (hidden) imenu-list entry.")
+
+  (defconst my-imenu-list-expanded-marker "▼"
+    "Marker shown before an unfolded (visible) imenu-list entry.")
+
+  ;; I need a more visible highlight for the current block
+  (defface my-hl-imenu-face
+  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
+  "A new custom face for highlighting."
+  :group 'my-custom-group)
+
+  (defun my-imenu-list--hide-ellipsis (ov)
+    "Suppress hideshow's default \"...\" indicator on OV.
+The leading arrow marker already conveys fold state, so the ellipsis
+would just be redundant clutter."
+    (when (eq (overlay-get ov 'invisible) 'hs)
+      (overlay-put ov 'display "")))
+
+  (add-hook 'imenu-list-major-mode-hook
+            (lambda ()
+	      (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
+	      ;; High enough priority for this face so it takes precedence
+	      ;; unlike normal I don't want to preserve the underlying foreground color
+	      (setq-local hl-line-overlay-priority 10)
+              (setq-local hs-set-up-overlay #'my-imenu-list--hide-ellipsis)))
+
+  (defun my-imenu-list-fold-below-depth (&optional depth)
+    "Collapse imenu-list entries nested deeper than DEPTH (default `imenu-depth'). Top-level entries are depth 1."
+    (interactive)
+    (let ((depth (or depth imenu-depth)))
+      (with-current-buffer imenu-list-buffer-name
+        (save-excursion
+	  (goto-char (+ 1 (point-min)))
+	  (hs-hide-level depth)))))
+
+  (defun my-imenu-list--set-marker-at-point ()
+    "Make the fold marker on the current line display as an arrow
+reflecting whether the block starting here is currently hidden."
+    (save-excursion
+      (beginning-of-line)
+      (when (looking-at "^ *\\(\\+\\) ")
+        (let ((inhibit-read-only t))
+          (put-text-property (match-beginning 1) (match-end 1)
+                              'display
+                              (if (hs-already-hidden-p)
+                                  my-imenu-list-collapsed-marker
+                                my-imenu-list-expanded-marker))))))
+
+  (defun my-imenu-list-update-fold-markers ()
+    "Update every foldable entry's marker in the *Ilist* buffer to match
+its current hidden/shown state."
+    (when (get-buffer imenu-list-buffer-name)
+      (with-current-buffer imenu-list-buffer-name
+        (save-excursion
+          (goto-char (point-min))
+          (while (not (eobp))
+            (my-imenu-list--set-marker-at-point)
+            (forward-line 1))))))
+
+  (defun my-imenu-list-fold-below-depth-once (&optional depth)
+    "Run default folding once per buffer, then refresh fold markers."
+    (unless imenu-list--folded-once
+      (setq imenu-list--folded-once t)
+      (my-imenu-list-fold-below-depth depth))
+    (my-imenu-list-update-fold-markers))
+
+  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once)
+
+  ;; Apply the arrow overlays when manually adjusting folded sections
+  (defun my-imenu-list--refresh-marker-after-toggle (&rest _)
+      (when (eq major-mode 'imenu-list-major-mode)
+       (my-imenu-list--set-marker-at-point)))
+
+  (advice-add 'hs-toggle-hiding :after #'my-imenu-list--refresh-marker-after-toggle)
+
+  ;; When the tracked entry is inside a currently-folded block, `hl-line-mode'
+  ;; highlights the (invisible) entry line, which visually collapses to just
+  ;; the fold ellipsis at the end of the header line.  Move point up to the
+  ;; visible header line instead so the highlight bar actually shows.
+  (defun my-imenu-list-reveal-current-entry (&rest _)
+    (when (get-buffer-window imenu-list-buffer-name)
+      (with-selected-window (get-buffer-window imenu-list-buffer-name)
+        (when (invisible-p (point))
+          (goto-char (previous-single-char-property-change (point) 'invisible))
+          (beginning-of-line)
+          (hl-line-highlight)))))
+
+  (advice-add 'imenu-list--show-current-entry :after #'my-imenu-list-reveal-current-entry))
 
 ;; Custom sorting function that alphabetizes per imenu object type.
 ;; There is no built in facility to extend sorting so we have to wire this in via advice
