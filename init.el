@@ -145,12 +145,12 @@
   (unless (= (buffer-size) 0)
     (progn
       (my-ignore (message "start %s window-start %s bufsize %s point %s"
-	       start (window-start) (buffer-size) (point)))
+               start (window-start) (buffer-size) (point)))
       (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
             (lines-to-end (count-lines (point) (buffer-size))))
-	(when (< visible-lines (window-text-height))
-	  (progn
-	    (recenter (- lines-to-end))))))))
+        (when (< visible-lines (window-text-height))
+          (progn
+            (recenter (- lines-to-end))))))))
 
 ;; Only install the limit scrolling hook on gui modes where scrolling is enabled
 (when window-system
@@ -283,7 +283,7 @@
 (defun pbcopy-kill-ring (&optional push)
   (interactive)
   (let ((process-connection-type nil)
-	(text (current-kill 0)))
+        (text (current-kill 0)))
     (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
       (process-send-string proc text)
       (process-send-eof proc))))
@@ -304,7 +304,7 @@
   :defer t
   :ensure t
   :config (setq sqlformat-command 'pgformatter
-		sqlformat-args '("-s2" "-g")))
+                sqlformat-args '("-s2" "-g")))
 
 ;;; flyspell config
 
@@ -313,22 +313,22 @@
       "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
       (interactive)
       (if (not (symbol-value flyspell-mode)) ; if not already on
-	(progn
-	  (if (derived-mode-p 'prog-mode)
-	    (progn
-	      (flyspell-prog-mode))
-	    ;; else
-	    (progn
-	      (flyspell-mode 1)))
-	  )))
+        (progn
+          (if (derived-mode-p 'prog-mode)
+            (progn
+              (flyspell-prog-mode))
+            ;; else
+            (progn
+              (flyspell-mode 1)))
+          )))
 
 (defun flyspell-toggle ()
   "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
   (interactive)
   (if (symbol-value flyspell-mode)
       (progn ; flyspell is on, turn it off
-	(message "Flyspell off")
-	(flyspell-mode -1))
+        (message "Flyspell off")
+        (flyspell-mode -1))
     ; else - flyspell is off, turn it on
     (flyspell-on-for-buffer-type)))
 
@@ -501,7 +501,7 @@
 ;; Simple wrapper to make an imenu leaf from a treesitter node
 (defun my/imenu-leaf (node buffer name-func)
        (cons (funcall name-func node)
-	     (my/make-marker buffer (treesit-node-start node))))
+             (my/make-marker buffer (treesit-node-start node))))
 
 ;; Compare two imenu nodes
 (defun my/imenu-compare (left right)
@@ -519,8 +519,8 @@
           (fields ())
           (methods ())
           (inner-classes ())
-	  (result ())
-	  (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
+          (result ())
+          (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
       (dolist (node (treesit-node-children classnode))
         (progn
           (cond ((equal (treesit-node-type node) "constructor_declaration")
@@ -547,8 +547,8 @@
       result))
 
 (setq my/first-level-ts-filters '(("Classes" "class_declaration")
-				  ("Interfaces" "interface_declaration")
-				  ("Records" "record_declaration")))
+                                  ("Interfaces" "interface_declaration")
+                                  ("Records" "record_declaration")))
 
 ;; Main routine that walks top level of the grammar tree and constructs imenu nodes
 ;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
@@ -559,8 +559,8 @@
     (let ((classes '())
           (interfaces '())
           (enums '())
-	  (class_declaration '())
-	  (subresults '())
+          (class_declaration '())
+          (subresults '())
           (result '()))
 
       (dolist (node (treesit-node-children (treesit-buffer-root-node)))
@@ -574,11 +574,11 @@
                    (object-start (treesit-node-start node)))
 
               (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
-	      (unless (assoc type subresults) (push (cons type nil) subresults))
-	      (push (cons objectname subleafs) (cdr (assoc type subresults)))
+              (unless (assoc type subresults) (push (cons type nil) subresults))
+              (push (cons objectname subleafs) (cdr (assoc type subresults)))
 
               (cond ((equal type "class_declaration")
-		     (push (cons objectname subleafs) classes))
+                     (push (cons objectname subleafs) classes))
                     ((equal type "enum_declaration")
                      (push (cons objectname subleafs) enums))
                     ((equal type "interface_declaration")
@@ -588,7 +588,7 @@
 
       (when enums (push (cons "Enums" (reverse enums)) result))
       (when (assoc "class_declaration" subresults)
-	(push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
+        (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
 
 ;;      (when classes (push (cons "Classes" (reverse classes)) result))
       (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
@@ -599,20 +599,20 @@
 ;; * Tone down colors on import statements
 (defun modify-java-ts-syntax-highlighting ()
   (let ((new-rule  (treesit-font-lock-rules
-		    :language 'java
-		    :override t
-		    :feature 'import
-		    '((import_declaration (scoped_identifier) @default)))))
+                    :language 'java
+                    :override t
+                    :feature 'import
+                    '((import_declaration (scoped_identifier) @default)))))
 
     (setq-local treesit-font-lock-settings (append treesit-font-lock-settings new-rule))
 
     ;; Setup the features to include import
     (setq-local treesit-font-lock-feature-list
-		'(( comment definition import)  ;; level 1
+                '(( comment definition import)  ;; level 1
                   ( constant keyword string type)
                   ( annotation expression literal)
                   ( bracket delimiter operator)
-		  ))))
+                  ))))
 
 ;; Common hook. This sets some ts specific options that won't take effect in regular java
 ;; mode
@@ -626,7 +626,7 @@
   (setq c-basic-offset 4
         tab-width 4
         indent-tabs-mode t
-	lsp-java-compile-null-analysis-mode "automatic")
+        lsp-java-compile-null-analysis-mode "automatic")
 
   (when use-ts
     (progn
@@ -635,12 +635,12 @@
       ;; Unused simple-imenu settings
       (my-ignore
        (setq-local treesit-simple-imenu-settings
-		   '(("Class" "\\`class_declaration\\'" nil nil)
-		     ("Interface" "\\`interface_declaration\\'" nil nil)
-		     ("Enum" "\\`record_declaration\\'" nil nil)
-		     ("Constructor" "\\`constructor_declaration\\'" nil my/get-def-name)
-		     ("Field" "\\`field_declaration\\'" nil my/get-field-name)
-		     ("Method" "\\`method_declaration\\'" nil nil)))))))
+                   '(("Class" "\\`class_declaration\\'" nil nil)
+                     ("Interface" "\\`interface_declaration\\'" nil nil)
+                     ("Enum" "\\`record_declaration\\'" nil nil)
+                     ("Constructor" "\\`constructor_declaration\\'" nil my/get-def-name)
+                     ("Field" "\\`field_declaration\\'" nil my/get-field-name)
+                     ("Method" "\\`method_declaration\\'" nil nil)))))))
 
 ;; Java mode hooks. Currently tree sitter java mode is the active one
 (add-hook 'java-mode-hook (apply-partially 'java-hook nil))
@@ -666,10 +666,10 @@
   :config
   ;; try no file watchers
   (setq lsp-enable-file-watchers nil
-	;; recommendations lsp optimization on gc and read output sizes
-	gc-cons-threshold 100000000
-	read-process-output-max (* 1024 1024)
-	)
+        ;; recommendations lsp optimization on gc and read output sizes
+        gc-cons-threshold 100000000
+        read-process-output-max (* 1024 1024)
+        )
 ;;  (setq lsp-file-watch-threshold 5000)
   :hook
   ((python-mode . lsp)))
@@ -686,11 +686,11 @@
 (defun my-treemacs-sort-by-kind-alphabetically (left right)
   (-let (((&plist :kind left-kind) left)
          ((&plist :kind right-kind) right)
-	 ((&plist :label left-name) left)
+         ((&plist :label left-name) left)
          ((&plist :label right-name) right))
 
     (if (equal left-kind right-kind)
-	(string> right-name left-name)
+        (string> right-name left-name)
       (and left-kind right-kind (> left-kind right-kind)))))
 
 (setq lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
@@ -708,7 +708,7 @@
   (lsp-treemacs-symbols)
   (with-current-buffer "*LSP Symbols List*"
     (let ((name (cond ((equal type 'my-treemacs-sort-by-kind-alphabetically) "alphabetical")
-		      (t "position"))))
+                      (t "position"))))
       (message "setting to %s" name)
       (setq mode-name (format "Symbols - %s" name))))
   )
@@ -716,8 +716,8 @@
 (define-advice lsp-treemacs--set-mode-line-format (:override (buffer title))
   (with-current-buffer buffer
     (let ((name (cond ((equal lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
-		     "alphabetical")
-		    (t "position"))))
+                     "alphabetical")
+                    (t "position"))))
       (message "setting to %s" name)
       (setq mode-name (format "Symbols - %s" name)))))
 
@@ -787,10 +787,10 @@
         imenu-list-auto-resize nil)
   ;; Simplified buffer name with icon for the menu bar.
   (setq imenu-list-mode-line-format
-	'("%e" mode-line-frame-identification
-	  (:propertize "󰉹" face mode-line-buffer-id) " "
-	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
-	  mode-line-end-spaces))
+        '("%e" mode-line-frame-identification
+          (:propertize "󰉹" face mode-line-buffer-id) " "
+          (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+          mode-line-end-spaces))
 
   (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
 
@@ -817,13 +817,13 @@
 
   ;; Hook for setup of the mode,
   (add-hook 'imenu-list-major-mode-hook
-	    (lambda ()
-	      ;; Wire in my custom highlight face.
-	      (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
-	      ;; High enough priority for this face so it takes precedence
-	      ;; unlike normal I don't want to preserve the underlying foreground color
-	      (setq-local hl-line-overlay-priority 10)
-	      ;; Wire in the ellipsis twiddling.
+            (lambda ()
+              ;; Wire in my custom highlight face.
+              (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
+              ;; High enough priority for this face so it takes precedence
+              ;; unlike normal I don't want to preserve the underlying foreground color
+              (setq-local hl-line-overlay-priority 10)
+              ;; Wire in the ellipsis twiddling.
               (setq-local hs-set-up-overlay #'my-imenu-list--hide-ellipsis)))
 
   (defun my-imenu-list-fold-below-depth (&optional depth)
@@ -832,8 +832,8 @@
     (let ((depth (or depth imenu-depth)))
       (with-current-buffer imenu-list-buffer-name
         (save-excursion
-	  (goto-char (+ 1 (point-min)))
-	  (hs-hide-level depth)))))
+          (goto-char (+ 1 (point-min)))
+          (hs-hide-level depth)))))
 
   (defun my-imenu-list--set-marker-at-point ()
     "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
@@ -894,29 +894,29 @@
 (defun my/imenu-list-sort-alphabetically ()
   (interactive)
   (let ((entries imenu--index-alist)
-	(leaf-entries nil)
-	(sorted-entries nil))
+        (leaf-entries nil)
+        (sorted-entries nil))
 
     (dolist (entry entries)
 
       ;; if its a category container sort the entries within it
       ;; o/w add to a temp list to be sorted below
       (if (not (listp (cdr entry)))
-	  (setq leaf-entries (cons entry leaf-entries))
-	(let* ((objects (cdr entry))
-	       (type (car entry))
-	       (sorted-objects (sort objects
-				     (lambda (left right)
-				       (string-lessp (car left) (car right))))))
+          (setq leaf-entries (cons entry leaf-entries))
+        (let* ((objects (cdr entry))
+               (type (car entry))
+               (sorted-objects (sort objects
+                                     (lambda (left right)
+                                       (string-lessp (car left) (car right))))))
 
-	  (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
-	  )))
+          (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
+          )))
 
     ;; Sort the top level leaf entries
     (setq sorted-entries (append sorted-entries
-	    (sort leaf-entries
-		  (lambda (left right)
-		    (string-lessp (car left) (car right))))))
+            (sort leaf-entries
+                  (lambda (left right)
+                    (string-lessp (car left) (car right))))))
     ))
 
 ;; Global variable to track sorting function
@@ -927,8 +927,8 @@
 (defun  my/imenu-current-sort (&optional buffer)
   (if buffer
       (with-current-buffer buffer
-	(progn
-	  (if my/imenu-list-sort-function "alpha" "pos")))
+        (progn
+          (if my/imenu-list-sort-function "alpha" "pos")))
     (if my/imenu-list-sort-function "alpha" "pos")))
 
 ;; Multiplexer advice that inserts a sorting function if one is
@@ -1002,10 +1002,10 @@
   :defer t
   :init
   (setq excorporate-update-diary nil
-	excorporate-update-org t
-	;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
-	setq excorporate-org-buffer-name "~/org/daily-meetings.org"
-	setq excorporate-org-persist-buffer t)
+        excorporate-update-org t
+        ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
+        setq excorporate-org-buffer-name "~/org/daily-meetings.org"
+        setq excorporate-org-persist-buffer t)
   )
 
 ;; Track whether we've turned excorporate on or not
@@ -1047,9 +1047,9 @@
     ;; skip if the file was updated within the last minute
     (message "my diary update started %s" (current-time-string))
     (let* ((time-list (decode-time (current-time)))
-	   (day (nth 3 time-list))
-	   (month (nth 4 time-list))
-	   (year (nth 5 time-list)))
+           (day (nth 3 time-list))
+           (month (nth 4 time-list))
+           (year (nth 5 time-list)))
       (exco-org-show-day month day year))))
 
 (advice-add 'org-agenda :before #'my-agenda-update-diary)
@@ -1077,26 +1077,26 @@
          "%12b"
          'face 'mode-line-buffer-id
          'help-echo
-	 (if (buffer-file-name) (buffer-file-name) (buffer-name))
+         (if (buffer-file-name) (buffer-file-name) (buffer-name))
          'mouse-face 'mode-line-highlight
          'local-map mode-line-buffer-identification-keymap)))
 
 ;; Return buffer state we want to save/restore as a list
 (defun my-get-buffer-state ()
   (list (current-buffer)
-	(bound-and-true-p display-line-numbers-mode)
-	(bound-and-true-p tab-line-mode)))
+        (bound-and-true-p display-line-numbers-mode)
+        (bound-and-true-p tab-line-mode)))
 
 ;; Restore back the saved buffer state
 (defun my-restore-buffer-state ( state )
   (let* ((buffer (nth 0 state))
-	 (linenums (nth 1 state))
-	 (tab-line (nth 2 state)))
+         (linenums (nth 1 state))
+         (tab-line (nth 2 state)))
     (with-current-buffer buffer
       (progn
-	(message "restoring %s" buffer)
-	(unless linenums (display-line-numbers-mode -1))
-	(if tab-line (tab-line-mode 1))))))
+        (message "restoring %s" buffer)
+        (unless linenums (display-line-numbers-mode -1))
+        (if tab-line (tab-line-mode 1))))))
 
 ;; hook before prep buffers to fixup the mode line hints
 ;; Turn off tab-line, turn on line numbers and record the list of buffers
@@ -1159,7 +1159,7 @@
                  :tag-glyph "exit"
                  :action (lambda (widget &optional event)
                            (ediff-quit nil)))
-					;(ediff-previous-difference)))
+                                        ;(ediff-previous-difference)))
 
   (widget-setup))
 
@@ -1243,9 +1243,9 @@
 ;; TODO: it would be cool to break down functions under the headings.
 ;;
 
-(setq-local imenu-generic-expression `(("transients" "^\(transient-define-prefix \\([^ 	\n]+\\)" 1)
-				      ("functions" "^\(defun \\([^	\n]+\\)" 1)
-				      ("options" "^ \\([-a-z]+\\)" 1)
-				      ("variables" "^\(defvar \\([^ 	\n]+\\)" 1)
-				      ("keymaps" ":keymap \\([^ 	\n]+\\)" 1)
-				      ("headings" "^;;; \\([^	\n]+\\)" 1)))
+(setq-local imenu-generic-expression `(("transients" "^\(transient-define-prefix \\([^  \n]+\\)" 1)
+                                      ("functions" "^\(defun \\([^      \n]+\\)" 1)
+                                      ("options" "^ \\([-a-z]+\\)" 1)
+                                      ("variables" "^\(defvar \\([^     \n]+\\)" 1)
+                                      ("keymaps" ":keymap \\([^         \n]+\\)" 1)
+                                      ("headings" "^;;; \\([^   \n]+\\)" 1)))
