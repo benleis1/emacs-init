@@ -9,8 +9,7 @@
 ;;  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
 ;; ```
 
-;; My emacs configuration file
-
+;; Emacs configuration file
 ;; Author: Benjamin Leis
 
 ;;; Commentary:
@@ -19,14 +18,13 @@
 ;;
 ;; These are all the high level priorities that inform the decisions I've made throughout this file. Unlike many other
 ;; users who have shared their config files, I like using the mouse and even the occasional menu
-;; rather than remembering key bindings for everything. So I've spent some time trying to get emacs to work more consistently for these
-;; modes. For example with flyspell on you can right click and get a context menu with the possible spellings like
+;; rather than remembering key bindings for everything. So I've spent some time trying to get emacs to work more consistently for these modes. For example with flyspell on you can right click and get a context menu with the possible spellings like
 ;; in most other applications.
 ;;
 ;; If possible I'll use built in functionality or packages that require minimal adaptation and just a use-package declaration.
-;; If not I try to keep everything in one section by general functionality area. Along these lines currently I prefer one larger file
-;; to a series of smaller ones for both reading and modifying. This may shift in the future but currently I only move code out to
-;; a new file if it reaches a "sufficiently" large size.
+;; If not I try to keep everything in one section by general functionality area. Along these lines currently
+;; I prefer one larger file to a series of smaller ones for both reading and modifying. This may shift in the future
+;; but currently I only move code out to  a new file if it reaches a "sufficiently" large size.
 ;;
 ;; I have a work style where I want to have a manageable small set of files open in a tabbed format. I'll save
 ;; these to a desktop and reload them when I start things up again. I've plumbed save/load desktop into the system menus
@@ -72,7 +70,7 @@
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 ;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
 ;; and `package-pinned-packages`. Most users will not need or want to do this.
-(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
+o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
 
 ;; WIP: Very expensive do we need it?
 ;;(package-initialize)
@@ -116,16 +114,15 @@
 ;; Initial major mode is text for new buffers
 (setq-default major-mode 'text-mode)
 
-;; Use winner mode by default for managing window configurations
-;; particularly useful when popping up a 2nd or 3rd window and
-;; wanting to go back to the previous config.
-(winner-mode 1)
-
 ;; turn off menu mode in text mode to save space
 (unless window-system
   (menu-bar-mode 0))
 
-;; turn on demand scroll bars when in window mode
+;; turn off tool bar always
+(tool-bar-mode 0)
+
+;; turn on scroll bars when in window mode
+;; testing on-demand scroll bar
 ;; Use the normal right click brings up a context menu
 (when window-system
   (use-package on-demand-scroll-bar
@@ -133,7 +130,6 @@
     :config
     (on-demand-scroll-bar-mode 1))
   (context-menu-mode)
-  ;;(scroll-bar-mode))
 )
 
 (my-ignore (setq scroll-conservatively 10))
@@ -143,25 +139,25 @@
 (defun limit-scrolling (&optional win start)
   ;; handle case where buffer is totally empty
   (unless (= (buffer-size) 0)
-    (progn
-      (my-ignore (message "start %s window-start %s bufsize %s point %s"
-               start (window-start) (buffer-size) (point)))
-      (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
-            (lines-to-end (count-lines (point) (buffer-size))))
-        (when (< visible-lines (window-text-height))
-          (progn
-            (recenter (- lines-to-end))))))))
+    (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
+          (lines-to-end (count-lines (point) (buffer-size))))
+      (when (< visible-lines (window-text-height))
+	(progn
+	  (recenter (- lines-to-end)))))))
 
 ;; Only install the limit scrolling hook on gui modes where scrolling is enabled
 (when window-system
   (add-hook 'post-command-hook #'limit-scrolling))
 
-;;
+;; Use winner mode by default for managing window configurations
+;; particularly useful when popping up a 2nd or 3rd window and
+;; wanting to go back to the previous config.
+(winner-mode 1)
+
 ;; Generally remove trailing white space except on markdown
-;;
 (defun my-before-save-hook ()
   (unless (equal major-mode 'markdown-mode)
-      (delete-trailing-whitespace)))
+    (delete-trailing-whitespace)))
 
 (add-hook 'before-save-hook #'my-before-save-hook)
 
@@ -170,7 +166,7 @@
 (setq tab-always-indent 'complete)
 (add-to-list 'completion-styles 'initials t)
 
-;; Switch buffer name context tip to actually be the buffer-name.
+;; Switch buffer name context tip to actually be the buffer name
 (setq-default mode-line-buffer-identification
               (list (propertize
                      "%12b"
@@ -190,6 +186,15 @@
 ;; Revert buffers when the underlying file has changed
 (global-auto-revert-mode 1)
 
+;; Revert Dired and other buffers
+(customize-set-variable 'global-auto-revert-non-file-buffers t)
+
+;; General utility function for inserting a date
+(defun insert-date ()
+  "Insert the current date and time."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
+
 ;; Enable mouse in text mode
 ;; Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring
 (unless window-system
@@ -207,17 +212,18 @@
 ;; the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 
-;; Try out undo-tree - if its useful enable persistent storage of the tree
-(my-ignore (use-package undo-tree
-  :ensure t))
-
-(setq vertico-sort-function 'vertico-sort-history-length-alpha)
-
 ;;; backup and autosave - put everything in ~/.saves
+
+;; Define a directory for auto-save files
+(defvar my-auto-save-folder (concat user-emacs-directory "~/.saves"))
+
+;; Ensure the directory exists
+(unless (file-exists-p my-auto-save-folder)
+  (make-directory my-auto-save-folder t))
 
 (setq
  auto-save-default nil ;; disable auto save files
- auto-save-file-name-transforms `((".*" , "~/.save" t))
+ auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
  '(("." . "~/.saves/"))    ; don't litter my fs tree
@@ -229,11 +235,11 @@
 ;;; Dired
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
-(use-package all-the-icons-dired
+(use-package nerd-icons-dired
   :defer t
   :if window-system
   :ensure t
-  :hook ((dired-mode . all-the-icons-dired-mode))
+  :hook ((dired-mode . nerd-icons-dired-mode))
   )
 
 ;; Do all dired ops in a single window
@@ -245,6 +251,8 @@
 ;; Note: its important to have a nerd font installed for the icons to work properly
 ;; I usd DejaVu Sans Mono with the Nerd Font extension
 ;; For now I leave the icons on even in terminal mode although they are a bit too small there.
+;; It has to be installed here before tab-config.el (loaded right below) uses its
+;; `doom-modeline-def-segment'/`doom-modeline-def-modeline' macros at load time.
 (use-package doom-modeline
   :ensure t
   :init (doom-modeline-mode 1))
@@ -258,11 +266,12 @@
 ;; function keys.
 
 (global-set-key (kbd "C-u") 'undo)
-(global-set-key (kbd "<f1>") 'treemacs)
-(global-set-key (kbd "<f2>") 'org-capture)
+(global-set-key (kbd "C-1") 'treemacs)
+(global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
+(global-set-key (kbd "C-3") 'wikimode-toggle)
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 ;; TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
@@ -283,7 +292,7 @@
 (defun pbcopy-kill-ring (&optional push)
   (interactive)
   (let ((process-connection-type nil)
-        (text (current-kill 0)))
+	(text (current-kill 0)))
     (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
       (process-send-string proc text)
       (process-send-eof proc))))
@@ -306,9 +315,8 @@
   :config (setq sqlformat-command 'pgformatter
                 sqlformat-args '("-s2" "-g")))
 
-;;; flyspell config
-
-;; currently not bound to a key. I use the context menu instead.
+;; flyspell config
+;; currently not bound to a key
 (defun flyspell-on-for-buffer-type ()
       "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
       (interactive)
@@ -443,6 +451,7 @@
 ;; I'm using org-pretty-table rather than org-modern's support for now
 ;; because it works better
 (use-package org-pretty-table
+;;  :ensure t
   :load-path "/Users/benjamin.leis/.emacs.d/org-pretty-table"
   :config
   :hook (org-mode . org-pretty-table-mode)
@@ -748,6 +757,22 @@
 ;; render remote images
 (setq markdown-display-remote-images t)
 
+;; When following a link whose target can't be found as-is, retry
+;; with a ".md" extension appended (e.g. a link to "foo" or "foo.html"
+;; falls back to "foo.md" if that file exists).
+;; This helps with compatibility with how github does relative links in its wiki mode
+(defun my-markdown-translate-filename-add-md-extension (filename)
+  "Return FILENAME, retrying with a \".md\" extension if it doesn't exist."
+  (if (file-exists-p filename)
+      filename
+    (let ((with-md (concat filename ".md")))
+      (if (and (not (string-suffix-p ".md" filename t))
+               (file-exists-p with-md))
+          with-md
+        filename))))
+
+(setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
+
 (add-hook 'markdown-mode-hook 'buffer-face-mode-helvetica)
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
@@ -756,7 +781,7 @@
 ;; I've also adjusted the faces to scale these up quite a bit so they're more visible
 (add-hook 'markdown-mode-hook (lambda ()
   "Beautify md Checkbox Symbol"
-  (push '("[ ]" .  "☐") prettify-symbols-alist)
+  (push '("[ ]" . "☐" ) prettify-symbols-alist)
   (push '("[X]" . "☑" ) prettify-symbols-alist)
   (push '("[x]" . "☑" ) prettify-symbols-alist)
   (push '("[-]" . "❍" ) prettify-symbols-alist)
@@ -787,10 +812,10 @@
         imenu-list-auto-resize nil)
   ;; Simplified buffer name with icon for the menu bar.
   (setq imenu-list-mode-line-format
-        '("%e" mode-line-frame-identification
-          (:propertize "󰉹" face mode-line-buffer-id) " "
-          (:eval (buffer-name imenu-list--displayed-buffer)) "  "
-          mode-line-end-spaces))
+	'("%e" mode-line-frame-identification
+	  (:propertize "󰉹" face mode-line-buffer-id) " "
+	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+	  mode-line-end-spaces))
 
   (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
 
@@ -806,12 +831,14 @@
 
   ;; I need a more visible highlight for the current block
   (defface my-hl-imenu-face
-    '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
+  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
   "A new custom face for highlighting."
   :group 'my-custom-group)
 
   (defun my-imenu-list--hide-ellipsis (ov)
-    "Suppress hideshow's default \"...\" indicator on OV. The leading arrow marker already conveys fold state, so the ellipsis would just be redundant clutter."
+    "Suppress hideshow's default \"...\" indicator on OV.
+The leading arrow marker already conveys fold state, so the ellipsis
+would just be redundant clutter."
     (when (eq (overlay-get ov 'invisible) 'hs)
       (overlay-put ov 'display "")))
 
@@ -834,6 +861,15 @@
         (save-excursion
           (goto-char (+ 1 (point-min)))
           (hs-hide-level depth)))))
+
+    (defun my-imenu-list-fold-below-depth-once (&optional depth)
+    "Run default folding once per buffer, then refresh fold markers."
+    (unless imenu-list--folded-once
+      (setq imenu-list--folded-once t)
+      (my-imenu-list-fold-below-depth depth))
+    (my-imenu-list-update-fold-markers))
+
+  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once)
 
   (defun my-imenu-list--set-marker-at-point ()
     "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
@@ -872,6 +908,16 @@
        (my-imenu-list--set-marker-at-point)))
 
   (advice-add 'hs-toggle-hiding :after #'my-imenu-list--refresh-marker-after-toggle)
+
+  ;; Refold
+  (defun my-after-imenu-list-toggle (&rest args)
+    "Run custom code after `imenu-list-smart-toggle` occurs."
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+	(when (local-variable-p 'imenu-list--folded-once)
+	  (setq imenu-list--folded-once nil)))))
+
+  (advice-add 'imenu-list-smart-toggle :before #'my-after-imenu-list-toggle)
 
   ;; When the tracked entry is inside a currently-folded block, `hl-line-mode'
   ;; highlights the (invisible) entry line, which visually collapses to just
@@ -997,7 +1043,8 @@
 ;;; Excorporate setup.
 ;; I've modified this quite a bit to directly generate org files.
 
-(use-package excorporate :after org-agenda
+(use-package excorporate
+  :after org-agenda
   :ensure t
   :defer t
   :init
@@ -1084,19 +1131,19 @@
 ;; Return buffer state we want to save/restore as a list
 (defun my-get-buffer-state ()
   (list (current-buffer)
-        (bound-and-true-p display-line-numbers-mode)
-        (bound-and-true-p tab-line-mode)))
+	(bound-and-true-p display-line-numbers-mode)
+	(bound-and-true-p tab-line-mode)))
 
 ;; Restore back the saved buffer state
 (defun my-restore-buffer-state ( state )
   (let* ((buffer (nth 0 state))
-         (linenums (nth 1 state))
-         (tab-line (nth 2 state)))
+	 (linenums (nth 1 state))
+	 (tab-line (nth 2 state)))
     (with-current-buffer buffer
       (progn
-        (message "restoring %s" buffer)
-        (unless linenums (display-line-numbers-mode -1))
-        (if tab-line (tab-line-mode 1))))))
+	(message "restoring %s" buffer)
+	(unless linenums (display-line-numbers-mode -1))
+	(if tab-line (tab-line-mode 1))))))
 
 ;; hook before prep buffers to fixup the mode line hints
 ;; Turn off tab-line, turn on line numbers and record the list of buffers
@@ -1180,24 +1227,44 @@
 
 ;;; Completion frameworks.
 
-;; marginalia + vertico for completions. I'm still deciding about Corfu.
+;; marginalia + vertico + orderless + consult for completions. I'm still deciding about Corfu.
 ;; this enables a vertical list of completions with context dependent notes in the minibuffer
 
 (use-package vertico
   :ensure t
-  :init (vertico-mode 1))
+  :init (vertico-mode 1)
+  :config (vertico-sort-function 'vertico-sort-history-length-alpha))
 
 (use-package marginalia
-  :ensure t
+  :ensure
   :init (marginalia-mode 1))
+
+;; Trying out orderless completion
+(use-package orderless
+  :ensure t
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles partial-completion)))))
+
+;; Consult - running from local git clone due to elpa issues.
+(use-package consult
+  :requires compat-31a
+  :ensure t
+  :config
+  ;; Replace switch-buffers with consult-buffer
+  (keymap-global-set "C-x b" 'consult-buffer)
 
 ;;
 ;; Font name completion for customize buffers
 ;;
 
-;; return if the current position is a Font Family widget.
+;; return if the current position is a Font Family widget. Checks one
+;; character back too since widget-at looks at the char *after* point, which
+;; falls outside the field once you've typed up to its end.
 (defun font-family-widget-p ()
-    (equal (widget-get (widget-at) :tag) "Font Family"))
+  (let ((w (or (widget-at (point))
+               (widget-at (max (point-min) (1- (point)))))))
+    (equal (widget-get w :tag) "Font Family")))
 
 ;; Completion function for font names to be hooked to custom mode
 ;; need to return a list (start end collection) if this matches or nil if not
@@ -1205,29 +1272,92 @@
   (when (font-family-widget-p)
     `(,(point-at-bol) ,(point-at-eol) ,(font-family-list))))
 
-;; Hook completion in and setup M-<tab> binding for it.
+;; Hook completion in and setup M-TAB binding for it. custom-field-keymap
+;; normally binds M-TAB to `widget-complete', which bypasses
+;; completion-at-point-functions entirely and falls back to the `string'
+;; widget's own :complete, hard-coded to ispell-complete-word. Rebind both
+;; the GUI (<M-tab>) and terminal (M-TAB, i.e. ESC TAB) forms so either
+;; frame type reaches completion-at-point/complete-font-name.
 (defun add-complete-font-name()
+  (add-hook 'completion-at-point-functions #'complete-font-name nil t)
   (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
-  (setq completion-at-point-functions (cons 'complete-font-name completion-at-point-functions)))
+  (define-key custom-field-keymap (kbd "M-TAB") 'completion-at-point))
 
 (add-hook 'Custom-mode-hook 'add-complete-font-name)
 
-;; Experiment with lsp-bridge
-;; Note it requires yasnippet
+;; Inline "Set Font..." button next to the Font Family field in
+;; customize-face buffers, on the same line like the Value Menu buttons
+;; next to Weight/Slant/etc.
+;;
+;; Uses x-select-font directly (the same dialog menu-set-font uses under the
+;; hood) rather than menu-set-font itself, since menu-set-font's job is to
+;; apply the chosen font as the new default frame font on all frames --
+;; x-select-font just returns the pick without touching any frame's font.
+(defun my-select-font ()
+  "Read a font from the user without changing any frame's font.
+Uses the native font dialog via `x-select-font' when available,
+falling back to `mouse-select-font'."
+  (if (fboundp 'x-select-font)
+      (x-select-font)
+    (mouse-select-font)))
 
+(defun my-widget-find-ancestor (widget type)
+  "Walk up WIDGET's :parent chain and return the nearest ancestor of TYPE."
+  (while (and widget (not (eq (widget-type widget) type)))
+    (setq widget (widget-get widget :parent)))
+  widget)
+
+(defun my-customize-face-set-font (button &rest _)
+  "Pick a font with `my-select-font' and fill its family, height, weight,
+and slant into the enclosing custom-face-edit widget's attributes."
+  (unless window-system
+    (user-error "Selecting a font requires a graphical frame"))
+  (let ((edit-widget (my-widget-find-ancestor button 'custom-face-edit)))
+    (unless edit-widget
+      (user-error "Could not find the face attribute editor"))
+    (let ((font (my-select-font)))
+      (unless font
+        (user-error "No font selected"))
+      (let ((attrs (font-face-attributes font))
+            (value (copy-sequence (widget-value edit-widget))))
+        (dolist (key '(:family :height :weight :slant))
+          (when (plist-member attrs key)
+            (setq value (plist-put value key (plist-get attrs key)))))
+        (widget-value-set edit-widget value)
+        (widget-setup)))))
+
+(defun my-face-family-value-create (widget)
+  "Render an inline \"Set Font...\" button right after the Font Family
+tag, followed by the normal editable field."
+  (let ((buttons (widget-get widget :buttons)))
+    (push (widget-create-child-and-convert
+           widget 'push-button
+           :tag " Set Font... "
+           :help-echo "Pick a font from the system font panel and fill in family/height/weight/slant."
+           :action #'my-customize-face-set-font)
+          buttons)
+    (widget-put widget :buttons buttons))
+  (widget-insert " ")
+  (widget-field-value-create widget))
+
+;; custom-face-edit's :args is computed once, at cus-edit.el load time, by
+;; mapping over custom-face-attributes -- and it embeds the very same list
+;; object as each attribute's widget spec (not a copy). So replacing the
+;; :family entry's spec (e.g. via setcar) would only repoint
+;; custom-face-attributes's own slot, leaving custom-face-edit's
+;; already-frozen :args pointing at the old list. Extending that shared
+;; list object in place with nconc reaches both.
+(let ((spec (cadr (assq :family custom-face-attributes))))
+  (when (and spec (not (plist-member spec :value-create)))
+    (nconc spec (list :value-create #'my-face-family-value-create))))
+
+;; Yanippet used defines some markdown templates for the blog
 (use-package yasnippet
-  :defer t
   :ensure t
-  :init
-  (yas-global-mode 1))
-
-;; lsp-bridge is directly cloned into my emacs directory.
-;; For now its only enabled in java lsp sessions directly in their hook.
-(use-package lsp-bridge
-  :load-path "~/.emacs.d/lsp-bridge"
-  :defer 2
+  :init (yas-global-mode 1)
   :config
-  (my-ignore (global-lsp-bridge-mode)))
+  (add-hook 'markdown-mode-hook #'yas-minor-mode)
+  )
 
 ;;; Garbage Collection
 ;; Turn GC on that was disabled in early-init
