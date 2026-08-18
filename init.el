@@ -70,18 +70,16 @@
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 ;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
 ;; and `package-pinned-packages`. Most users will not need or want to do this.
-o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
+(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
 
-;; WIP: Very expensive do we need it?
-;;(package-initialize)
+;; use-package has been part of core emacs since version 29 so I now assume its ok to just require it.
+(require 'use-package)
 
-;; use-package to simplify package loading.
-(unless (package-installed-p `use-package)
-  (package-refresh-contents)
-  (package-install `use-package))
-
-(eval-when-compile
-  (require 'use-package))
+;; Legacy Emacs 29 setup for :vc so we can load directly from github for selected packages not in melpa.
+(when (< emacs-major-version 30)
+  (unless (package-installed-p 'vc-use-package)
+    (package-vc-install "https://github.com/slotThe/vc-use-package"))
+  (require 'vc-use-package))
 
 ;; early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
@@ -95,6 +93,25 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 
 (defvar my-code-bright "goldenrod3")
 (defvar my-code-dark "goldenrod4")
+
+;; doom-themes provides the doom-solarized-light theme that custom.el enables
+;; via `custom-enabled-themes'. It has to be installed and on `load-path'
+;; *before* custom-file loads below.
+(use-package doom-themes
+  :ensure t
+  :config
+  ;; Global settings (defaults)
+  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+        doom-themes-enable-italic t) ; if nil, italics is universally disabled
+
+  ;; Enable flashing mode-line on errors
+  ;;  (doom-themes-visual-bell-config)
+  ;; or for treemacs users
+  (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
+  (doom-themes-treemacs-config)
+  ;; Corrects (and improves) org-mode's native fontification.
+  ;;  (doom-themes-org-config)
+  )
 
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 ;; All customizations are stored on the side in custom.el
@@ -147,6 +164,7 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 
 ;; Only install the limit scrolling hook on gui modes where scrolling is enabled
 (when window-system
+  (setq use-system-tooltips nil)
   (add-hook 'post-command-hook #'limit-scrolling))
 
 ;; Use winner mode by default for managing window configurations
@@ -188,12 +206,6 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 
 ;; Revert Dired and other buffers
 (customize-set-variable 'global-auto-revert-non-file-buffers t)
-
-;; General utility function for inserting a date
-(defun insert-date ()
-  "Insert the current date and time."
-  (interactive)
-  (insert (format-time-string "%Y-%m-%d")))
 
 ;; Enable mouse in text mode
 ;; Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring
@@ -266,6 +278,7 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 ;; function keys.
 
 (global-set-key (kbd "C-u") 'undo)
+(global-set-key (kbd "C-f") 'goto-line)
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
@@ -278,8 +291,8 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
 ;; Add standard minimal CUA  key bindings ctrl-c, ctrl-v insert paste etc.
-;; TODO - I need ctrl-z to still be suspend in terminal mode so disabling for now.
-(my-ignore (cua-mode))
+;; TODO - I need ctrl-z to still be suspend
+;;(cua-mode)
 
 ;; Copy to clipboard functions for terminal mode
 ;; copy the current region directly
@@ -338,8 +351,7 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
         (message "Flyspell off")
         (flyspell-mode -1))
     ; else - flyspell is off, turn it on
-    (flyspell-on-for-buffer-type)))
-
+    (flyspell-on-for-buffers-type)))
 
 ;; preset modes to have flyspell on
 (add-hook 'text-mode-hook 'flyspell-mode)
@@ -367,6 +379,16 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
+
+;; Use monospaced font faces in org mode - currently the hook is off
+(defun org-mode-fonts ()
+  "Sets up display fonts for org-mode"
+  (interactive)
+  (setq buffer-face-mode-face '(:family "TeX Gyre Pagella-13" :height 100))
+  (buffer-face-mode))
+
+;; Set default font faces for Info and ERC modes
+;; (add-hook 'org-mode-hook 'org-mode-fonts)
 
 ;; set org-mode to use variable width fonts smartly
 (use-package mixed-pitch
@@ -451,15 +473,20 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 ;; I'm using org-pretty-table rather than org-modern's support for now
 ;; because it works better
 (use-package org-pretty-table
-;;  :ensure t
-  :load-path "/Users/benjamin.leis/.emacs.d/org-pretty-table"
+  :ensure t
+  :vc (:url "https://github.com/Fuco1/org-pretty-table")
   :config
   :hook (org-mode . org-pretty-table-mode)
 )
 
 ;;; Programming modes
 
-;; Install magit for git
+;; magit - git porcelain installation.
+;; transient is bundled with Emacs, but the bundled copy here is older than
+;; what current magit requires. Explicitly managing it via package.el gets a
+;; fresh install that satisfies magit's minimum.
+(use-package transient
+  :ensure t)
 
 (use-package magit
   :ensure t)
@@ -467,286 +494,281 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
+;; Project.el settings.
+
+;; I prefer to have project-switch-project to just change the project for the next project
+;; command. bear in mind, project mostly uses the current directory of the buffer to
+;; determine the project
+(setq project-switch-commands 'project-any-command)
+;; Set project boundary at the first build.gradle found as well
+(setopt project-vc-extra-root-markers '("build.gradle"))
+
+;; treesit-fold - useful for folding things like imports in java
+;;
+;; Java's grammar has no single node wrapping all the imports -- each
+;; import_declaration is just a sibling of the next, so folding on
+;; import_declaration alone (e.g. via treesit-fold-range-seq) only ever
+;; folds one import. This walks forward across the run of consecutive
+;; import_declaration (and interleaved comment) siblings so that folding
+;; on any import line collapses that line and every import after it.
+(defun treesit-fold-range-java-imports (node offset)
+  "Fold the contiguous run of Java import declarations starting at NODE."
+  (let ((last-node node)
+        (sibling (treesit-node-next-sibling node t)))
+    (while (member (treesit-node-type sibling)
+                    '("import_declaration" "line_comment" "block_comment"))
+      (when (equal (treesit-node-type sibling) "import_declaration")
+        (setq last-node sibling))
+      (setq sibling (treesit-node-next-sibling sibling t)))
+    (unless (treesit-node-eq last-node node)
+      (treesit-fold--cons-add
+       (cons (treesit-node-start node) (treesit-node-end last-node))
+       offset))))
+
+;; Automatically fold the import block when a Java buffer is opened, called
+;; from `setup-common-java' below.
+(defun treesit-fold-close-java-imports ()
+  "Fold the run of Java import declarations at the top of the buffer, if any."
+  (when (and (treesit-available-p) (treesit-parser-list) (treesit-fold-usable-mode-p))
+    (when-let* ((first-import
+                 (seq-find (lambda (n) (equal (treesit-node-type n) "import_declaration"))
+                           (treesit-node-children (treesit-buffer-root-node)))))
+      ;; `treesit-fold-summary-java' recovers the folded node from `point',
+      ;; so move there rather than passing the node to `treesit-fold-close'
+      ;; directly -- see the comment above `treesit-fold-summary-java'.
+      (goto-char (treesit-node-start first-import))
+      (treesit-fold-close))))
+
+(defun treesit-fold-summary-java (doc-str)
+  "Summarize a folded Java DOC-STR by the tree-sitter node type it came from."
+  (let* ((node (treesit-fold--foldable-node-at-pos))
+         (type (and node (treesit-node-type node))))
+    (if (member type '("block_comment" "line_comment"))
+        (treesit-fold-summary-javadoc doc-str)
+      (or type (treesit-fold-summary-javadoc doc-str)))))
+
+;; Add a "Fold Line" entry to the right-click context menu when the click
+;; lands on the line-number gutter. Clicks there are reported as ordinary
+;; text-area clicks whose X pixel offset is measured from the left edge of
+;; the text area (which includes the line-number glyphs), so a click is in
+;; the gutter when its X is less than the line-number display's pixel width.
+(defun context-menu-fold-line (menu click)
+  "Add a fold-line entry to MENU when CLICK lands on the line-number gutter."
+  (when (and (bound-and-true-p display-line-numbers-mode)
+             (treesit-available-p)
+             (treesit-parser-list)
+             (treesit-fold-usable-mode-p))
+    (let* ((posn (event-end click))
+           (x (car (posn-x-y posn)))
+           (pos (and (posn-point posn)
+                     (save-excursion
+                       (goto-char (posn-point posn))
+                       (line-beginning-position)))))
+      (when (and x pos
+                 (< x (line-number-display-width t))
+                 (treesit-fold--foldable-node-at-pos pos))
+        (define-key menu [treesit-fold-line]
+          `(menu-item "Fold Line"
+                      ,(lambda ()
+                         (interactive)
+                         ;; `treesit-fold-summary-java' recovers the folded
+                         ;; node from `point', so move there rather than
+                         ;; passing the node to `treesit-fold-close' directly.
+                         (save-excursion
+                           (goto-char pos)
+                           (treesit-fold-close)))
+                      :help "Fold the code at this line")))))
+  menu)
+
+(use-package treesit-fold
+  :ensure t
+  :vc (:url "https://github.com/emacs-tree-sitter/treesit-fold")
+  :config
+  ;; Add a rule for java-mode and java-ts-mode to fold the whole run of imports at once
+  (dolist (mode '(java-mode java-ts-mode))
+    (push '(import_declaration . treesit-fold-range-java-imports)
+          (alist-get mode treesit-fold-range-alist)))
+  (dolist (mode '(java-mode java-ts-mode))
+    (setf (alist-get mode treesit-fold-summary-parsers-alist)
+          #'treesit-fold-summary-java))
+  (add-hook 'context-menu-functions #'context-menu-fold-line))
+
 ;;; Java
 
-;; *  Always use lsp.
-;; * 4 space tabs
-;;
-;; **Note:** I customized the lsp-java-server-install-dir to be in a more discoverable location
-(use-package lsp-java
-  :defer t
-  :ensure t
-  :after lsp)
+;; set java home
+(setq java-home "/Users/benjamin.leis/.jenv/versions/21.0")
+(setenv "JAVA_HOME" java-home)
 
-(use-package dap-mode
-  :defer t
-  :ensure t
-  :after lsp
-  :config
-  (setq dap-auto-configure-features '(sessions locals controls tooltip)))
-
-(setq dap-auto-configure-features '(sessions locals controls tooltip))
-
-;;
-;; Custom hierarchical parsing of the treesitter tree
-;;
-
-;; Generate a marker for the given node
-;; This can only be done while in the buffer
-(defun my/make-marker (buffer point)
-  (with-current-buffer buffer
-    (copy-marker point)))
-
-;; Treesitter node name function for most node types
-(defun my/get-def-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name node "name")))
-
-;; Treesitter node name function for class fields
-(defun my/get-field-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name")))
-
-;; Simple wrapper to make an imenu leaf from a treesitter node
-(defun my/imenu-leaf (node buffer name-func)
-       (cons (funcall name-func node)
-             (my/make-marker buffer (treesit-node-start node))))
-
-;; Compare two imenu nodes
-(defun my/imenu-compare (left right)
-  (string-lessp (car left) (car right)))
-
-;; Sort a list of imenu nodes
-(defun my/imenu-sort (seq)
-  (sort seq 'my/imenu-compare))
-
-;; Walk the parent node class of an interface, class or enum and
-;; construct a list of all fields, constructors and methods.
-;; Recursion occurs when there is an inner class.
-(defun my/walk-object-declaration (classnode buffer)
-    (let ((constructors ())
-          (fields ())
-          (methods ())
-          (inner-classes ())
-          (result ())
-          (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
-      (dolist (node (treesit-node-children classnode))
-        (progn
-          (cond ((equal (treesit-node-type node) "constructor_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
-
-                ((equal (treesit-node-type node) "method_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
-
-                ((equal (treesit-node-type node) "class_declaration")
-                 (let* ((body (treesit-node-child-by-field-name node "body"))
-                        (classname (my/get-def-name node))
-                        (subleafs (my/walk-object-declaration body buffer)))
-
-                   (push (cons classname subleafs) inner-classes)))
-
-                ((equal (treesit-node-type node) "field_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
-
-      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
-      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
-      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
-      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
-      ;; final value
-      result))
-
-(setq my/first-level-ts-filters '(("Classes" "class_declaration")
-                                  ("Interfaces" "interface_declaration")
-                                  ("Records" "record_declaration")))
-
-;; Main routine that walks top level of the grammar tree and constructs imenu nodes
-;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
-(defun my/generate-ts-imenu (&optional buffer)
-  (interactive)
-  (unless buffer (setq buffer (current-buffer)))
-  (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
-    (let ((classes '())
-          (interfaces '())
-          (enums '())
-          (class_declaration '())
-          (subresults '())
-          (result '()))
-
-      (dolist (node (treesit-node-children (treesit-buffer-root-node)))
-        (let ((type (treesit-node-type node)))
-          (when (or (equal type "class_declaration")
-                    (equal type "interface_declaration")
-                    (equal type "enum_declaration"))
-            (let* ((body (treesit-node-child-by-field-name node "body"))
-                   (subleafs  (when body (my/walk-object-declaration body buffer)))
-                   (objectname (my/get-def-name node))
-                   (object-start (treesit-node-start node)))
-
-              (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
-              (unless (assoc type subresults) (push (cons type nil) subresults))
-              (push (cons objectname subleafs) (cdr (assoc type subresults)))
-
-              (cond ((equal type "class_declaration")
-                     (push (cons objectname subleafs) classes))
-                    ((equal type "enum_declaration")
-                     (push (cons objectname subleafs) enums))
-                    ((equal type "interface_declaration")
-                     (push (cons objectname subleafs) interfaces)))))))
-
-;;      (dolist ("enum_declaration" "class_declaration" "interface_declaration"))
-
-      (when enums (push (cons "Enums" (reverse enums)) result))
-      (when (assoc "class_declaration" subresults)
-        (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
-
-;;      (when classes (push (cons "Classes" (reverse classes)) result))
-      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
-      result)))
-
-
-;; Some custom font lock rule
-;; * Tone down colors on import statements
-(defun modify-java-ts-syntax-highlighting ()
-  (let ((new-rule  (treesit-font-lock-rules
-                    :language 'java
-                    :override t
-                    :feature 'import
-                    '((import_declaration (scoped_identifier) @default)))))
-
-    (setq-local treesit-font-lock-settings (append treesit-font-lock-settings new-rule))
-
-    ;; Setup the features to include import
-    (setq-local treesit-font-lock-feature-list
-                '(( comment definition import)  ;; level 1
-                  ( constant keyword string type)
-                  ( annotation expression literal)
-                  ( bracket delimiter operator)
-                  ))))
-
-;; Common hook. This sets some ts specific options that won't take effect in regular java
-;; mode
-(defun java-hook (use-ts)
-  ;; LSP config
-  (when use-ts (setq-local lsp-enable-imenu nil))
-  (lsp)
-  (lsp-bridge-mode 1)
-
-  ;; Basic config
+(defun setup-common-java ()
   (setq c-basic-offset 4
         tab-width 4
-        indent-tabs-mode t
-        lsp-java-compile-null-analysis-mode "automatic")
+        indent-tabs-mode t)
+  (setq-local imenu-depth 3)
+  (setq-local imenu-create-index-function 'my/generate-ts-imenu)
+  (treesit-fold-mode)
+  (treesit-fold-close-java-imports))
 
-  (when use-ts
-    (progn
-      (modify-java-ts-syntax-highlighting)
-      (setq-local imenu-create-index-function 'my/generate-ts-imenu)
-      ;; Unused simple-imenu settings
-      (my-ignore
-       (setq-local treesit-simple-imenu-settings
-                   '(("Class" "\\`class_declaration\\'" nil nil)
-                     ("Interface" "\\`interface_declaration\\'" nil nil)
-                     ("Enum" "\\`record_declaration\\'" nil nil)
-                     ("Constructor" "\\`constructor_declaration\\'" nil my/get-def-name)
-                     ("Field" "\\`field_declaration\\'" nil my/get-field-name)
-                     ("Method" "\\`method_declaration\\'" nil nil)))))))
+(add-hook 'java-mode-hook 'setup-common-java)
+(add-hook 'java-ts-mode-hook 'setup-common-java)
 
-;; Java mode hooks. Currently tree sitter java mode is the active one
-(add-hook 'java-mode-hook (apply-partially 'java-hook nil))
-(add-hook 'java-ts-mode-hook (apply-partially 'java-hook t))
-
-;; Setup automatic mode remapping so we always use treesitter for java
+; Setup automatic mode remapping so we always use treesitter for java
 (setq major-mode-remap-alist
       '((java-mode . java-ts-mode)))
 
-;; Set java home for all the various components that need it.
-(setenv "JAVA_HOME"  "/Users/benjamin.leis/.jenv/versions/17.0")
-(setq lsp-java-java-path (format "%s/bin/java" (getenv "JAVA_HOME")))
-(setq dap-java-java-command (format "%s/bin/java" (getenv "JAVA_HOME")))
-(setq lsp-java-vmargs '("-Xmx4g"))
+(setq dap-java-java-command (concat java-home "/bin/java"))
 
+;;; eglot
 
-;;; Common LSP + python
+;; eglot configuration.
+(setq eglot-max-file-watches 5000)
+(setq eglot-connect-timeout 180)
+(setq eglot-report-progress 'messages) ;; progress updates in the message bar
+;; tree sitter is fine for faces and we don't need highlighting on the current line.
+(setq eglot-ignored-server-capabilities '(:semanticTokensProvider :documentHighlightProvider))
+(setq eglot-stay-out-of '(imenu)) ;; Use my versiong
+;; asynchronous connections to not freeze during initial handshake.
+(setq eglot-sync-connect nil)
 
-(use-package lsp-mode
-  :defer t
-  :ensure t
-  :after lsp-bridge
-  :config
-  ;; try no file watchers
-  (setq lsp-enable-file-watchers nil
-        ;; recommendations lsp optimization on gc and read output sizes
-        gc-cons-threshold 100000000
-        read-process-output-max (* 1024 1024)
-        )
-;;  (setq lsp-file-watch-threshold 5000)
-  :hook
-  ((python-mode . lsp)))
+;; prettier format for the json rpc - needed a bit less with the eglot-report-progress to
+;; messages buffer but still easier to parse
+(setq eglot-events-buffer-config '(:size 2000000 :format short))
 
-;; Pretty UI for several different views of data i.e. symbols or build issues
-;; but I'm moving away from it towards other options like ts + imenu.
-(use-package lsp-treemacs
-  :defer t
-  :ensure t
-  :after lsp)
+;; Pin the java version for JDT. Set it here and after the load.
+(setq my-jdtls-settings
+      `(:java (
+	       :home ,java-home
 
-;; A combo sort that organizes into groups by type and within it alphabetically
-;; The numbers assigned to type work more naturally sorted high to low
-(defun my-treemacs-sort-by-kind-alphabetically (left right)
-  (-let (((&plist :kind left-kind) left)
-         ((&plist :kind right-kind) right)
-         ((&plist :label left-name) left)
-         ((&plist :label right-name) right))
+		     )))
 
-    (if (equal left-kind right-kind)
-        (string> right-name left-name)
-      (and left-kind right-kind (> left-kind right-kind)))))
+(setq-default eglot-workspace-configuration my-jdtls-settings)
 
-(setq lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
+;; jsonrpc--log-event's `short' branch is just the preamble
+;; (direction/method/id) -- :log-text is only ever populated for
+;; internal debug/warn events, never for real protocol messages, so
+;; there's normally nothing after it. Inject a summary of :message
+;; (method+params, or result/error) as :log-text when one isn't
+;; already present; the `full'/`lisp' branches prefer :json/
+;; :foreign-message over :log-text, so this only affects `short'.
+(defun jsonrpc-elide-text-document (params)
+  "Copy of PARAMS with params.textDocument.text elided.
+That field carries a whole file's contents (e.g. on
+textDocument/didOpen) and otherwise floods the short log format.
+uri/version and everything else in PARAMS are left untouched."
+  (if (and (listp params) (plist-member params :textDocument))
+      (let ((td (plist-get params :textDocument)))
+        (if (and (listp td) (plist-member td :text))
+            (plist-put (copy-sequence params) :textDocument
+                       (plist-put (copy-sequence td) :text "<elided>"))
+          params))
+    params))
 
-;; WIP interactive command to make it easy to swap how the symbols are sorted
-(defun lsp-treemacs-symbols-switch-sort (type)
-  (interactive
-   (let ((choices '(("alphabetize"  . (my-treemacs-sort-by-kind-alphabetically))
-                    ("by position" . (lsp-treemacs-sort-by-position)))))
-     (list (alist-get
-      (completing-read "Choose: " choices)
-      choices nil nil 'equal))))
+(defun jsonrpc-elide-token (params)
+  "Copy of PARAMS with a top-level :token field elided.
+$/progress notifications carry a fresh token on every call and
+otherwise flood the short log format with noise."
+  (if (and (listp params) (plist-member params :token))
+      (plist-put (copy-sequence params) :token "<elided>")
+    params))
 
-  (setq lsp-treemacs-symbols-sort-functions type)
-  (lsp-treemacs-symbols)
-  (with-current-buffer "*LSP Symbols List*"
-    (let ((name (cond ((equal type 'my-treemacs-sort-by-kind-alphabetically) "alphabetical")
-                      (t "position"))))
-      (message "setting to %s" name)
-      (setq mode-name (format "Symbols - %s" name))))
-  )
+(defun jsonrpc-log-text (message)
+  "One-line summary of jsonrpc MESSAGE, for `short' events format."
+  (cond ((equal (plist-get message :method) "$/progress")
+         (let ((value (plist-get (plist-get message :params) :value)))
+           (format "%s: %s" (or (plist-get value :kind) "")
+                   (or (plist-get value :message) ""))))
+        ((plist-get message :method)
+         ;; preamble already shows the method name (e.g. "--> $/progress"),
+         ;; so only contribute the params here.
+         (format "%s" (or (jsonrpc-elide-token
+                            (jsonrpc-elide-text-document
+                             (plist-get message :params)))
+                           "")))
+        ((plist-get message :result)
+         (format "=> %s" (plist-get message :result)))
+        ((plist-get message :error)
+         (format "ERROR %s" (plist-get message :error)))))
 
-(define-advice lsp-treemacs--set-mode-line-format (:override (buffer title))
-  (with-current-buffer buffer
-    (let ((name (cond ((equal lsp-treemacs-symbols-sort-functions '(my-treemacs-sort-by-kind-alphabetically))
-                     "alphabetical")
-                    (t "position"))))
-      (message "setting to %s" name)
-      (setq mode-name (format "Symbols - %s" name)))))
+(defun jsonrpc-skip-message-p (message)
+  "Non-nil if MESSAGE shouldn't be logged at all.
+Suppresses $/progress begin/end notifications entirely -- `begin'
+just opens a task and `end' just closes it, neither carries
+anything as useful as the `report' messages in between."
+  (and (equal (plist-get message :method) "$/progress")
+       (member (plist-get (plist-get (plist-get message :params) :value)
+                           :kind)
+               '("begin" "end"))))
 
-(use-package lsp-ui
-  :ensure t
-  :defer t
-  :commands lsp-ui-mode)
+(with-eval-after-load 'jsonrpc
+  (advice-add 'jsonrpc--log-event :around
+              (lambda (orig connection origin &rest plist)
+                (let ((message (plist-get plist :message)))
+                  (unless (jsonrpc-skip-message-p message)
+                    (when (and message (not (plist-get plist :log-text)))
+                      (setq plist (plist-put plist :log-text
+                                              (jsonrpc-log-text message))))
+                    (apply orig connection origin plist))))))
 
+(with-eval-after-load 'eglot
+  ;; Keep jdtls metadata in a per-project dir under jdtls-cache.
+  ;; Must be a lambda, not a precomputed path: eglot only loads
+  ;; (and evaluates this let-binding) once, on first use, so a
+  ;; a lambda is needed.
+  (add-to-list 'eglot-server-programs
+               `((java-mode java-ts-mode)
+                 . ,(lambda (&optional _interactive project)
+                      (let ((cache-dir (expand-file-name
+                                        (md5 (or (and project (project-root project))
+                                                 default-directory))
+                                        (locate-user-emacs-file "jdtls-cache"))))
+                        (list "jdtls"
+                              "--jvm-arg=-Djava.import.generatesMetadataFilesAtProjectRoot=false"
+                              "-data" cache-dir
+                              :initializationOptions
+                              (list :settings my-jdtls-settings)))))))
 
-;; Test treesitter folding
-(my-ignore
- (use-package ts-fold
-   :load-path "~/.emacs.d/ts-fold"))
+;;; flymake
+
+;; Dock the diagnostics list as a bottom "problems panel" instead of
+;; letting it split whatever window happens to be current.
+(add-to-list 'display-buffer-alist
+             '("\\`\\*Flymake diagnostics for"
+               (display-buffer-reuse-window display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 0)
+               (window-height . 0.25)
+               (dedicated . t)))
+
+;; [mode-line mouse-1] is globally bound to `mouse-select-window' (see
+;; mouse.el), so clicking the flymake diagnostics window's mode-line
+;; just focuses it instead of closing it. Override that specifically
+;; for this mode.
+(defun flymake-buffer-quit (event)
+  "Close the flymake diagnostics window clicked on in its mode-line."
+  (interactive "e")
+  (quit-window nil (posn-window (event-start event))))
+
+(defvar-keymap flymake-buffer-id-keymap
+  "<mode-line> <mouse-1>" #'flymake-buffer-quit)
+
+(add-hook 'flymake-diagnostics-buffer-mode-hook
+          (lambda ()
+            (setq-local mode-line-buffer-identification-keymap
+                        flymake-buffer-id-keymap)))
+
+;; Save space by not showing zero warn/error counter in the mode line
+(setq flymake-suppress-zero-counters t)
+
+;;; python - TODO turn on eglot integration later.
 
 ;;; markdown mode
+
+(use-package markdown-mode
+   :ensure t)
+
 (use-package stripe-buffer
-  :ensure t)
+   :ensure t)
 
 (setq markdown-header-scaling t)
-
 ;; Use helvetica for the current mode when hooked
 (defun buffer-face-mode-helvetica ()
   "Set default font to helvetica in current buffer"
@@ -787,15 +809,6 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
   (push '("[-]" . "❍" ) prettify-symbols-alist)
   (prettify-symbols-mode)))
 
-;; integrate with imenu for an outline sidebar - not in use the regular version looks better
-(defun use-outline-for-imenu ()
-  (require 'outline)
-  (setq imenu-create-index-function
-        'imenu-default-create-index-function
-        imenu-generic-expression
-        (list (list nil (concat "^\\(?:" outline-regexp "\\).*$") 0))))
-
-(my-ignore (add-hook 'markdown-mode-hook 'use-outline-for-imenu))
 
 ;; Automatically add the index menu entry for org and markdown modes. This will
 ;; also be available via the context menus
@@ -815,6 +828,7 @@ o(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.me
 	'("%e" mode-line-frame-identification
 	  (:propertize "󰉹" face mode-line-buffer-id) " "
 	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
 	  mode-line-end-spaces))
 
   (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
@@ -893,15 +907,6 @@ would just be redundant clutter."
             (my-imenu-list--set-marker-at-point)
             (forward-line 1))))))
 
-  (defun my-imenu-list-fold-below-depth-once (&optional depth)
-    "Run default folding once per buffer, then refresh fold markers."
-    (unless imenu-list--folded-once
-      (setq imenu-list--folded-once t)
-      (my-imenu-list-fold-below-depth depth))
-    (my-imenu-list-update-fold-markers))
-
-  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once)
-
   ;; Apply the arrow overlays when manually adjusting folded sections
   (defun my-imenu-list--refresh-marker-after-toggle (&rest _)
       (when (eq major-mode 'imenu-list-major-mode)
@@ -932,6 +937,57 @@ would just be redundant clutter."
           (hl-line-highlight)))))
 
   (advice-add 'imenu-list--show-current-entry :after #'my-imenu-list-reveal-current-entry))
+
+;;
+;; Custom hierarchical parsing of the treesitter tree
+;;
+
+;; Generate a marker for the given node
+;; This can only be done while in the buffer
+(defun my/make-marker (buffer point)
+  (with-current-buffer buffer
+    (copy-marker point)))
+
+;; Treesitter node name function for most node types
+(defun my/get-def-name (node)
+  (treesit-node-text
+   (treesit-node-child-by-field-name node "name") t))
+
+;; Treesitter node name function for class fields
+(defun my/get-field-name (node)
+  (treesit-node-text
+   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name") t))
+
+;; Simple wrapper to make an imenu leaf from a treesitter node
+(defun my/imenu-leaf (node buffer name-func)
+       (cons (funcall name-func node)
+             (my/make-marker buffer (treesit-node-start node))))
+
+;; Compare two imenu nodes
+(defun my/imenu-compare (left right)
+  (string-lessp (car left) (car right)))
+
+;; Global variable to track sorting function
+;; which we'll set per buffer and then multiplex on
+(defvar my/imenu-list-sort-function nil)
+
+;; String for which sorting mode we're in for use in the mode-line
+(defun  my/imenu-current-sort (&optional buffer)
+  (if buffer
+      (with-current-buffer buffer
+        (progn
+          (if my/imenu-list-sort-function "alpha" "pos")))
+    (if my/imenu-list-sort-function "alpha" "pos")))
+
+;; Multiplexer advice that inserts a sorting function if one is
+;; defined above.
+(defun my/imenu-list-sort-advice ()
+  (when my/imenu-list-sort-function
+    (progn
+      (setq imenu--index-alist (funcall my/imenu-list-sort-function)))))
+
+(define-advice imenu-list-rescan-imenu (:after ())
+  (my/imenu-list-sort-advice))
 
 ;; Custom sorting function that alphabetizes per imenu object type.
 ;; There is no built in facility to extend sorting so we have to wire this in via advice
@@ -965,42 +1021,115 @@ would just be redundant clutter."
                     (string-lessp (car left) (car right))))))
     ))
 
-;; Global variable to track sorting function
-;; which we'll set per buffer and then multiplex on
-(defvar my/imenu-list-sort-function nil)
-
-;; String for which sorting mode we're in for use in the mode-line
-(defun  my/imenu-current-sort (&optional buffer)
-  (if buffer
-      (with-current-buffer buffer
-        (progn
-          (if my/imenu-list-sort-function "alpha" "pos")))
-    (if my/imenu-list-sort-function "alpha" "pos")))
-
-;; Multiplexer advice that inserts a sorting function if one is
-;; defined above.
-(defun my/imenu-list-sort-advice ()
-  (when my/imenu-list-sort-function
-    (progn
-      (setq imenu--index-alist (funcall my/imenu-list-sort-function)))))
-
-(define-advice imenu-list-rescan-imenu (:after ())
-  (my/imenu-list-sort-advice))
-
 ;; Interactive command to make it easy to swap how the symbols are sorted
 ;; Note: default is to go by position so we don't have to override for that
 (defun imenu-list-switch-sort (type)
   (interactive
-   (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
-                    ("by position" . nil )))) ;; default no override needed
-     (list (alist-get
-      (completing-read "Choose: " choices)
-      choices nil nil 'equal))))
+   (with-current-buffer imenu-list--displayed-buffer
+     (unless (eq imenu-create-index-function 'my/generate-ts-imenu)
+       (user-error "Sort switching is only available for treesitter class/interface imenus"))
+     (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
+		       ("by position" . nil )))) ;; default no override needed
+       (list (alist-get
+	      (completing-read "Choose: " choices)
+	      choices nil nil 'equal)))))
+  (with-current-buffer imenu-list--displayed-buffer
+    (setq-local my/imenu-list-sort-function type)
+    ;; mode line update to add the sort message.
+    (force-mode-line-update))
+  (imenu-list-refresh))
 
-  (setq-local my/imenu-list-sort-function type)
-  (force-mode-line-update))
+;; Let "s" in the *Ilist* buffer itself switch sort order, since that's
+(define-key imenu-list-major-mode-map (kbd "s") #'imenu-list-switch-sort)
 
-;;; System Menu configuration.
+;; Sort a list of imenu nodes
+(defun my/imenu-sort (seq)
+  (sort seq 'my/imenu-compare))
+
+;; Walk the parent node class of an interface, class or enum and
+;; construct a list of all fields, constructors and methods.
+;; Recursion occurs when there is an inner class.
+(defun my/walk-object-declaration (classnode buffer)
+    (let ((constructors ())
+          (fields ())
+          (methods ())
+          (inner-classes ())
+          (result ())
+          (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
+      (dolist (node (treesit-node-children classnode))
+        (progn
+          (cond ((equal (treesit-node-type node) "constructor_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
+
+                ((equal (treesit-node-type node) "method_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
+
+                ((equal (treesit-node-type node) "class_declaration")
+                 (let* ((body (treesit-node-child-by-field-name node "body"))
+                        (classname (my/get-def-name node))
+			(subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
+					(my/walk-object-declaration body buffer))))
+
+                   (push (cons classname subleafs) inner-classes)))
+
+                ((equal (treesit-node-type node) "field_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
+
+      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
+      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
+      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
+      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
+      ;; final value
+      result))
+
+(setq my/first-level-ts-filters '(("Classes" "class_declaration")
+                                  ("Interfaces" "interface_declaration")
+                                  ("Records" "record_declaration")))
+
+;; Main routine that walks top level of the grammar tree and constructs imenu nodes
+;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
+(defun my/generate-ts-imenu (&optional buffer)
+  (interactive)
+  (unless buffer (setq buffer (current-buffer)))
+  (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
+    (let ((classes '())
+          (interfaces '())
+          (enums '())
+          (class_declaration '())
+          (subresults '())
+          (result '()))
+
+      (dolist (node (treesit-node-children (treesit-buffer-root-node)))
+        (let ((type (treesit-node-type node)))
+          (when (or (equal type "class_declaration")
+                    (equal type "interface_declaration")
+                    (equal type "enum_declaration"))
+            (let* ((body (treesit-node-child-by-field-name node "body"))
+                   (subleafs  (when body (my/walk-object-declaration body buffer)))
+                   (objectname (my/get-def-name node))
+                   (object-start (treesit-node-start node)))
+
+              (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
+              (unless (assoc type subresults) (push (cons type nil) subresults))
+              (push (cons objectname subleafs) (cdr (assoc type subresults)))
+
+              (cond ((equal type "class_declaration")
+                     (push (cons objectname subleafs) classes))
+                    ((equal type "enum_declaration")
+                     (push (cons objectname subleafs) enums))
+                    ((equal type "interface_declaration")
+                     (push (cons objectname subleafs) interfaces)))))))
+
+;;      (dolist ("enum_declaration" "class_declaration" "interface_declaration"))
+
+      (when enums (push (cons "Enums" (reverse enums)) result))
+      (when (assoc "class_declaration" subresults)
+        (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
+
+;;      (when classes (push (cons "Classes" (reverse classes)) result))
+      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
+      result)))
+
 
 ;; Setup file menu to include load/save desktop
 ;; Note: lookup-key is the way to find existing entry names
@@ -1040,6 +1169,20 @@ would just be redundant clutter."
   '("Next Buffer" . next-buffer)
   'zoom-out)
 
+
+;;; elisp
+
+;; Group `use-package' declarations under their own imenu heading --
+;; the default `lisp-imenu-generic-expression' only covers def* forms,
+;; so use-package calls otherwise don't show up at all.
+(add-hook 'emacs-lisp-mode-hook
+          (lambda ()
+            (add-to-list 'imenu-generic-expression
+                          (list "Use-package"
+                                (concat "^\\s-*(use-package\\s-+\\("
+                                        lisp-mode-symbol-regexp "\\)")
+                                1))))
+
 ;;; Excorporate setup.
 ;; I've modified this quite a bit to directly generate org files.
 
@@ -1048,11 +1191,11 @@ would just be redundant clutter."
   :ensure t
   :defer t
   :init
-  (setq excorporate-update-diary nil
-        excorporate-update-org t
-        ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
-        setq excorporate-org-buffer-name "~/org/daily-meetings.org"
-        setq excorporate-org-persist-buffer t)
+  (setq excorporate-update-diary nil)
+  (setq excorporate-update-org t)
+	;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
+	;;setq excorporate-org-buffer-name "~/org/daily-meetings.org"
+  (setq	excorporate-org-persist-buffer t)
   )
 
 ;; Track whether we've turned excorporate on or not
@@ -1094,9 +1237,9 @@ would just be redundant clutter."
     ;; skip if the file was updated within the last minute
     (message "my diary update started %s" (current-time-string))
     (let* ((time-list (decode-time (current-time)))
-           (day (nth 3 time-list))
-           (month (nth 4 time-list))
-           (year (nth 5 time-list)))
+	   (day (nth 3 time-list))
+	   (month (nth 4 time-list))
+	   (year (nth 5 time-list)))
       (exco-org-show-day month day year))))
 
 (advice-add 'org-agenda :before #'my-agenda-update-diary)
@@ -1124,7 +1267,7 @@ would just be redundant clutter."
          "%12b"
          'face 'mode-line-buffer-id
          'help-echo
-         (if (buffer-file-name) (buffer-file-name) (buffer-name))
+	 (if (buffer-file-name) (buffer-file-name) (buffer-name))
          'mouse-face 'mode-line-highlight
          'local-map mode-line-buffer-identification-keymap)))
 
@@ -1183,7 +1326,7 @@ would just be redundant clutter."
 ;; Keep the control window in the default frame
 (setq ediff-window-setup-function #'ediff-setup-windows-plain)
 
-;; WIP: experiment with widgets in the control frame
+;; experiment with widgets in the control frame
 (defun ediff-add-buttons ()
   (message "setting up buttons")
 
@@ -1206,7 +1349,7 @@ would just be redundant clutter."
                  :tag-glyph "exit"
                  :action (lambda (widget &optional event)
                            (ediff-quit nil)))
-                                        ;(ediff-previous-difference)))
+					;(ediff-previous-difference)))
 
   (widget-setup))
 
@@ -1218,6 +1361,10 @@ would just be redundant clutter."
 ((require 'wid-edit)
 (set-keymap-parent ediff-mode-map widget-keymap)))
 
+;; temptemp outorg testing
+;;(defvar outline-minor-mode-prefix "\M-#")
+;;(setq outorg-edit-whole-buffer-p t)
+
 ;; Some GC analytics to see if tuning GC is interesting
 ;; this is a bit intrusive so I'll turnoff most of the time
 (defun gc-notification ()
@@ -1227,16 +1374,17 @@ would just be redundant clutter."
 
 ;;; Completion frameworks.
 
-;; marginalia + vertico + orderless + consult for completions. I'm still deciding about Corfu.
+;; marginalia + vertico + orderless for completions. I'm still deciding about Corfu.
 ;; this enables a vertical list of completions with context dependent notes in the minibuffer
 
 (use-package vertico
   :ensure t
-  :init (vertico-mode 1)
-  :config (vertico-sort-function 'vertico-sort-history-length-alpha))
+  :custom
+  (vertico-sort-function 'vertico-sort-history-length-alpha)
+  :init (vertico-mode 1))
 
 (use-package marginalia
-  :ensure
+  :ensure t
   :init (marginalia-mode 1))
 
 ;; Trying out orderless completion
@@ -1246,13 +1394,9 @@ would just be redundant clutter."
   (completion-styles '(orderless basic))
   (completion-category-overrides '((file (styles partial-completion)))))
 
-;; Consult - running from local git clone due to elpa issues.
-(use-package consult
-  :requires compat-31a
+(use-package corfu
   :ensure t
-  :config
-  ;; Replace switch-buffers with consult-buffer
-  (keymap-global-set "C-x b" 'consult-buffer)
+  )
 
 ;;
 ;; Font name completion for customize buffers
@@ -1359,23 +1503,26 @@ tag, followed by the normal editable field."
   (add-hook 'markdown-mode-hook #'yas-minor-mode)
   )
 
-;;; Garbage Collection
-;; Turn GC on that was disabled in early-init
-;; this should stay at the end of the file
-;;
+(use-package wikimode
+  :ensure t
+  :vc (:url "https://github.com/benleis1/wikimode")
+;;  :load-path "/Users/benjamin.leis/dev/wikimode"
+  )
 
-(setq gc-cons-threshold  67108864) ;; check with lsp-mode settings to make sure they win
-(garbage-collect)
+;;;  Consult navigation package
+(use-package consult
+  :ensure t
+  :config
+  ;; Replace switch-buffers with consult-buffer
+  (keymap-global-set "C-x b" 'consult-buffer)
 
-
-;;
-;; Testing Imenu option with headings in it.
-;; TODO: it would be cool to break down functions under the headings.
-;;
-
-(setq-local imenu-generic-expression `(("transients" "^\(transient-define-prefix \\([^  \n]+\\)" 1)
-                                      ("functions" "^\(defun \\([^      \n]+\\)" 1)
-                                      ("options" "^ \\([-a-z]+\\)" 1)
-                                      ("variables" "^\(defvar \\([^     \n]+\\)" 1)
-                                      ("keymaps" ":keymap \\([^         \n]+\\)" 1)
-                                      ("headings" "^;;; \\([^   \n]+\\)" 1)))
+  ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
+  ;; completion-at-point, which otherwise falls back to the *Completions*
+  ;; buffer popup (e.g. for the font-family widget completion done earlier). Route it
+  ;; through consult so it also uses the minibuffer.
+  (setq completion-in-region-function
+	(lambda (&rest args)
+          (apply (if vertico-mode
+                     #'consult-completion-in-region
+                   #'completion--in-region)
+		 args))))
