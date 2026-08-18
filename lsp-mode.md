@@ -1,4 +1,4 @@
-q# Introduction
+# Introduction
 
 When I first started using LSP, jdtls (the java language server) and emacs, I installed lsp-mode because it was recommended online in the various places I first looked (youtube, reddit etc.). After the normal configuration issues were ironed out  that worked fine for my initial test scenarios. But recently, I've decided that lsp-mode makes some design choices that around integration with UI, treemacs and file layouts etc. that I'm not sure I like and it would be fun to experiment with the built-in eglot and see how it compares. A recent regression in the  diagnostics build warnings/errors side window's ability to move to the line via a right click  for each issue while fixable was the final motivation for me to give eglot a try. This was also an opportunity to reexamine some configuration I have never fully cleaned up in the first place.
 
@@ -66,19 +66,19 @@ This was a huge improvement. I could see the *full*  latest progress updates in 
 
 Now I went back to the mode-line again. The above experience had clued me into the fact that my own customizations of the mode line might be interfering with the default experience. I use `doom-modeline` and a lot of config code around it.  So I turned it off and confirmed - that there was some extremely useful segments for both the flymake compile information and eglot itself that I was missing.
 
-![modeline](eglot.png "default modeline")
+![modeline](./eglot.png "default modeline")
 
 * Eglot depends on flymake for the buffer compile diagnostics
 * It has a main segment where it chains top line eglot actions including things like connecting to a server, organizing imports etc.
 
 So I went back to my mode line customizations for doom-modeline and added its built in segments for both missing pieces.  I chose a very small width set of texts because screen space is fairly cramped on the modeline when working with LSP already. I have a single one character icon for eglot's main context menu and a minimal count for flymake.
 
-![My modeline](eglot2.png )
+![My modeline](./eglot2.png )
 * The red section is the current file with the project root highlighted in a slightly different shade of blue so I can confirm its correct.
 * The green section is the flymake info/error/warning block and clicking on it will open the dedicated `flymake-show-buffer-diagnostics` windows
 * the purple icon is the eglot main "button". When clicked on the following context menu pops up.
 
-![Example contextual menu](eglot3.png)
+![Example contextual menu](./eglot3.png)
 
 A lesson out of all of this is I should probably spend some time - going back to the built in mode line at some point.
 
