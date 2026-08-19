@@ -70,7 +70,7 @@ Now I went back to the mode-line again. The above experience had clued me into t
 
 * Eglot depends on flymake for the buffer compile diagnostics
 * It has a main segment where it chains top line eglot actions including things like connecting to a server, organizing imports etc.
-
+  
 So I went back to my mode line customizations for doom-modeline and added its built in segments for both missing pieces.  I chose a very small width set of texts because screen space is fairly cramped on the modeline when working with LSP already. I have a single one character icon for eglot's main context menu and a minimal count for flymake.
 
 ![My modeline](./eglot2.png )
