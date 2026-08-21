@@ -16,24 +16,28 @@ Author: Benjamin Leis
 
 ## Philosophy
 
-These are all the high level priorities that inform the decisions I've made throughout this file. Unlike many other
-users who have shared their config files, I like using the mouse and even the occasional menu
-rather than remembering key bindings for everything. So I've spent some time trying to get emacs to work more consistently for these modes. For example with flyspell on you can right click and get a context menu with the possible spellings like
-in most other applications.
+These are all the high level priorities that inform the decisions I've made throughout this file.
+Unlike many other users who have shared their config files, I like using the mouse and even
+the occasional menu rather than remembering key bindings for everything. So I've spent some time
+trying to get emacs to work more consistently for these modes. For example with flyspell on you
+can right click and get a context menu with the possible spellings like in most other applications.
 
-If possible I'll use built in functionality or packages that require minimal adaptation and just a use-package declaration.
-If not I try to keep everything in one section by general functionality area. Along these lines currently
-I prefer one larger file to a series of smaller ones for both reading and modifying. This may shift in the future
-but currently I only move code out to  a new file if it reaches a "sufficiently" large size.
+If possible I'll use built in functionality or packages that require minimal adaptation and
+just a use-package declaration. If not I try to keep everything in one section by general
+functionality area. Along these lines currently I prefer one larger file to a series of smaller
+ones for both reading and modifying. This may shift in the future but currently I only move
+code out to  a new file if it reaches a "sufficiently" large size.
 
-I have a work style where I want to have a manageable small set of files open in a tabbed format. I'll save
-these to a desktop and reload them when I start things up again. I've plumbed save/load desktop into the system menus
-and also extensively modified tab-line to fit my work flow.
-Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related sets of these files. For now I have customized tab-line with "views" to facilitate this. See tab-config.el for more details.
+I have a work style where I want to have a manageable small set of files open in a tabbed format.
+I'll save these to a desktop and reload them when I start things up again. I've plumbed
+save/load desktop into the system menus and also extensively modified tab-line to fit my work flow.
+Longterm if the need arises I plan to either integrate in bookmark+ or activities to
+save related sets of these files. For now I have customized tab-line with "views" to
+facilitate this. See tab-config.el for more details.
 
-Style-wise, I prefer a fairly minimal design theme. I'm currently using the solarized light theme  and have changed most faces to just
-use the same  gray color or a bolder one for emphasis. I really only want color in critical locations. However that's mostly not seen here
-since I use the customization mechanism and all of those tweaks are in the custom.el file.
+Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
+based on the builtin  modus-themes and have changed most faces to just  use the same default
+foreground color or a bolder one for emphasis. I really only want color in critical locations.
 
 Sample screen:
 ![sample screen](./sample-screen.png)
@@ -67,6 +71,7 @@ My typical alias setup
 - [Code:](#code)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
+- [modus theme configuration. These adjustments make switching around more comfortable.](#modus-theme-configuration-these-adjustments-make-switching-around-more-comfortable)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [limit-scrolling](#limit-scrolling)
   - [my-before-save-hook](#my-before-save-hook)
@@ -99,18 +104,6 @@ My typical alias setup
 - [markdown mode](#markdown-mode)
   - [buffer-face-mode-helvetica](#buffer-face-mode-helvetica)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
-  - [my/make-marker](#mymake-marker)
-  - [my/get-def-name](#myget-def-name)
-  - [my/get-field-name](#myget-field-name)
-  - [my/imenu-leaf](#myimenu-leaf)
-  - [my/imenu-compare](#myimenu-compare)
-  - [my/imenu-current-sort](#myimenu-current-sort)
-  - [my/imenu-list-sort-advice](#myimenu-list-sort-advice)
-  - [my/imenu-list-sort-alphabetically](#myimenu-list-sort-alphabetically)
-  - [imenu-list-switch-sort](#imenu-list-switch-sort)
-  - [my/imenu-sort](#myimenu-sort)
-  - [my/walk-object-declaration](#mywalk-object-declaration)
-  - [my/generate-ts-imenu](#mygenerate-ts-imenu)
 - [elisp](#elisp)
 - [Excorporate setup.](#excorporate-setup)
   - [my-diary-cleanup](#my-diary-cleanup)
@@ -169,6 +162,11 @@ Legacy Emacs 29 setup for :vc so we can load directly from github for selected p
   (require 'vc-use-package))
 ```
 
+Enable automatic package installation globally
+```
+(setq use-package-always-ensure t)
+```
+
 early on setup follow-symlinks to true for loaded files
 ```
 (setq vc-follow-symlinks t)
@@ -190,7 +188,7 @@ doom-themes provides the doom-solarized-light theme that custom.el enables
 via `custom-enabled-themes'. It has to be installed and on `load-path'
 *before* custom-file loads below.
 ```
-(use-package doom-themes
+(my-ignore (use-package doom-themes
   :ensure t
   :config
   ;; Global settings (defaults)
@@ -204,7 +202,68 @@ via `custom-enabled-themes'. It has to be installed and on `load-path'
   (doom-themes-treemacs-config)
   ;; Corrects (and improves) org-mode's native fontification.
   ;;  (doom-themes-org-config)
-  )
+  ))
+```
+
+# modus theme configuration. These adjustments make switching around more comfortable.
+
+Override all modus themes to use the background color from tab-line
+This keeps visual parity with what I currently use
+Make headers all the same color as foreground
+```
+(setq modus-themes-common-palette-overrides
+      '((bg-tab-bar EEE8D5)
+        (bg-tab-current bg-main)
+        (bg-tab-other EEE8D5)
+
+	;; Tone down the headings: use the default foreground instead
+        ;; of the theme's per-level accent colors.
+        (fg-heading-0 fg-main)
+        (fg-heading-1 fg-main)
+        (fg-heading-2 fg-main)
+        (fg-heading-3 fg-main)
+        (fg-heading-4 fg-main)
+        (fg-heading-5 fg-main)
+        (fg-heading-6 fg-main)
+        (fg-heading-7 fg-main)
+        (fg-heading-8 fg-main)
+
+	;; tone down code blocks
+	(bg-prose-block-contents unspecified)
+	(bg-prose-code unspecified)
+        (bg-prose-block-delimiter unspeficied)
+        (fg-prose-block-delimiter fg-dim)
+
+	;; For folio - which oddly sets only these to blue with an overline
+	(bg-heading-2 unspecified)
+	(overline-heading-1 unspecified)
+        (overline-heading-2 unspecified)
+
+	))
+```
+
+enable fixed fonts for code and variable for text
+```
+(setq modus-themes-mixed-fonts t)
+```
+
+Tone down the cursor specifically for modus-operandi-tinted.
+```
+(setq modus-operandi-tinted-palette-overrides
+      '((cursor "gray60")
+	(comment fg-main)
+	(keyword yellow-intense)
+	(bg-completion bg-yellow-nuanced)
+	))
+```
+
+Currently trying out the folio theme.
+```
+(use-package folio-theme
+  :vc (:url "https://github.com/kn66/folio-theme.el"
+            :rev :newest)
+  :config
+  (load-theme 'folio t))
 ```
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -245,6 +304,7 @@ turn off tool bar always
 turn on scroll bars when in window mode
 testing on-demand scroll bar
 Use the normal right click brings up a context menu
+Add a faint window divider
 ```
 (when window-system
   (use-package on-demand-scroll-bar
@@ -252,7 +312,14 @@ Use the normal right click brings up a context menu
     :config
     (on-demand-scroll-bar-mode 1))
   (context-menu-mode)
-)
+
+  ;; Add dividers on the right and bottom
+  (setq window-divider-default-places t)
+  ;; Set the width of the dividers to 1 pixel
+  (setq window-divider-default-right-width 1
+	window-divider-default-bottom-width 1)
+  (window-divider-mode 1)
+  )
 
 (my-ignore (setq scroll-conservatively 10))
 ```
@@ -315,7 +382,8 @@ Switch buffer name context tip to actually be the buffer name
                      'local-map mode-line-buffer-identification-keymap)))
 ```
 
-Override the default value so isearch is always full screen. If set too low emacs tries to render less
+Override the default value so isearch is always full screen. If set too low emacs
+tries to render less
 ```
 (setq baud-rate 19200)
 ```
@@ -336,7 +404,8 @@ Revert Dired and other buffers
 ```
 
 Enable mouse in text mode
-Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy after copying to the kill ring
+Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy
+after copying to the kill ring
 ```
 (unless window-system
   (require 'mouse)
@@ -417,7 +486,7 @@ It has to be installed here before tab-config.el (loaded right below) uses its
 
 Load all of my custom tab-line config.
 ```
-(load "~/.emacs.d/tab-config.el")
+(load  (locate-user-emacs-file "tab-config.el"))
 ```
 
 # Global key bindings
@@ -1139,9 +1208,18 @@ Note: C-\ is bound to smart toggle.
   ;; Some built in default around resizing and window focus I prefer.
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil)
+
+  ;; doom-modeline renders its icons at `doom-modeline-icon-scale-factor'
+  ;; This invisible spacer forces the same line height here so the
+  ;; imenu-list mode-line matches the height of the main buffers' doom-modeline.
+  (defvar my-imenu-list-mode-line-height-spacer
+    (propertize " " 'display '(height 1.3))
+    "Zero-effect text used only to match doom-modeline's line height.")
+
   ;; Simplified buffer name with icon for the menu bar.
   (setq imenu-list-mode-line-format
-	'("%e" mode-line-frame-identification
+	`("%e" mode-line-frame-identification
+	  ,my-imenu-list-mode-line-height-spacer
 	  (:propertize "󰉹" face mode-line-buffer-id) " "
 	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
 	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
@@ -1255,238 +1333,10 @@ would just be redundant clutter."
   (advice-add 'imenu-list--show-current-entry :after #'my-imenu-list-reveal-current-entry))
 ```
 
-
-Custom hierarchical parsing of the treesitter tree
-
-
-## my/make-marker
-Generate a marker for the given node
-This can only be done while in the buffer
+Load all of my custom imenu extensions.
 ```
-(defun my/make-marker (buffer point)
-  (with-current-buffer buffer
-    (copy-marker point)))
+(load-file (locate-user-emacs-file "imenu.el"))
 ```
-
-## my/get-def-name
-Treesitter node name function for most node types
-```
-(defun my/get-def-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name node "name") t))
-```
-
-## my/get-field-name
-Treesitter node name function for class fields
-```
-(defun my/get-field-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name") t))
-```
-
-## my/imenu-leaf
-Simple wrapper to make an imenu leaf from a treesitter node
-```
-(defun my/imenu-leaf (node buffer name-func)
-       (cons (funcall name-func node)
-             (my/make-marker buffer (treesit-node-start node))))
-```
-
-## my/imenu-compare
-Compare two imenu nodes
-```
-(defun my/imenu-compare (left right)
-  (string-lessp (car left) (car right)))
-```
-
-Global variable to track sorting function
-which we'll set per buffer and then multiplex on
-```
-(defvar my/imenu-list-sort-function nil)
-```
-
-## my/imenu-current-sort
-String for which sorting mode we're in for use in the mode-line
-```
-(defun  my/imenu-current-sort (&optional buffer)
-  (if buffer
-      (with-current-buffer buffer
-        (progn
-          (if my/imenu-list-sort-function "alpha" "pos")))
-    (if my/imenu-list-sort-function "alpha" "pos")))
-```
-
-## my/imenu-list-sort-advice
-Multiplexer advice that inserts a sorting function if one is
-defined above.
-```
-(defun my/imenu-list-sort-advice ()
-  (when my/imenu-list-sort-function
-    (progn
-      (setq imenu--index-alist (funcall my/imenu-list-sort-function)))))
-
-(define-advice imenu-list-rescan-imenu (:after ())
-  (my/imenu-list-sort-advice))
-```
-
-## my/imenu-list-sort-alphabetically
-Custom sorting function that alphabetizes per imenu object type.
-There is no built in facility to extend sorting so we have to wire this in via advice
-This is written generically to handle elisp which just inserts all the functions as leaf nodes
-and java lsp/treesitter which insert everything under categories.
-```
-(defun my/imenu-list-sort-alphabetically ()
-  (interactive)
-  (let ((entries imenu--index-alist)
-        (leaf-entries nil)
-        (sorted-entries nil))
-
-    (dolist (entry entries)
-
-      ;; if its a category container sort the entries within it
-      ;; o/w add to a temp list to be sorted below
-      (if (not (listp (cdr entry)))
-          (setq leaf-entries (cons entry leaf-entries))
-        (let* ((objects (cdr entry))
-               (type (car entry))
-               (sorted-objects (sort objects
-                                     (lambda (left right)
-                                       (string-lessp (car left) (car right))))))
-
-          (setq sorted-entries (append sorted-entries (list (cons type sorted-objects))))
-          )))
-
-    ;; Sort the top level leaf entries
-    (setq sorted-entries (append sorted-entries
-            (sort leaf-entries
-                  (lambda (left right)
-                    (string-lessp (car left) (car right))))))
-    ))
-```
-
-## imenu-list-switch-sort
-Interactive command to make it easy to swap how the symbols are sorted
-Note: default is to go by position so we don't have to override for that
-```
-(defun imenu-list-switch-sort (type)
-  (interactive
-   (with-current-buffer imenu-list--displayed-buffer
-     (unless (eq imenu-create-index-function 'my/generate-ts-imenu)
-       (user-error "Sort switching is only available for treesitter class/interface imenus"))
-     (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
-		       ("by position" . nil )))) ;; default no override needed
-       (list (alist-get
-	      (completing-read "Choose: " choices)
-	      choices nil nil 'equal)))))
-  (with-current-buffer imenu-list--displayed-buffer
-    (setq-local my/imenu-list-sort-function type)
-    ;; mode line update to add the sort message.
-    (force-mode-line-update))
-  (imenu-list-refresh))
-```
-
-Let "s" in the *Ilist* buffer itself switch sort order, since that's
-```
-(define-key imenu-list-major-mode-map (kbd "s") #'imenu-list-switch-sort)
-```
-
-## my/imenu-sort
-Sort a list of imenu nodes
-```
-(defun my/imenu-sort (seq)
-  (sort seq 'my/imenu-compare))
-```
-
-## my/walk-object-declaration
-Walk the parent node class of an interface, class or enum and
-construct a list of all fields, constructors and methods.
-Recursion occurs when there is an inner class.
-```
-(defun my/walk-object-declaration (classnode buffer)
-    (let ((constructors ())
-          (fields ())
-          (methods ())
-          (inner-classes ())
-          (result ())
-          (orderfn (if my/imenu-list-sort-function 'my/imenu-sort 'reverse)))
-      (dolist (node (treesit-node-children classnode))
-        (progn
-          (cond ((equal (treesit-node-type node) "constructor_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
-
-                ((equal (treesit-node-type node) "method_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
-
-                ((equal (treesit-node-type node) "class_declaration")
-                 (let* ((body (treesit-node-child-by-field-name node "body"))
-                        (classname (my/get-def-name node))
-			(subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
-					(my/walk-object-declaration body buffer))))
-
-                   (push (cons classname subleafs) inner-classes)))
-
-                ((equal (treesit-node-type node) "field_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
-
-      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
-      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
-      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
-      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
-      ;; final value
-      result))
-
-(setq my/first-level-ts-filters '(("Classes" "class_declaration")
-                                  ("Interfaces" "interface_declaration")
-                                  ("Records" "record_declaration")))
-```
-
-## my/generate-ts-imenu
-Main routine that walks top level of the grammar tree and constructs imenu nodes
-to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
-```
-(defun my/generate-ts-imenu (&optional buffer)
-  (interactive)
-  (unless buffer (setq buffer (current-buffer)))
-  (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
-    (let ((classes '())
-          (interfaces '())
-          (enums '())
-          (class_declaration '())
-          (subresults '())
-          (result '()))
-
-      (dolist (node (treesit-node-children (treesit-buffer-root-node)))
-        (let ((type (treesit-node-type node)))
-          (when (or (equal type "class_declaration")
-                    (equal type "interface_declaration")
-                    (equal type "enum_declaration"))
-            (let* ((body (treesit-node-child-by-field-name node "body"))
-                   (subleafs  (when body (my/walk-object-declaration body buffer)))
-                   (objectname (my/get-def-name node))
-                   (object-start (treesit-node-start node)))
-
-              (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
-              (unless (assoc type subresults) (push (cons type nil) subresults))
-              (push (cons objectname subleafs) (cdr (assoc type subresults)))
-
-              (cond ((equal type "class_declaration")
-                     (push (cons objectname subleafs) classes))
-                    ((equal type "enum_declaration")
-                     (push (cons objectname subleafs) enums))
-                    ((equal type "interface_declaration")
-                     (push (cons objectname subleafs) interfaces)))))))
-
-;;      (dolist ("enum_declaration" "class_declaration" "interface_declaration"))
-
-      (when enums (push (cons "Enums" (reverse enums)) result))
-      (when (assoc "class_declaration" subresults)
-        (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
-
-;;      (when classes (push (cons "Classes" (reverse classes)) result))
-      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
-      result)))
-```
-
 
 Setup file menu to include load/save desktop
 Note: lookup-key is the way to find existing entry names
@@ -1777,10 +1627,6 @@ also I still want to type text in the box and have it work
 (set-keymap-parent ediff-mode-map widget-keymap)))
 ```
 
-temptemp outorg testing
-(defvar outline-minor-mode-prefix "\M-#")
-(setq outorg-edit-whole-buffer-p t)
-
 ## gc-notification
 Some GC analytics to see if tuning GC is interesting
 this is a bit intrusive so I'll turnoff most of the time
@@ -1965,7 +1811,6 @@ Yanippet used defines some markdown templates for the blog
 (use-package wikimode
   :ensure t
   :vc (:url "https://github.com/benleis1/wikimode")
-;;  :load-path "/Users/benjamin.leis/dev/wikimode"
   )
 ```
 

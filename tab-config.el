@@ -514,7 +514,7 @@ at the mouse-down event to the position at mouse-up event."
                  'tab-line-tab-inactive))
 	 (group-view (window-parameter nil 'tab-line-groups)))
 
-    ;; the face funcs expect to get called with whether the tab is a buffer
+    ;; the face funcs are called even when the tab isn't a buffer
     ;; so we can't use buffer directly here
     (dolist (fn tab-line-tab-face-functions)
       (progn
