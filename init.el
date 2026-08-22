@@ -120,7 +120,12 @@
   ;;  (doom-themes-org-config)
   ))
 
-;;; modus theme configuration. These adjustments make switching around more comfortable.
+;;; modus theme configuration.
+
+;; These mostly global level changes make switching around easier between themes
+;; They preserve the tabbing styling I use and mute the colors a bit.
+;; The consequence of moving over to modus is the need to not generally customize faces in
+;; custom.el.
 
 ;; Override all modus themes to use the background color from tab-line
 ;; This keeps visual parity with what I currently use
@@ -147,6 +152,10 @@
 	(bg-prose-code unspecified)
         (bg-prose-block-delimiter unspeficied)
         (fg-prose-block-delimiter fg-dim)
+
+	;; paren-matching
+	(fg-paren-match red)
+	(bg-paren-match bg-red-intense)
 
 	;; For folio - which oddly sets only these to blue with an overline
 	(bg-heading-2 unspecified)
@@ -297,7 +306,7 @@
 ;;; backup and autosave - put everything in ~/.saves
 
 ;; Define a directory for auto-save files
-(defvar my-auto-save-folder (concat user-emacs-directory "~/.saves"))
+(defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
 
 ;; Ensure the directory exists
 (unless (file-exists-p my-auto-save-folder)
@@ -315,6 +324,14 @@
  version-control t)
 
 ;;; Dired
+
+;; nerd icons setup.
+;; These are used by doom-modeline and color adjustments need to be done prior to loading it
+(use-package nerd-icons
+  :config
+  ;; set the nerd icon color for lisp mode prior to starting up. Yellow doesn't read well.
+  (add-to-list 'nerd-icons-mode-icon-alist
+               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green)))
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 (use-package nerd-icons-dired
@@ -337,7 +354,8 @@
 ;; `doom-modeline-def-segment'/`doom-modeline-def-modeline' macros at load time.
 (use-package doom-modeline
   :ensure t
-  :init (doom-modeline-mode 1))
+  :init
+  (doom-modeline-mode 1))
 
 ;; Load all of my custom tab-line config.
 (load  (locate-user-emacs-file "tab-config.el"))
@@ -398,7 +416,7 @@
   :config (setq sqlformat-command 'pgformatter
                 sqlformat-args '("-s2" "-g")))
 
-;; flyspell config
+;;; flyspell config
 ;; currently not bound to a key
 (defun flyspell-on-for-buffer-type ()
       "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
@@ -695,7 +713,7 @@
 (setq eglot-report-progress 'messages) ;; progress updates in the message bar
 ;; tree sitter is fine for faces and we don't need highlighting on the current line.
 (setq eglot-ignored-server-capabilities '(:semanticTokensProvider :documentHighlightProvider))
-(setq eglot-stay-out-of '(imenu)) ;; Use my versiong
+(setq eglot-stay-out-of '(imenu)) ;; Use my version
 ;; asynchronous connections to not freeze during initial handshake.
 (setq eglot-sync-connect nil)
 
@@ -1399,6 +1417,10 @@ tag, followed by the normal editable field."
   :config
   ;; Replace switch-buffers with consult-buffer
   (keymap-global-set "C-x b" 'consult-buffer)
+
+  ;; live preview when M-. is pressed rather than automatically since it easily
+  ;; splits the window
+  (setq consult-preview-key "M-.")
 
   ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
   ;; completion-at-point, which otherwise falls back to the *Completions*
