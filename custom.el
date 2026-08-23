@@ -4,9 +4,13 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(custom-enabled-themes '(doom-solarized-light))
+ '(custom-enabled-themes '(folio))
  '(custom-safe-themes
-   '("f38f24d7468df32f8945a0572c856223f8351b8ea050b717ce36b0051399e3ad"
+   '("e759984e3274da0dd3b87648cf8220ae79f44e6cc7fc626c8d457c16fa3407f5"
+     "aa05031fde757caa957b3993a9e36933b3f283b780f5dd9a61e97af465418d9a"
+     "8b7486d4dfb06867fefb13deb20da1e7383135c29158533a3324708d31eae05e"
+     "2dd2fe7575d76094652d9e04de604db1cd1cdf1582e1494bc646b2a6e402afb0"
+     "f38f24d7468df32f8945a0572c856223f8351b8ea050b717ce36b0051399e3ad"
      "8e8acbea18dbf51b41a09e7fc789f8af666b2ca8c099a268b5275bfc4541a5ff"
      "a8c1252f9844caf313a2315ecf1e8ef4d92495c9f2067d875bb1c783b08719ad"
      "7c0179ef765b9bf1d79612235236d29eebcaca9b4a287ff802959ed20db154b6"
@@ -73,27 +77,20 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(default ((t (:inherit nil :extend nil :stipple nil :foreground "gray33" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight regular :height 160 :width normal :foundry "nil" :family "DejaVuSansM Nerd Font"))))
- '(cursor ((t (:background "dark gray"))))
  '(font-lock-constant-face ((t (:foreground "gray33" :weight bold))))
- '(font-lock-function-call-face ((t (:inherit nil :foreground "gray33" :slant italic))))
- '(font-lock-type-face ((t (:foreground "gray33" :slant italic))))
  '(font-lock-variable-use-face ((t (:inherit font-lock-variable-name-face :foreground "gray33"))))
  '(imenu-list-entry-face ((t (:family "DejaVu Sans Mono for Powerline"))))
  '(imenu-list-entry-face-0 ((t (:inherit imenu-list-entry-face :foreground "#556b72"))))
  '(imenu-list-entry-face-1 ((t (:inherit imenu-list-entry-face :foreground "#556b72"))))
  '(imenu-list-entry-face-2 ((t (:inherit imenu-list-entry-face :foreground "#556b72"))))
  '(imenu-list-entry-face-3 ((t (:inherit imenu-list-entry-face))))
- '(line-number ((t (:inherit default :background "#EEE8D5" :foreground "#96A7A9" :weight normal))))
- '(markdown-code-face ((t (:extend t :background "#f2e7d0" :weight normal :family "Space Mono for Powerline"))))
- '(markdown-header-face ((t (:inherit bold :foreground "gray0" :underline nil :height 1.5 :family "helvetica"))))
- '(markdown-italic-face ((t (:inherit italic :foreground "gray27"))))
- '(markdown-link-face ((t (:foreground "goldenrod4"))))
- '(markdown-list-face ((t (:foreground "gray0"))))
- '(markdown-metadata-key-face ((t (:foreground "black" :weight medium))))
- '(markdown-pre-face ((t (:foreground "SlateGray4" :family "DejaVu Sans Mono for Powerline"))))
- '(markdown-table-face ((t (:inherit markdown-code-face :family "DejaVu Sans Mono for Powerline"))))
- '(markdown-url-face ((t (:foreground "gray0" :weight normal))))
- '(mode-line-active ((t (:inherit mode-line :background "cornsilk3" :box (:line-width (2 . 1) :color "tan" :style pressed-button)))))
+;; '(markdown-header-face ((t (:inherit bold :foreground "gray0" :underline nil :height 1.5))))
+;; '(markdown-italic-face ((t (:inherit italic :foreground "gray27")))) ;
+;; '(markdown-list-face ((t (:foreground "gray0"))))
+;; '(markdown-metadata-key-face ((t (:foreground "black" :weight medium))))
+;; '(markdown-pre-face ((t (:foreground "SlateGray4" :family "DejaVu Sans Mono for Powerline"))))
+;; '(markdown-table-face ((t (:inherit markdown-code-face :family "DejaVu Sans Mono for Powerline"))))
+;; '(markdown-url-face ((t (:foreground "gray0" :weight normal))))
  '(org-checkbox ((t (:inherit org-todo :height 1.7))))
  '(org-date ((t (:foreground "DodgerBlue1"))))
  '(org-document-info ((t (:foreground "black"))))
@@ -109,7 +106,7 @@
  '(org-table ((t (:inherit fixed-pitch :foreground "#6c71c4" :height 1.0 :family "DejaVu Sans Mono for Powerline"))))
  '(shadow ((t (:foreground "gray56"))))
  '(stripe-hl-line ((t (:background "DarkOrange2" :foreground "ivory"))))
- '(tab-line ((t (:background "#EEE8D5" :height 1.3 :family "San Francisco (SF Pro)"))))
+ '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3)))
  '(tab-line-tab-modified ((t (:inherit font-lock-doc-face :foreground "DarkOrange1" :weight bold :family "DejaVu "))))
  '(tooltip ((t (:background "#EEE8D5" :foreground "#556b72" :height 1.3))))
  '(treesit-fold-replacement-face ((t (:background "goldenrod4" :foreground "white" :box (:line-width (1 . -1) :color "black" :style pressed-button)))))
