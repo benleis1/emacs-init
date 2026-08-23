@@ -71,22 +71,37 @@ My typical alias setup
 - [Code:](#code)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
-- [modus theme configuration. These adjustments make switching around more comfortable.](#modus-theme-configuration-these-adjustments-make-switching-around-more-comfortable)
+- [Font setup. This needs to be done prior to theming.](#font-setup-this-needs-to-be-done-prior-to-theming)
+- [modus theme configuration.](#modus-theme-configuration)
+  - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [limit-scrolling](#limit-scrolling)
   - [my-before-save-hook](#my-before-save-hook)
 - [backup and autosave - put everything in ~/.saves](#backup-and-autosave---put-everything-in-saves)
 - [Dired](#dired)
+- [Nano-like mode line styling](#nano-like-mode-line-styling)
+- [This has become complicated enough that I should probably stop using](#this-has-become-complicated-enough-that-i-should-probably-stop-using)
+- [doom modeline](#doom-modeline)
+  - [my/doom-modeline-recolor-file-icon](#mydoom-modeline-recolor-file-icon)
+  - [my/doom-modeline--height-spacer](#mydoom-modeline--height-spacer)
+  - [my/doom-modeline-hide-segment](#mydoom-modeline-hide-segment)
+  - [my/doom-modeline--icon-square](#mydoom-modeline--icon-square)
+  - [my/doom-modeline--squared-buffer-info](#mydoom-modeline--squared-buffer-info)
+  - [my/doom-modeline-buffer-info-override](#mydoom-modeline-buffer-info-override)
+  - [my/doom-modeline-buffer-info-simple-override](#mydoom-modeline-buffer-info-simple-override)
+  - [my/doom-modeline-bar-override](#mydoom-modeline-bar-override)
 - [Global key bindings](#global-key-bindings)
   - [pbcopy-region](#pbcopy-region)
   - [pbcopy-kill-ring](#pbcopy-kill-ring)
   - [paste-for-osx](#paste-for-osx)
 - [sql formatting setup for sqlformat-* functions.](#sql-formatting-setup-for-sqlformat--functions)
+- [flyspell config](#flyspell-config)
+  - [my-flyspell-prog-mode](#my-flyspell-prog-mode)
   - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
   - [flyspell-toggle](#flyspell-toggle)
 - [org-mode](#org-mode)
-  - [org-mode-fonts](#org-mode-fonts)
 - [Programming modes](#programming-modes)
+  - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
   - [treesit-fold-range-java-imports](#treesit-fold-range-java-imports)
   - [treesit-fold-close-java-imports](#treesit-fold-close-java-imports)
   - [treesit-fold-summary-java](#treesit-fold-summary-java)
@@ -102,7 +117,6 @@ My typical alias setup
   - [flymake-buffer-quit](#flymake-buffer-quit)
 - [python - TODO turn on eglot integration later.](#python---todo-turn-on-eglot-integration-later)
 - [markdown mode](#markdown-mode)
-  - [buffer-face-mode-helvetica](#buffer-face-mode-helvetica)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
 - [elisp](#elisp)
 - [Excorporate setup.](#excorporate-setup)
@@ -116,7 +130,9 @@ My typical alias setup
   - [my-ediff-prep-buffers](#my-ediff-prep-buffers)
   - [my-ediff-qh](#my-ediff-qh)
   - [command-line-diff](#command-line-diff)
-  - [ediff-add-buttons](#ediff-add-buttons)
+  - [my-ediff-nav-button](#my-ediff-nav-button)
+  - [my-ediff-nav-string](#my-ediff-nav-string)
+  - [my-ediff-install-nav-overlay](#my-ediff-install-nav-overlay)
   - [gc-notification](#gc-notification)
 - [Completion frameworks.](#completion-frameworks)
   - [font-family-widget-p](#font-family-widget-p)
@@ -182,6 +198,7 @@ requires manual editing of custom-set-faces to use ` back tick operator.
 ```
 (defvar my-code-bright "goldenrod3")
 (defvar my-code-dark "goldenrod4")
+(defvar margin-tan-bg "#EEE8D5")
 ```
 
 doom-themes provides the doom-solarized-light theme that custom.el enables
@@ -205,16 +222,54 @@ via `custom-enabled-themes'. It has to be installed and on `load-path'
   ))
 ```
 
-# modus theme configuration. These adjustments make switching around more comfortable.
+# Font setup. This needs to be done prior to theming.
+Mixed-pitch mode. I use this in markdown and org modes currently.
+
+```
+(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
+  "Default fixed-pitch font family.")
+(defvar my-default-variable-pitch-font "Helvetica"
+    "Default variable-pitch font family.")
+
+(use-package mixed-pitch
+  :ensure t
+  :init
+  (set-face-attribute 'variable-pitch nil
+                      :font my-default-variable-pitch-font
+                      :height 1.0)
+
+  ;; Ensure the fixed-pitch face strictly inherits from the default font
+  (set-face-attribute 'fixed-pitch nil
+                      :inherit 'default)
+
+  :hook ((org-mode . mixed-pitch-mode)
+	 (markdown-mode . mixed-pitch-mode)))
+```
+
+# modus theme configuration.
+
+Disable all previously loaded themes before loading another one.
+```
+(advice-add 'load-theme :before
+            (lambda (&rest varargs_)
+              (mapc #'disable-theme custom-enabled-themes)))
+```
+
+These mostly global level changes make switching around easier between themes
+They preserve the tabbing styling I use and mute the colors a bit.
+The consequence of moving over to modus is the need to not generally customize faces in
+custom.el.
 
 Override all modus themes to use the background color from tab-line
 This keeps visual parity with what I currently use
 Make headers all the same color as foreground
+
 ```
 (setq modus-themes-common-palette-overrides
-      '((bg-tab-bar EEE8D5)
+      `((bg-tab-bar ,margin-tan-bg)
         (bg-tab-current bg-main)
-        (bg-tab-other EEE8D5)
+        (bg-tab-other ,margin-tan-bg)
+	(bg-line-number-inactive ,margin-tan-bg)
 
 	;; Tone down the headings: use the default foreground instead
         ;; of the theme's per-level accent colors.
@@ -234,17 +289,31 @@ Make headers all the same color as foreground
         (bg-prose-block-delimiter unspeficied)
         (fg-prose-block-delimiter fg-dim)
 
-	;; For folio - which oddly sets only these to blue with an overline
-	(bg-heading-2 unspecified)
-	(overline-heading-1 unspecified)
-        (overline-heading-2 unspecified)
+	;;diffs - duplicate modus deuteranopia colors (I don't like red/green)
 
+	(bg-added             bg-yellow-subtle)
+        (bg-added-faint       bg-yellow-faint)
+        (bg-added-refine      bg-yellow-refine)
+        (bg-added-intense     bg-yellow-intense)
+        (fg-added             yellow)
+        (fg-added-intense     yellow-intense)
+        (bg-removed           bg-blue-subtle)
+        (bg-removed-faint     bg-blue-faint)
+        (bg-removed-refine    bg-blue-refine)
+        (bg-removed-intense   bg-blue-intense)
+        (fg-removed           blue)
+        (fog-removed-intense   blue-intense)
 	))
 ```
 
 enable fixed fonts for code and variable for text
 ```
 (setq modus-themes-mixed-fonts t)
+```
+
+bold works well for coding faces
+```
+(setq modus-themes-bold-constructs t)
 ```
 
 Tone down the cursor specifically for modus-operandi-tinted.
@@ -257,7 +326,86 @@ Tone down the cursor specifically for modus-operandi-tinted.
 	))
 ```
 
-Currently trying out the folio theme.
+Specific folio theme overrides
+```
+(setq folio-theme-palette-overrides
+      ;; headers need some color and overlines stripped
+      '((bg-heading-2 unspecified)
+	(overline-heading-1 unspecified)
+        (overline-heading-2 unspecified)
+	(overline-heading-3 unspecified)
+        (overline-heading-4 unspecified)
+	(bg-prose-block-contents bg-tab-bar)
+
+	;; I like a slightly bolder mode-line background
+	(bg-mode-line-active "gray75")
+
+	;; paren-matching
+	(fg-paren-match red)
+	(bg-paren-match bg-red-intense)
+
+	;; Current set of coding keyword color selections.
+	(keyword green-warmer)
+	(type unspecified)
+	(fnname yellow-cooler)
+	(fnname-call unspecified)
+	))
+
+(setq nano-like-palette-overrides
+      '((bg-tab-bar bg-inactive)
+        (bg-tab-current bg-main)
+        (bg-tab-other bg-inactive)
+	(bg-line-number-inactive bg-inactive)
+
+	;; hover select only lets you change the background by default.
+	(bg-hover bg-magenta-nuanced)
+	))
+```
+
+Give nano-like its own fixed/variable-pitch fonts (relies on
+`modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and
+`variable-pitch'). Revert to the unspecified/default family otherwise.
+
+```
+(defvar my-nano-fixed-pitch-font "Roboto Mono for Powerline"
+  "Fixed-pitch font family used while the nano-like theme is active.")
+(defvar my-nano-variable-pitch-font "Fira Code"
+  "Variable-pitch font family used while the nano-like theme is active.")
+```
+
+## my-reload-fonts
+Loop through all the buffers and force mixed-pitch-mode ones to reload.
+```
+(defun my-reload-fonts ()
+  (interactive)
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (bound-and-true-p mixed-pitch-mode)
+	(mixed-pitch-mode)))))
+
+(add-hook 'enable-theme-functions
+          (lambda (theme)
+            (if (eq theme 'nano-like)
+                (progn
+		  (set-face-attribute 'default nil :family my-nano-fixed-pitch-font)
+                  (set-face-attribute 'fixed-pitch nil :family my-nano-fixed-pitch-font)
+                  (set-face-attribute 'variable-pitch nil :family my-nano-variable-pitch-font)
+		  (my-reload-fonts))
+              (progn
+		(set-face-attribute 'default nil :family my-default-fixed-pitch-font)
+                (set-face-attribute 'fixed-pitch nil :family my-default-fixed-pitch-font)
+                (set-face-attribute 'variable-pitch nil :family my-default-variable-pitch-font)
+		(my-reload-fonts)
+		))))
+```
+
+Modus doesn't handle fonts so just set this directly here where all other styling is being done.
+```
+(custom-set-faces
+ '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3))))
+```
+
+Currently trying out the folio theme as my main theme.
 ```
 (use-package folio-theme
   :vc (:url "https://github.com/kn66/folio-theme.el"
@@ -431,7 +579,7 @@ the gui app open for long periods of time
 
 Define a directory for auto-save files
 ```
-(defvar my-auto-save-folder (concat user-emacs-directory "~/.saves"))
+(defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
 ```
 
 Ensure the directory exists
@@ -453,6 +601,16 @@ Ensure the directory exists
 
 # Dired
 
+nerd icons setup.
+These are used by doom-modeline and color adjustments need to be done prior to loading it
+```
+(use-package nerd-icons
+  :config
+  ;; set the nerd icon color for lisp mode prior to starting up. Yellow doesn't read well.
+  (add-to-list 'nerd-icons-mode-icon-alist
+               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green)))
+```
+
 Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 ```
 (use-package nerd-icons-dired
@@ -462,6 +620,7 @@ Icons for dired. I'm not sure if I care enough to keep this longterm yet.
   :hook ((dired-mode . nerd-icons-dired-mode))
   )
 ```
+
 
 Do all dired ops in a single window
 ```
@@ -474,14 +633,193 @@ allow find-alternate-file i.e. open and kill dired
 
 doom-modeline setup
 Note: its important to have a nerd font installed for the icons to work properly
-I usd DejaVu Sans Mono with the Nerd Font extension
-For now I leave the icons on even in terminal mode although they are a bit too small there.
+I usd DejaVu Sans Mono with the Nerd Font extension. For now I leave the icons on
+even in terminal mode although they are a bit too small there.
 It has to be installed here before tab-config.el (loaded right below) uses its
 `doom-modeline-def-segment'/`doom-modeline-def-modeline' macros at load time.
 ```
 (use-package doom-modeline
   :ensure t
-  :init (doom-modeline-mode 1))
+  :init
+  (doom-modeline-mode 1)
+  :config
+  (setq doom-modeline-bar-width 0)
+  (setq doom-modeline-position-column-line-format '("L%l:%c")))
+```
+
+# Nano-like mode line styling
+# This has become complicated enough that I should probably stop using
+# doom modeline
+
+When the nano-like theme is active, flatten doom-modeline's buffer/file
+icon to white-on-gray instead of nerd-icons' per-filetype colors.
+```
+(defface my/doom-modeline-file-icon
+  '((t :foreground "white" :background "gray60"))
+  "Face for the doom-modeline buffer/file icon under the nano-like theme.")
+
+(defvar my/doom-modeline-file-icon-scale 1.6
+  "How much larger than normal text the file icon renders.")
+
+(defvar my/doom-modeline-file-icon-padding-scale 1.1
+  "How much larger than normal text the icon's side padding renders.")
+```
+
+## my/doom-modeline-recolor-file-icon
+>Recolor ICON, doom-modeline's buffer/file icon, to `my/doom-modeline-file-icon'
+and enlarge it by `my/doom-modeline-file-icon-scale'.
+Meant as a `:filter-return' advice on `doom-modeline-icon-for-buffer'.
+
+```
+(defun my/doom-modeline-recolor-file-icon (icon)
+  "Recolor ICON, doom-modeline's buffer/file icon, to `my/doom-modeline-file-icon'
+and enlarge it by `my/doom-modeline-file-icon-scale'.
+Meant as a `:filter-return' advice on `doom-modeline-icon-for-buffer'."
+  (if (stringp icon)
+      (let ((props (get-text-property 0 'face icon)))
+        (if (listp props)
+            (let ((new-props (plist-put (copy-sequence props)
+                                         :inherit 'my/doom-modeline-file-icon)))
+              (setq new-props (plist-put new-props :height
+                                         (* my/doom-modeline-file-icon-scale
+                                            (or (plist-get props :height) 1.0))))
+              (propertize icon 'face new-props))
+          icon))
+    icon))
+
+
+(defvar my/doom-modeline-height-scale 1.3
+  "Safety margin on top of `my/doom-modeline-file-icon-scale' used to size
+the invisible height-regulating spacer in `my/doom-modeline--height-spacer'.
+Its half-height needs to exceed the enlarged icon's own ascent, or the icon
+(not the spacer) ends up dictating the line's height, and text goes back to
+sitting low. Raise this if text still looks low; lower it if the mode-line
+looks taller than it needs to.")
+```
+
+## my/doom-modeline--height-spacer
+>An effectively invisible (1px wide), vertically-symmetric image that
+grows the mode-line equally above and below the baseline, so unscaled text
+stays centered against the enlarged file icon.
+
+```
+(defun my/doom-modeline--height-spacer ()
+  "An effectively invisible (1px wide), vertically-symmetric image that
+grows the mode-line equally above and below the baseline, so unscaled text
+stays centered against the enlarged file icon."
+  (when (and (display-graphic-p) (image-type-available-p 'pbm))
+    (let ((h (max 1 (round (* my/doom-modeline-height-scale
+                              my/doom-modeline-file-icon-scale
+                              (doom-modeline--font-height))))))
+      (ignore-errors
+        (create-image
+         (concat (format "P1\n1 %d\n" h) (make-string h ?1) "\n")
+         'pbm t :scale 1 :foreground "None" :ascent 'center)))))
+```
+
+## my/doom-modeline-hide-segment
+>Unconditionally hide a segment.
+
+```
+(defun my/doom-modeline-hide-segment (&optional _result)
+  "Unconditionally hide a segment."
+  nil)
+```
+
+## my/doom-modeline--icon-square
+>The file/major-mode icon padded into a gray square badge.
+Like `doom-modeline--buffer-mode-icon', but pads with
+`my/doom-modeline-file-icon' on both sides instead of appending a plain,
+differently-faced `doom-modeline-vspc'.
+
+```
+(defun my/doom-modeline--icon-square ()
+  "The file/major-mode icon padded into a gray square badge.
+Like `doom-modeline--buffer-mode-icon', but pads with
+`my/doom-modeline-file-icon' on both sides instead of appending a plain,
+differently-faced `doom-modeline-vspc'."
+  (when (and doom-modeline-icon doom-modeline-major-mode-icon)
+    (when-let* ((icon (or doom-modeline--buffer-file-icon
+                          (doom-modeline-update-buffer-file-icon))))
+      (unless (string-empty-p icon)
+        (let* ((pad-face `(:inherit my/doom-modeline-file-icon
+                           :height ,my/doom-modeline-file-icon-padding-scale))
+               (pad (propertize " " 'face pad-face))
+               ;; Same face as PAD so its 1px width blends into the badge
+               ;; instead of showing as a sliver of the default background.
+               (spacer (propertize " " 'face pad-face
+                                    'display (my/doom-modeline--height-spacer))))
+          (concat spacer pad icon pad))))))
+```
+
+## my/doom-modeline--squared-buffer-info
+>Buffer-info, with the icon squared off via `my/doom-modeline--icon-square'
+instead of `doom-modeline--buffer-mode-icon', and no leading spacer so the
+square sits flush against the mode-line's left edge. NAME-FN supplies the
+buffer-name part, e.g. `doom-modeline--buffer-name' or `--buffer-simple-name'.
+
+```
+(defun my/doom-modeline--squared-buffer-info (name-fn)
+  "Buffer-info, with the icon squared off via `my/doom-modeline--icon-square'
+instead of `doom-modeline--buffer-mode-icon', and no leading spacer so the
+square sits flush against the mode-line's left edge. NAME-FN supplies the
+buffer-name part, e.g. `doom-modeline--buffer-name' or `--buffer-simple-name'."
+  (concat (my/doom-modeline--icon-square)
+          (doom-modeline-spc)
+          (doom-modeline--buffer-state-icon)
+          (funcall name-fn)))
+```
+
+## my/doom-modeline-buffer-info-override
+```
+(defun my/doom-modeline-buffer-info-override ()
+  (my/doom-modeline--squared-buffer-info #'doom-modeline--buffer-name))
+```
+
+## my/doom-modeline-buffer-info-simple-override
+```
+(defun my/doom-modeline-buffer-info-simple-override ()
+  (my/doom-modeline--squared-buffer-info #'doom-modeline--buffer-simple-name))
+```
+
+## my/doom-modeline-bar-override
+>Just the height-regulating bar image, dropping doom-modeline's own
+trailing `doom-modeline-spc' (which otherwise leaves an uncolored gap
+between the bar and the icon square).
+
+```
+(defun my/doom-modeline-bar-override ()
+  "Just the height-regulating bar image, dropping doom-modeline's own
+trailing `doom-modeline-spc' (which otherwise leaves an uncolored gap
+between the bar and the icon square)."
+  (when (display-graphic-p)
+    (if doom-modeline-hud (doom-modeline--hud) (doom-modeline--bar))))
+
+(defvar my/doom-modeline-nano-advice
+  `((doom-modeline-icon-for-buffer :filter-return my/doom-modeline-recolor-file-icon)
+    (doom-modeline-segment--buffer-info :override my/doom-modeline-buffer-info-override)
+    (doom-modeline-segment--buffer-info-simple :override my/doom-modeline-buffer-info-simple-override)
+    (doom-modeline-segment--bar :override my/doom-modeline-bar-override)
+    ,@(mapcar (lambda (seg)
+                (list (intern (format "doom-modeline-segment--%s" seg))
+                      :filter-return 'my/doom-modeline-hide-segment))
+              '(window-state workspace-name window-number modals matches follow eldoc)))
+  "Advice applied to doom-modeline while the nano-like theme is active, as
+\(FUNCTION ADVICE-TYPE ADVICE-FN) triples.")
+
+(add-hook 'enable-theme-functions
+          (lambda (theme)
+            (let ((add (eq theme 'nano-like)))
+              (dolist (entry my/doom-modeline-nano-advice)
+                (let ((fn (nth 0 entry)) (type (nth 1 entry)) (advice (nth 2 entry)))
+                  (when (fboundp fn)
+                    (if add (advice-add fn type advice) (advice-remove fn advice)))))
+              ;; Buffers that already existed before this theme switch (e.g.
+              ;; *scratch*, whose icon is cached at startup, long before any
+              ;; theme is enabled) keep their stale, pre-advice icon otherwise.
+              (dolist (buf (buffer-list))
+                (with-current-buffer buf
+                  (doom-modeline-update-buffer-file-icon))))))
 ```
 
 Load all of my custom tab-line config.
@@ -560,11 +898,59 @@ for terminal mode cut to system clipboard
                 sqlformat-args '("-s2" "-g")))
 ```
 
+# flyspell config
+currently not bound to a key
+
+Set the ispell program name to aspell
+(switching to aspell will generally offer better performance than ispell.)
+```
+(setq ispell-program-name "aspell")
+```
+
+Set the global default dictionary for the Ispell process.
+```
+(setq ispell-dictionary "en_US")
+```
+
+Reduce unnecessary messages when checking individual words.
+```
+(setq ispell-quietly t)
+```
+
+Configure Aspell's suggestion mode to "ultra", which favors very close
+spelling and phonetic matches when generating suggestions.
+```
+(setq ispell-extra-args '("--sug-mode=ultra"))
+```
+
+## my-flyspell-prog-mode
+>Enable `flyspell-prog-mode' with buffer-local Aspell arguments.
+
+```
+(defun my-flyspell-prog-mode (&rest _args)
+  "Enable `flyspell-prog-mode' with buffer-local Aspell arguments."
+  ;; The --run-together flag instructs Aspell to accept words formed by
+  ;; combining two or more valid dictionary words without spaces, treating the
+  ;; resulting string as valid.
+  ;;
+  ;; This is excellent for source code. Code is heavily populated with
+  ;; compound variable names and technical terms (e.g., filepath, buffername,
+  ;; checkbox).
+  ;; URL: https://www.jamescherti.com/emacs-spell-checker-flyspell-ispell-aspell/
+  (make-local-variable 'ispell-extra-args)
+  (dolist (item '("--run-together"
+                  ;; "--ignore=2"
+                  ;; "--run-together-min=3"
+                  ;; "--run-together-limit=4"
+                  ;; "--camel-case"
+                  ))
+    (add-to-list 'ispell-extra-args item))
+  (flyspell-prog-mode))
+```
+
 ## flyspell-on-for-buffer-type
 >Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing.
 
-flyspell config
-currently not bound to a key
 ```
 (defun flyspell-on-for-buffer-type ()
       "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
@@ -572,11 +958,9 @@ currently not bound to a key
       (if (not (symbol-value flyspell-mode)) ; if not already on
         (progn
           (if (derived-mode-p 'prog-mode)
-            (progn
-              (flyspell-prog-mode))
+              (my-flyspell-prog-mode)
             ;; else
-            (progn
-              (flyspell-mode 1)))
+            (flyspell-mode 1))
           )))
 ```
 
@@ -592,13 +976,13 @@ currently not bound to a key
         (message "Flyspell off")
         (flyspell-mode -1))
     ; else - flyspell is off, turn it on
-    (flyspell-on-for-buffers-type)))
+    (flyspell-on-for-buffer-type)))
 ```
 
 preset modes to have flyspell on
 ```
 (add-hook 'text-mode-hook 'flyspell-mode)
-(add-hook 'prog-mode-hook 'flyspell-prog-mode)
+(add-hook 'prog-mode-hook 'my-flyspell-prog-mode)
 ```
 
 Enable which key
@@ -630,28 +1014,6 @@ word wrap for normal text and stripe mode for tables
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hoom #'stripe-buffer-mode))
-```
-
-## org-mode-fonts
->Sets up display fonts for org-mode
-
-Use monospaced font faces in org mode - currently the hook is off
-```
-(defun org-mode-fonts ()
-  "Sets up display fonts for org-mode"
-  (interactive)
-  (setq buffer-face-mode-face '(:family "TeX Gyre Pagella-13" :height 100))
-  (buffer-face-mode))
-```
-
-Set default font faces for Info and ERC modes
-(add-hook 'org-mode-hook 'org-mode-fonts)
-
-set org-mode to use variable width fonts smartly
-```
-(use-package mixed-pitch
-  :ensure t
-  :hook (org-mode . mixed-pitch-mode))
 ```
 
 hide asterisks in headers
@@ -776,9 +1138,16 @@ fresh install that satisfies magit's minimum.
   :ensure t)
 ```
 
+## my-common-prog-mode-setup
+```
+(defun my-common-prog-mode-setup ()
+  (display-line-numbers-mode)
+  (column-number-mode))
+```
+
 Set display line number mode on
 ```
-(add-hook 'prog-mode-hook #'display-line-numbers-mode)
+(add-hook 'prog-mode-hook #'my-common-prog-mode-setup)
 ```
 
 Project.el settings.
@@ -946,7 +1315,7 @@ eglot configuration.
 tree sitter is fine for faces and we don't need highlighting on the current line.
 ```
 (setq eglot-ignored-server-capabilities '(:semanticTokensProvider :documentHighlightProvider))
-(setq eglot-stay-out-of '(imenu)) ;; Use my versiong
+(setq eglot-stay-out-of '(imenu)) ;; Use my version
 ```
 asynchronous connections to not freeze during initial handshake.
 ```
@@ -1137,21 +1506,16 @@ Save space by not showing zero warn/error counter in the mode line
 (setq markdown-header-scaling t)
 ```
 
-## buffer-face-mode-helvetica
-
->Set default font to helvetica in current buffer
-Use helvetica for the current mode when hooked
-```
-(defun buffer-face-mode-helvetica ()
-  "Set default font to helvetica in current buffer"
-  (interactive)
-  (setq buffer-face-mode-face '(:family "helvetica" :height 180))
-  (buffer-face-mode))
-```
-
 render remote images
 ```
 (setq markdown-display-remote-images t)
+```
+
+Make markdown coding faces inherit as need from from fixed pitch
+```
+(my-ignore (custom-set-faces
+ '(markdown-markup-face ((t (:inherit fixed-pitch))))
+ '(markdown-code-face ((t (:inherit fixed-pitch))))))
 ```
 
 ## my-markdown-translate-filename-add-md-extension
@@ -1174,7 +1538,6 @@ This helps with compatibility with how github does relative links in its wiki mo
 
 (setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
 
-(add-hook 'markdown-mode-hook 'buffer-face-mode-helvetica)
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
 ```
@@ -1216,11 +1579,20 @@ Note: C-\ is bound to smart toggle.
     (propertize " " 'display '(height 1.3))
     "Zero-effect text used only to match doom-modeline's line height.")
 
+  ;; The icon glyphs below come from a Nerd Font's private-use-area range, so
+  ;; they only render when the mode-line is actually displayed in one. Force
+  ;; that family explicitly instead of inheriting `mode-line-buffer-id''s
+  ;; font, which under some themes (e.g. nano-like with Fira Code) doesn't
+  ;; contain those glyphs and shows blanks/boxes instead.
+  (defface my-imenu-list-icon-face
+    `((t (:inherit mode-line-buffer-id :family ,my-default-fixed-pitch-font)))
+    "Face for the icon glyphs in `imenu-list-mode-line-format'.")
+
   ;; Simplified buffer name with icon for the menu bar.
   (setq imenu-list-mode-line-format
 	`("%e" mode-line-frame-identification
 	  ,my-imenu-list-mode-line-height-spacer
-	  (:propertize "󰉹" face mode-line-buffer-id) " "
+	  (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
 	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
 	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
 	  mode-line-end-spaces))
@@ -1239,7 +1611,8 @@ Note: C-\ is bound to smart toggle.
 
   ;; I need a more visible highlight for the current block
   (defface my-hl-imenu-face
-  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
+    ;;  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
+    '((t (:foreground "DarkOrange2" :weight bold)))
   "A new custom face for highlighting."
   :group 'my-custom-group)
 
@@ -1587,44 +1960,70 @@ Keep the control window in the default frame
 (setq ediff-window-setup-function #'ediff-setup-windows-plain)
 ```
 
-## ediff-add-buttons
-experiment with widgets in the control frame
+Diff counter + up/down nav buttons prepended before the control
+buffer's help line ("Type ? for help"). ediff centers that line by
+padding it with leading whitespace to (roughly) the window width, so
+inserting our text via before-string just lengthens the line past the
+window width and wraps it, growing the control window by a line. Instead
+we put a 'display overlay over that leading whitespace (the same span
+`ediff-setup-control-buffer' itself skips past via `ediff-whitespace')
+so our text replaces the padding instead of adding to it. Buttons use a
+plain 'keymap' text property (like button.el), not 'local-map' on the
+mode/header line, which needs a [header-line mouse-1]-prefixed binding
+to receive clicks at all.
+Advising ediff-setup-control-buffer and ediff-refresh-mode-lines (rather
+than a fixed list of hooks) keeps the overlay in sync across startup,
+?-toggled help text, and every diff-position change, without needing to
+enumerate every command that can move ediff-current-difference.
 ```
-(defun ediff-add-buttons ()
-  (message "setting up buttons")
-
-  (widget-create 'push-button
-                 :tag "next"
-                 :help-echo "Ediff next"
-                 :tag-glyph "fwd-arrow"
-                 :action (lambda (widget &optional event)
-                           (ediff-next-difference)))
-  (widget-create 'push-button
-                 :tag "prev"
-                 :help-echo "Ediff previous"
-                 :tag-glyph "back-arrow"
-                 :action (lambda (widget &optional event)
-                           (ediff-previous-difference)))
-
-  (widget-create 'push-button
-                 :tag "quit"
-                 :help-echo "Ediff quit"
-                 :tag-glyph "exit"
-                 :action (lambda (widget &optional event)
-                           (ediff-quit nil)))
-					;(ediff-previous-difference)))
-
-  (widget-setup))
+(defvar-local my-ediff-nav-overlay nil)
 ```
 
-Adds widgets but they they don't work yet - probably need to set the keymap
-also I still want to type text in the box and have it work
-(add-hook 'ediff-mode-hook 'ediff-add-buttons)
-
+## my-ediff-nav-button
 ```
-(my-ignore
-((require 'wid-edit)
-(set-keymap-parent ediff-mode-map widget-keymap)))
+(defun my-ediff-nav-button (label command help)
+  (propertize label
+              'help-echo help
+              'mouse-face 'highlight
+              'keymap (let ((map (make-sparse-keymap)))
+                        (define-key map [mouse-1] command)
+                        map)))
+```
+
+## my-ediff-nav-string
+```
+(defun my-ediff-nav-string ()
+  (let ((cur ediff-current-difference)
+        (total ediff-number-of-differences))
+    (concat
+     (cond ((< cur 0) (format "_/%d" total))
+           ((>= cur total) (format "$/%d" total))
+           (t (format "%d/%d" (1+ cur) total)))
+     " "
+     (my-ediff-nav-button "▲" #'ediff-previous-difference "Previous diff")
+     " "
+     (my-ediff-nav-button "▼" #'ediff-next-difference "Next diff")
+     "  ")))
+```
+
+## my-ediff-install-nav-overlay
+```
+(defun my-ediff-install-nav-overlay (&rest _)
+  (unless (overlayp my-ediff-nav-overlay)
+    (setq my-ediff-nav-overlay (make-overlay (point-min) (point-min))))
+  (let ((pad-end (save-excursion
+                   (goto-char (point-min))
+                   (skip-chars-forward ediff-whitespace)
+                   (point))))
+    (move-overlay my-ediff-nav-overlay (point-min) pad-end)
+    (overlay-put my-ediff-nav-overlay 'display nil)
+    (overlay-put my-ediff-nav-overlay 'before-string nil)
+    (overlay-put my-ediff-nav-overlay
+                 (if (> pad-end (point-min)) 'display 'before-string)
+                 (my-ediff-nav-string))))
+
+(advice-add 'ediff-setup-control-buffer :after #'my-ediff-install-nav-overlay)
+(advice-add 'ediff-refresh-mode-lines :after #'my-ediff-install-nav-overlay)
 ```
 
 ## gc-notification
@@ -1821,6 +2220,10 @@ Yanippet used defines some markdown templates for the blog
   :config
   ;; Replace switch-buffers with consult-buffer
   (keymap-global-set "C-x b" 'consult-buffer)
+
+  ;; live preview when M-. is pressed rather than automatically since it easily
+  ;; splits the window
+  (setq consult-preview-key "M-.")
 
   ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
   ;; completion-at-point, which otherwise falls back to the *Completions*
