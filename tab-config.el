@@ -840,70 +840,9 @@ at the mouse-down event to the position at mouse-up event."
 ;; Via advice add on the filter button
 (advice-add 'tab-line-format-template :filter-return 'tab2-add-on-filter-button)
 
-;;; Doom modeline integration
-
-(defvar-keymap tab2-mode-line-view-map
-  "<mode-line> <mouse-3>" #'tab2-next-view
-  "<mode-line> <mouse-1>" #'tab2-prev-view)
-
-(doom-modeline-def-segment tab2-view-segment
-  "show the current tab2 view"
-  (propertize (concat
-	       "    "
-	       (tab2-view-name (tab2-get-current-view)))
-	      'help-echo "Current tab view - click to switch to the next one"
-	      'local-map tab2-mode-line-view-map
-	      ))
-
-;; `doom-modeline--buffer-simple-name' hardcodes its `help-echo' text
-;; inline (unlike the keymap, it isn't sourced from an overridable
-;; variable), so there's no buffer-local variable to shadow here. It's
-;; also a `defsubst', and `doom-modeline-def-segment' byte-compiles each
-;; segment function immediately at load time, so its body gets inlined
-;; into `doom-modeline-segment--buffer-info' right then -- advising the
-;; defsubst itself is a no-op for that already-compiled call site.
-;; Advise the segment function instead, which is the entry point
-;; actually invoked each redisplay. `propertize' merges properties onto
-;; the existing string rather than replacing them, so the local-map/
-;; face/mouse-face set above survive untouched.
-(advice-add 'doom-modeline-segment--buffer-info :filter-return
-            (lambda (result)
-              (if (derived-mode-p 'flymake-diagnostics-buffer-mode)
-                  (propertize result
-                              'help-echo "mouse-1: close the window")
-                result)))
-
-;; Binding to open the diagnostics buffer
-(defvar tab2-flymake-modeline-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mode-line mouse-1] #'flymake-show-buffer-diagnostics)
-    map))
-
-(doom-modeline-def-segment tab2-eglot-flymake-segment
-  "Flymake's error/warning/note counter, but only when eglot manages the buffer.
-Elsewhere (e.g. elisp buffers using plain flymake) stays silent.
-Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
-list for the buffer, even when it's currently empty."
-  (when (bound-and-true-p eglot--managed-mode)
-    (let ((counters (format-mode-line flymake-mode-line-counters)))
-      (propertize (if (string-empty-p counters) "  OK  " counters)
-                  'local-map tab2-flymake-modeline-map
-                  'mouse-face 'mode-line-highlight
-                  'help-echo "mouse-1: show flymake diagnostics"))))
-
-(doom-modeline-def-modeline 'tab2-aware-modeline
-  '(bar matches buffer-info remote-host buffer-position parrot selection-info)
-  '(misc-info tab2-eglot-flymake-segment lsp minor-modes input-method major-mode process vcs tab2-view-segment))
-
-;; TODO: move out into main init.el
-
-;; Set once on start
-(doom-modeline-set-modeline 'tab2-aware-modeline 'default)
-
-;; Hook in after that.
-(add-hook 'doom-modeline-mode-hook
-          (lambda ()
-            (doom-modeline-set-modeline 'tab2-aware-modeline 'default)))
+;; Note: the tab2-aware modeline segments themselves (the eglot/flymake
+;; counter and the current tab2 view) are defined in modeline.el, alongside
+;; the rest of the modeline segment code, and included there unconditionally.
 
 ;; bunch of code from nicolas rougier adapted to use the header-line
 (defface quick-command-face

@@ -1,0 +1,766 @@
+;;; modeline.el --- A native, header-line-safe replacement for doom-modeline -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; A  small mode-line built directly out of stock  Emacs mode-line machinery
+;; (`format-mode-line', `mode-line-modes', `vc-mode', nerd-icons).  Each segment is a plain function
+;; re-evaluated on every redisplay via `:eval', so there's no advice and no
+;; `enable-theme-functions' hook: theme-conditional rendering (the squared icon
+;; badge under the nano-like theme) just checks the live theme state each time
+;; it runs instead of being patched in and out when a theme (de)activates.
+;;
+;; The result, `my-modeline-format', is an ordinary mode-line-format spec, so
+;; it works verbatim as either `mode-line-format' or `header-line-format':
+;;
+;;   (setq-default mode-line-format my-modeline-format)     ; the default
+;;   (setq-default header-line-format my-modeline-format)   ; or here instead
+;;
+;; Mouse clicks need this too: Emacs's own mode-line constructs are usually
+;; already dual-bound (`mode-line-buffer-identification-keymap' and
+;; `mode-line-modes' both carry bindings under the `mode-line' AND
+;; `header-line' event prefixes), but a few, like `vc-mode''s click-to-menu
+;; binding, only bind `mode-line'.  `my-modeline--render-dual' mirrors
+;; whatever it finds onto both prefixes, and custom segments in this file
+;; build their keymaps dual-bound from the start -- so no segment cares which
+;; line it ends up displayed in.
+
+;;; Code:
+
+(require 'nerd-icons nil t)
+
+;; eglot's own menu keymaps, reused as-is for the rocket-icon segment's
+;; clicks (see `my-modeline-segment-eglot'); declared here only to quiet
+;; the byte-compiler, since eglot is loaded lazily and these aren't defined
+;; until it is -- by which point `bound-and-true-p eglot--managed-mode'
+;; being non-nil already guarantees they exist.
+(defvar eglot-menu)
+(defvar eglot-server-menu)
+
+;;; Customization
+
+(defcustom my-modeline-icon t
+  "Whether to show a file/major-mode icon in the buffer-info segment."
+  :type 'boolean
+  :group 'my-modeline)
+
+(defcustom my-modeline-position-format "L%l:%c"
+  "`format-mode-line' spec used for the buffer position segment."
+  :type 'string
+  :group 'my-modeline)
+
+(defvar my-modeline-icon-font-family
+  (if (boundp 'my-default-fixed-pitch-font)
+      my-default-fixed-pitch-font
+    (and (boundp 'nerd-icons-font-family) nerd-icons-font-family))
+  "Font family explicitly requested for every icon glyph this file draws,
+via `my-modeline--icon'. nerd-icons' own icon functions default to
+`nerd-icons-font-family' (\"Symbols Nerd Font Mono\"), but that exact font
+may not be what's actually installed -- this config uses
+`my-default-fixed-pitch-font' instead (see init.el), the same override
+`my-imenu-list-icon-face' needs for the same reason. Forcing it explicitly
+on every call, rather than relying on nerd-icons' default, means an icon
+can't silently render as a tofu box just because the two names don't match.")
+
+(defun my-modeline--icon (fn &rest args)
+  "Call FN, a nerd-icons icon function (e.g. `nerd-icons-octicon'), with
+ARGS, forcing `my-modeline-icon-font-family'. nerd-icons' generated icon
+functions read the `nerd-icons-font-family' variable directly and have no
+`:family' key in ARGS to override per call, so the only way to force a
+specific family for just these calls -- without changing the family for
+nerd-icons-dired and everything else that shares that global default --
+is a dynamic let-binding around the call."
+  (let ((nerd-icons-font-family (or my-modeline-icon-font-family nerd-icons-font-family)))
+    (apply fn args)))
+
+(defun my-modeline--icon-safe (fn &rest args)
+  "Like `my-modeline--icon', but nil instead of an error when FN isn't a
+bound function (e.g. its icon set's package isn't installed) or the call
+itself errors (e.g. a renamed/missing glyph name) -- every icon-drawing
+segment in this file guards its nerd-icons calls this way, so a missing
+icon set can never break the mode-line."
+  (and (fboundp fn) (ignore-errors (apply #'my-modeline--icon fn args))))
+
+;;; Powerline-style file-type badge
+;;
+;; A flat-colored chip -- icon, then a short file-extension label, both on
+;; `my-modeline-file-icon-face' -- capped by a solid divider glyph
+;; (`nf-pl-left_hard_divider') that fades the chip's background back into
+;; the plain mode-line, powerline-style. Text stays normal-sized throughout;
+;; no enlarging, no line-height juggling.
+
+(defface my-modeline-file-icon-face
+  '((t :foreground "white" :background "gray60"))
+  "Background face for the powerline-style file-type badge. Its
+`:background' is kept in sync with the active modus theme's `cursor'
+palette color by `my-modeline--sync-file-icon-face' whenever `modus-themes'
+is available; the \"gray60\" here is only the fallback otherwise.")
+
+(defface my-modeline-file-icon-divider-face
+  '((t :foreground "gray60"))
+  "Foreground-only face for the divider glyph capping off the
+powerline-style file-type badge. Kept in sync with
+`my-modeline-file-icon-face''s `:background' by
+`my-modeline--sync-file-icon-face'. (A raw color plist can't be passed as
+nerd-icons' `:face' argument: nerd-icons puts it straight into an
+`:inherit' slot, which only accepts a face symbol -- hence syncing real
+named faces instead of computing an ad hoc one per call.)")
+
+(defun my-modeline--sync-file-icon-face ()
+  "Refresh `my-modeline-file-icon-face' and `my-modeline-file-icon-divider-face'
+from the active modus theme's `cursor' palette color, when `modus-themes'
+is available. A no-op otherwise, leaving each face's own static
+`:background'/`:foreground'. Called fresh on every render -- like every
+other segment in this file -- instead of hooked to theme-change events, so
+it can't go stale."
+  (when (fboundp 'modus-themes-get-color-value)
+    (let ((bg (modus-themes-get-color-value 'cursor)))
+      (when (stringp bg)
+        (set-face-attribute 'my-modeline-file-icon-face nil :background bg)
+        (set-face-attribute 'my-modeline-file-icon-divider-face nil :foreground bg)))))
+
+
+(modus-themes-get-color-value 'cursor)
+
+(defun my-modeline--file-type-label ()
+  "A short, upcased label for the current buffer's file type: its file
+extension when visiting a file, or the first few letters of `mode-name'
+otherwise."
+  (if buffer-file-name
+      (let ((ext (file-name-extension buffer-file-name)))
+        (upcase (or ext (file-name-base buffer-file-name) "")))
+    (let ((name (format-mode-line mode-name)))
+      (upcase (substring name 0 (min 4 (length name)))))))
+
+(defun my-modeline--file-type-icon ()
+  "Plain file/mode icon glyph, recolored to `my-modeline-file-icon-face' to
+match the badge it renders inside of."
+  (if buffer-file-name
+      (my-modeline--icon-safe #'nerd-icons-icon-for-file
+                               (file-name-nondirectory buffer-file-name)
+                               :face 'my-modeline-file-icon-face)
+    (my-modeline--icon-safe #'nerd-icons-icon-for-mode major-mode
+                             :face 'my-modeline-file-icon-face)))
+
+(defun my-modeline--file-type-divider ()
+  "A solid right-pointing divider glyph, on `my-modeline-file-icon-divider-face',
+capping off the powerline-style file-type badge as it fades into the plain
+mode-line."
+  (my-modeline--icon-safe #'nerd-icons-powerline "nf-pl-left_hard_divider"
+                           :face 'my-modeline-file-icon-divider-face))
+
+(defun my-modeline--buffer-icon ()
+  "Powerline-style file-type badge: an icon and a short, upcased,
+bold file-extension label on `my-modeline-file-icon-face', ending in
+`my-modeline--file-type-divider'. Carries the same help text and keymap as
+the major mode name in `my-modeline-segment-modes', since the badge
+represents the mode too."
+  (when my-modeline-icon
+    (ignore-errors
+      (my-modeline--sync-file-icon-face)
+      (let* ((prefix (concat " " (or (my-modeline--file-type-icon) "") " "))
+             (label (my-modeline--file-type-label))
+             (chip (propertize (concat prefix label " ")
+                                'face 'my-modeline-file-icon-face
+                                'help-echo (format "%s\nmouse-1: Display major mode menu\nmouse-2: Show help for major mode\nmouse-3: Toggle minor modes"
+                                                    (format-mode-line mode-name))
+                                'local-map (my-modeline--dualize-keymap mode-line-major-mode-keymap))))
+        (add-face-text-property (length prefix) (+ (length prefix) (length label))
+                                 '(:weight bold) nil chip)
+        (concat chip (or (my-modeline--file-type-divider) ""))))))
+
+;;; Modified/read-only state icon
+
+(defface my-modeline-buffer-modified-face
+  '((t :inherit (warning bold)))
+  "Face for the modified-buffer icon in `my-modeline--buffer-state-icon'.
+Forked from doom-modeline's own `doom-modeline-buffer-modified'
+(effectively `(warning bold)', its `doom-modeline' base face being an
+empty placeholder), rather than depending on the doom-modeline package
+for it.")
+
+(defun my-modeline--buffer-state-icon ()
+  "Small icon noting whether the buffer is read-only or modified. The
+modified-buffer icon mirrors doom-modeline's own
+`doom-modeline-update-buffer-file-state-icon' (`nf-md-content_save_edit')."
+  (when my-modeline-icon
+    (cond (buffer-read-only
+           (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-lock" :face 'nerd-icons-red))
+          ((and buffer-file-name (buffer-modified-p))
+           (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-content_save_edit"
+                                    :face 'my-modeline-buffer-modified-face)))))
+
+;;; Mode-line / header-line dual-prefix mouse bindings
+
+(defun my-modeline-mouse-map (bindings)
+  "Return a keymap for BINDINGS, an alist of (MOUSE-EVENT . COMMAND), bound
+under both the `mode-line' and `header-line' event prefixes, so it works
+regardless of which one this modeline ends up displayed in."
+  (let ((map (make-sparse-keymap)))
+    (dolist (prefix '(mode-line header-line))
+      (dolist (binding bindings)
+        (define-key map (vector prefix (car binding)) (cdr binding))))
+    map))
+
+(defun my-modeline--dualize-keymap (map)
+  "Return a copy of MAP with any `mode-line'/`header-line' prefixed submap
+mirrored onto whichever of the two prefixes it's missing."
+  (when (keymapp map)
+    (let* ((new (copy-keymap map))
+           (mode-sub (lookup-key map [mode-line]))
+           (header-sub (lookup-key map [header-line])))
+      (when (and (keymapp mode-sub) (not (keymapp (lookup-key new [header-line]))))
+        (define-key new [header-line] mode-sub))
+      (when (and (keymapp header-sub) (not (keymapp (lookup-key new [mode-line]))))
+        (define-key new [mode-line] header-sub))
+      new)))
+
+(defun my-modeline--dualize-local-maps (string)
+  "Copy STRING with every `local-map' text property dualized via
+`my-modeline--dualize-keymap', so mouse bindings baked in by code that only
+thought about the mode-line (e.g. `vc-mode') still work in the header-line."
+  (let ((s (copy-sequence string))
+        (pos 0)
+        (len (length string)))
+    (while (< pos len)
+      (let* ((next (or (next-single-property-change pos 'local-map s) len))
+             (map (get-text-property pos 'local-map s)))
+        (when (keymapp map)
+          (put-text-property pos next 'local-map (my-modeline--dualize-keymap map) s))
+        (setq pos next)))
+    s))
+
+(defun my-modeline--render-dual (construct)
+  "Render CONSTRUCT, a `mode-line-format' construct, via `format-mode-line',
+then dualize its mouse bindings (see `my-modeline--dualize-local-maps')."
+  (my-modeline--dualize-local-maps (format-mode-line construct)))
+
+(defun my-modeline--first-property (string prop)
+  "The first non-nil value of text property PROP found anywhere in STRING,
+or nil if it has none. Useful for lifting a click binding off of a stock
+construct (e.g. `vc-mode') whose properties start a character or two in,
+rather than at position 0."
+  (let ((pos (text-property-not-all 0 (length string) prop nil string)))
+    (and pos (get-text-property pos prop string))))
+
+;;; Dedicated windows
+;;
+;; Buffers that only ever show up in their own disposable popup window (e.g.
+;; flymake's diagnostics list) are better served by mouse-1 in the mode-line
+;; closing that window than by the usual `mouse-select-window' -- there's
+;; nothing else worth switching to it for. Add a major mode here (or a
+;; derived-mode-p-style symbol) to opt it into that behavior.
+
+(defcustom my-modeline-dedicated-window-modes '(flymake-diagnostics-buffer-mode)
+  "Major modes whose buffers get a click-to-close mode-line/header-line,
+via `my-modeline--buffer-id', instead of the usual buffer-name bindings."
+  :type '(repeat symbol)
+  :group 'my-modeline)
+
+(defun my-modeline--dedicated-window-p ()
+  (apply #'derived-mode-p my-modeline-dedicated-window-modes))
+
+(defun my-modeline-close-dedicated-window (event)
+  "Close the dedicated window clicked on in its mode-line/header-line."
+  (interactive "e")
+  (quit-window nil (posn-window (event-start event))))
+
+(defvar my-modeline-dedicated-window-map
+  (my-modeline-mouse-map '((mouse-1 . my-modeline-close-dedicated-window))))
+
+;;; Segments
+
+(defun my-modeline--icon-badge ()
+  "Icon/state badge for the current buffer: the powerline-style file-type
+badge from `my-modeline--buffer-icon' plus a small modified/read-only
+indicator. Shared by the full mode-line's buffer-info segment and the
+dedicated-window reduced one."
+  (concat (my-modeline--buffer-icon) " " (my-modeline--buffer-state-icon) " "))
+
+(defun my-modeline--buffer-id ()
+  "Buffer name, styled like the stock `mode-line-buffer-identification'
+default, but rebuilt fresh on every call instead of being a plain
+propertized string set once via `setq-default' -- so a buffer whose major
+mode is listed in `my-modeline-dedicated-window-modes' gets the
+click-to-close binding and matching help text every time, not whatever was
+baked in by the first buffer to render this segment."
+  (if (my-modeline--dedicated-window-p)
+      (propertize "%12b"
+                  'face 'mode-line-buffer-id
+                  'help-echo "mouse-1: close the window"
+                  'mouse-face 'mode-line-highlight
+                  'local-map my-modeline-dedicated-window-map)
+    (propertize "%12b"
+                'face 'mode-line-buffer-id
+                'help-echo
+                '(format "%s\nmouse-1: Previous buffer\nmouse-3: Next buffer"
+                         (if buffer-file-name
+                             (abbreviate-file-name buffer-file-name)
+                           (buffer-name)))
+                'mouse-face 'mode-line-highlight
+                'local-map mode-line-buffer-identification-keymap)))
+
+(defun my-modeline-segment-buffer-info ()
+  "Buffer icon/state badge, followed by the buffer name. No extra pad on
+the left -- the badge's own colored chip (see `my-modeline--buffer-icon')
+already starts with a 1-space inset, and an unstyled space in front of it
+would just show up as a mismatched sliver against the chip's background."
+  (concat (my-modeline--icon-badge)
+          (format-mode-line (my-modeline--buffer-id))))
+
+(defun my-modeline-segment-remote-host ()
+  "The remote host name, when the buffer is visiting a TRAMP file."
+  (when-let* ((host (and default-directory (file-remote-p default-directory 'host))))
+    (propertize (format " @%s " host) 'face 'mode-line-emphasis
+                'help-echo "Remote host")))
+
+(defun my-modeline--scroll-percent ()
+  "Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
+a number with a trailing `%' in between. Computed directly from
+`window-start'/`window-end'/`point-min'/`point-max' rather than via a
+nested `format-mode-line' call on \"%p\" (calling `format-mode-line' from
+inside any `:eval' while a mode-line is already being computed is
+unreliable).
+
+The string this returns is itself used as a mode-line construct -- per
+`:eval's own documented behavior -- and so gets `%'-decoded again just
+like any other mode-line string would: a lone `%' is consumed rather
+than displayed, and `%%' is the standard escape for a literal `%'. That
+decode happens TWICE here, not once: this segment's own
+`my-modeline--render-dual' call decodes it going into
+`my-modeline-segment-position''s return value, and the top-level `:eval'
+in `my-modeline-format' (see `my-modeline--render') decodes it AGAIN on
+the way out. Two decode passes need `%%%%' -- four literal percent
+characters -- to still read as one `%' at the end, the same way `%%'
+would survive a single pass."
+  (let ((top (point-min))
+        (bot (point-max))
+        (start (window-start))
+        (end (window-end nil t)))
+    (cond ((and (<= start top) (>= end bot)) "All")
+          ((<= start top) "Top")
+          (t (format "%d%%%%%%%%" (round (* 100.0 (/ (float (- start top))
+                                                      (max 1 (- bot top))))))))))
+
+(defun my-modeline-segment-position ()
+  "Line/column position, per `my-modeline-position-format', followed by
+the window scroll percentage and, when `size-indication-mode' is on, a
+buffer size indication -- all with the same right-click menu (toggle
+line/column/size display) stock `mode-line-position' has, see
+`mode-line-column-line-number-mode-map'."
+  (my-modeline--render-dual
+   `(" " (:propertize ,my-modeline-position-format
+                       local-map ,mode-line-column-line-number-mode-map
+                       mouse-face mode-line-highlight
+                       help-echo "Line number and Column number\nmouse-1: Display Line and Column Mode Menu")
+     " " (:propertize (:eval (my-modeline--scroll-percent))
+                       local-map ,mode-line-column-line-number-mode-map
+                       mouse-face mode-line-highlight
+                       help-echo "Window Scroll Percentage\nmouse-1: Display Line and Column Mode Menu")
+     (size-indication-mode
+      (:propertize " of %I"
+                   local-map ,mode-line-column-line-number-mode-map
+                   mouse-face mode-line-highlight
+                   help-echo "Size indication mode\nmouse-1: Display Line and Column Mode Menu"))
+     " ")))
+
+(defun my-modeline-segment-selection-info ()
+  "Size of the active region, when there is one."
+  (when (use-region-p)
+    (let* ((beg (region-beginning))
+           (end (region-end))
+           (lines (count-lines beg end))
+           (chars (- end beg)))
+      (propertize (if (> lines 1)
+                      (format " %dL:%dC " lines chars)
+                    (format " %dC " chars))
+                  'face 'mode-line-emphasis))))
+
+(defun my-modeline-segment-misc-info ()
+  "Whatever third-party packages (flycheck, ...) publish via
+`mode-line-misc-info', except eglot's own bracketed text indicator --
+filtered out (non-destructively, via `remq'; no hook touches the shared
+global list) since `my-modeline-segment-eglot' replaces it with a
+colorized rocket icon instead."
+  (my-modeline--render-dual
+   (remq (assq 'eglot--managed-mode mode-line-misc-info) mode-line-misc-info)))
+
+(defun my-modeline-segment-eglot ()
+  "A rocket icon standing in for eglot's own bracketed text mode-line
+indicator (see `my-modeline-segment-misc-info'), colored by connection
+health: `my-modeline-lsp-success' (green) once connected,
+`my-modeline-lsp-warning' while requests are pending or no project
+nickname is available yet, and `my-modeline-lsp-error' after a JSON-RPC
+error -- mirroring doom-modeline's own eglot/lsp segment. Mouse-1 opens
+eglot's menu, mouse-3 its server-control submenu, exactly as they do on
+eglot's own indicator."
+  (when (bound-and-true-p eglot--managed-mode)
+    (let* ((server (eglot-current-server))
+           (nick (and server (eglot-project-nickname server)))
+           (pending (and server (jsonrpc-continuation-count server)))
+           (last-error (and server (jsonrpc-last-error server)))
+           (face (cond (last-error 'my-modeline-lsp-error)
+                       ((and pending (> pending 0)) 'my-modeline-lsp-warning)
+                       (nick 'my-modeline-lsp-success)
+                       (t 'my-modeline-lsp-warning)))
+           (icon (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-rocket" :face face)))
+      (when icon
+        (propertize icon
+                    'help-echo (format "Eglot connected [%s]\nmouse-1: Display minor mode menu\nmouse-3: LSP server control menu"
+                                        (or nick ""))
+                    'mouse-face 'mode-line-highlight
+                    'local-map (my-modeline-mouse-map
+                                (list (cons 'mouse-1 eglot-menu)
+                                      (cons 'mouse-3 eglot-server-menu))))))))
+
+(defun my-modeline-segment-modes ()
+  "Major mode name and `mode-line-process', deliberately without the
+`minor-mode-alist' text stock `mode-line-modes' also shows: mouse-3 on the
+major mode name already pops up the minor-mode toggle menu (see
+`mode-line-major-mode-keymap'), so there's no need to list them inline too."
+  (my-modeline--render-dual
+   `((:propertize ("" mode-name)
+                  help-echo "Major mode\nmouse-1: Display major mode menu\nmouse-2: Show help for major mode\nmouse-3: Toggle minor modes"
+                  mouse-face mode-line-highlight
+                  local-map ,mode-line-major-mode-keymap)
+     ("" mode-line-process))))
+
+(defun my-modeline--vcs-state ()
+  (and buffer-file-name
+       (let ((backend (vc-backend buffer-file-name)))
+         (and backend (vc-state buffer-file-name backend)))))
+
+;;; VCS state faces
+;;
+;; Loosely forked from doom-modeline's own `doom-modeline-info'/`-warning'/
+;; `-urgent'/`-vcs-default' faces -- not referenced or inherited from them,
+;; just started from the same idea -- so this file has no dependency on
+;; the doom-modeline package at all, even implicitly via face names a
+;; theme happens to style. doom-modeline's own default (no theme override)
+;; is effectively green/yellow/red via `success'/`warning'/`error', so
+;; that's the static fallback here too. This config's modus-derived themes
+;; (folio, nano-like, ...) don't color plain `success' at all, though --
+;; `my-modeline--refresh-vcs-faces' instead pulls a real green/the
+;; `warning'/`modeline-err' palette slots into these forked faces, so a
+;; clean repository still reads as green under them.
+
+(defface my-modeline-vcs-info
+  '((t :inherit success :foreground "ForestGreen"))
+  "Face for an up-to-date or otherwise neutral/in-progress VCS state (e.g.
+edited, added, a merge in progress) -- green, like doom-modeline's
+`doom-modeline-info' renders by default.")
+
+(defface my-modeline-vcs-warning
+  '((t :inherit warning))
+  "Face for a VCS state that will need attention soon, e.g. an incoming
+pull. Forked from doom-modeline's `doom-modeline-warning'.")
+
+(defface my-modeline-vcs-urgent
+  '((t :inherit error))
+  "Face for a VCS state that needs attention now, e.g. a conflict. Forked
+from doom-modeline's `doom-modeline-urgent'.")
+
+(defface my-modeline-vcs-default
+  '((t :inherit (my-modeline-vcs-info bold)))
+  "Default face for a VCS state not otherwise called out above. Forked
+from doom-modeline's `doom-modeline-vcs-default'.")
+
+;; The eglot rocket-icon segment (`my-modeline-segment-eglot') below reuses
+;; this same green/warning/urgent palette, just under its own face names --
+;; `my-modeline-lsp-success' etc., mirroring doom-modeline's own naming for
+;; its lsp/eglot segment -- so both segments read consistently and neither
+;; needs its own palette-refresh logic.
+(defface my-modeline-lsp-success
+  '((t :inherit my-modeline-vcs-info))
+  "Face for a healthy eglot/LSP connection. Forked from doom-modeline's
+`doom-modeline-lsp-success'.")
+
+(defface my-modeline-lsp-warning
+  '((t :inherit my-modeline-vcs-warning))
+  "Face for an eglot/LSP connection with requests pending, or none
+established yet. Forked from doom-modeline's `doom-modeline-lsp-warning'.")
+
+(defface my-modeline-lsp-error
+  '((t :inherit my-modeline-vcs-urgent))
+  "Face for an eglot/LSP connection that hit a JSON-RPC error. Forked from
+doom-modeline's `doom-modeline-lsp-error'.")
+
+(defun my-modeline--refresh-vcs-faces (&rest _)
+  "Pull `my-modeline-vcs-info'/`-warning'/`-urgent''s colors from the
+active modus-themes palette's `green'/`warning'/`modeline-err' slots --
+green being the closest equivalent to doom-modeline's own default
+green-via-`success' look, since this config's modus-derived themes don't
+color plain `success' at all -- so a clean repository still reads as
+green under them. A no-op when modus-themes isn't loaded, or the current
+theme isn't one of its derivatives."
+  (when (fboundp 'modus-themes-get-color-value)
+    (dolist (spec '((my-modeline-vcs-info . green)
+                    (my-modeline-vcs-warning . warning)
+                    (my-modeline-vcs-urgent . modeline-err)))
+      (let ((color (modus-themes-get-color-value (cdr spec) t)))
+        (unless (eq color 'unspecified)
+          (set-face-attribute (car spec) nil :foreground color))))))
+
+(add-hook 'enable-theme-functions #'my-modeline--refresh-vcs-faces)
+(my-modeline--refresh-vcs-faces)
+
+(defun my-modeline--vcs-face (state)
+  "Face for STATE, using the forked faces above: `my-modeline-vcs-default'
+for a neutral/in-progress state, bold `my-modeline-vcs-warning' for a
+pending pull, and bold `my-modeline-vcs-urgent' for something that needs
+attention (removed, conflict, unregistered)."
+  (cond ((eq state 'needs-update) '(my-modeline-vcs-warning bold))
+        ((memq state '(removed conflict unregistered)) '(my-modeline-vcs-urgent bold))
+        (t 'my-modeline-vcs-default)))
+
+(defun my-modeline--vcs-icon (state face)
+  "Icon for STATE, colored with FACE: a compare/merge/pull-request/branch
+glyph depending on STATE, mirroring doom-modeline's vcs segment (an alert
+triangle instead, for a state that needs attention)."
+  (if (memq state '(removed conflict unregistered))
+      (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
+    (my-modeline--icon-safe
+     #'nerd-icons-devicon
+     (cond ((eq state 'needs-update) "nf-dev-git_pull_request")
+           ((eq state 'needs-merge) "nf-dev-git_merge")
+           ((memq state '(edited added)) "nf-dev-git_compare")
+           (t "nf-dev-git_branch"))
+     :face face)))
+
+(defun my-modeline--vcs-branch-name ()
+  "Just the branch/state part of `vc-mode', stripped of its \"Backend:\"
+prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
+backend it is, so showing it twice is redundant."
+  (and vc-mode (cadr (split-string (string-trim vc-mode) "^[A-Z]+[-:]+"))))
+
+(defun my-modeline-segment-vcs ()
+  "Version-control branch, when the buffer is under version control.
+Icon and coloring mirror doom-modeline's vcs segment: a git
+compare/merge/pull-request/branch glyph depending on `vc-state', with the
+icon and branch name both colored by that same state -- not just the text
+-- and the whole segment clickable via `vc-mode''s own binding, mirrored
+onto the header-line too (see `my-modeline--dualize-keymap')."
+  (when vc-mode
+    (let* ((state (my-modeline--vcs-state))
+           (face (my-modeline--vcs-face state))
+           (icon (my-modeline--vcs-icon state face))
+           (name (my-modeline--vcs-branch-name))
+           (map (my-modeline--dualize-keymap
+                 (my-modeline--first-property vc-mode 'local-map)))
+           (help (my-modeline--first-property vc-mode 'help-echo)))
+      (propertize (concat (and icon (concat icon " ")) name)
+                  'face face
+                  'mouse-face 'mode-line-highlight
+                  'help-echo help
+                  'local-map map))))
+
+;;; Right alignment
+;;
+;; Stock Emacs 30 already has `mode-line-format-right-align' for exactly
+;; this, and its pixel math is subtle enough (frame vs. window, fringes,
+;; scroll bars, dividers) that it isn't worth re-deriving from scratch --
+;; get it wrong and content quietly falls short of, or overshoots, the
+;; real edge. The only problem is that its docstring is explicit that it
+;; only works when embedded directly in the variable `mode-line-format':
+;; it locates itself there via `memq' on that one hardcoded variable name
+;; to measure what follows it, which is silently wrong here, since this
+;; file's whole point is a format that works the same way installed as
+;; either `mode-line-format' or `header-line-format'.
+;;
+;; `my-modeline--right-align' reuses the real implementation function,
+;; `mode--line-format-right-align', instead of a rewrite: it dynamically
+;; binds `mode-line-format' -- a `defvar'-declared, and therefore always
+;; dynamically (not lexically) scoped, special variable -- to a throwaway
+;; list with TRAILING right after the marker, for just the duration of
+;; that one call. The `memq' lookup inside then finds exactly what this
+;; function handed it, however this format is actually installed.
+
+(defun my-modeline--right-align (trailing)
+  "Return a padding string that right-aligns TRAILING (already-rendered
+mode-line content) against the edge of the window, via stock Emacs's own
+`mode--line-format-right-align'."
+  (let ((mode-line-format (list "" 'mode-line-format-right-align trailing)))
+    (mode--line-format-right-align)))
+
+(defvar my-modeline-right-margin "  "
+  "Fixed padding kept between the rightmost content and the true edge of
+the window, in both `my-modeline--render' and `my-modeline--dedicated-render'.
+Without it, the last character renders flush against the very edge, which
+can look clipped even when it technically isn't.")
+
+;;; Dedicated windows' reduced mode-line
+;;
+;; Modeled on `imenu-list-mode-line-format' in init.el, which does the same
+;; thing by hand for its own popup buffers: a minimal mode-line with just a
+;; pin icon -- marking the window as dedicated/disposable -- and the buffer
+;; name. No file-type/read-only icon and no position/selection/VC/misc-info
+;; clutter either; there's nothing else worth showing in a window this size.
+
+(defun my-modeline--pin-icon ()
+  (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'mode-line-emphasis))
+
+(defun my-modeline--dedicated-render ()
+  "The pin icon and buffer name, both sharing the same click-to-close
+binding and help text (see `my-modeline-dedicated-window-map') -- so
+mousing over or clicking either half of this reduced mode-line behaves
+the same standard way, rather than only the buffer name being clickable."
+  (propertize (concat (or (my-modeline--pin-icon) "") " "
+                       (format-mode-line (my-modeline--buffer-id)))
+              'help-echo "mouse-1: close the window"
+              'mouse-face 'mode-line-highlight
+              'local-map my-modeline-dedicated-window-map))
+
+;;; Assembly
+
+(defvar my-modeline-left-segments
+  '(my-modeline-segment-buffer-info
+    my-modeline-segment-remote-host
+    my-modeline-segment-position
+    my-modeline-segment-selection-info)
+  "Segment functions rendered left-to-right on the left side of
+`my-modeline-format'.")
+
+(defvar my-modeline-right-segments
+  '(my-modeline-segment-misc-info
+    my-modeline-segment-eglot
+    my-eglot-flymake-segment
+    my-modeline-segment-vcs)
+  "Segment functions rendered left-to-right immediately after the left-side
+segments in `my-modeline-format', each separated by a space (see
+`my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
+counter never ends up glued directly to the VCS branch name. See
+`my-modeline-anchored-right-segments' for segments that should instead
+hug the window's right edge.")
+
+(defvar my-modeline-anchored-right-segments
+  '(tab2-view-segment my-modeline-segment-zoom)
+  "Segment functions right-justified flush against the window's right
+edge -- separated from `my-modeline-right-segments' by however much space
+remains, and from each other by a couple of spaces, rather than run
+together with everything else. E.g. the current tab2 view, or the
+rightmost zoom in/out icon.")
+
+(defun my-modeline--eval-segments (segments &optional separator)
+  "Concatenate the non-nil results of calling each of SEGMENTS, joined by
+SEPARATOR (default: none)."
+  (let ((results (delq nil (mapcar #'funcall segments))))
+    (if separator (mapconcat #'identity results separator) (apply #'concat results))))
+
+(defvar my-modeline-right-gap "   "
+  "Fixed spacing kept between `my-modeline-right-segments' and
+`my-modeline-anchored-right-segments' in `my-modeline--render', on top of
+whatever space `my-modeline--right-align' leaves -- so e.g. the major
+mode name and the tab2 view never end up touching just because the rest
+of the line happened to fill the window exactly.")
+
+(defun my-modeline--render ()
+  "The full mode-line, or, in a dedicated window (see
+`my-modeline-dedicated-window-modes'), the reduced one from
+`my-modeline--dedicated-render'.
+
+The right side has two zones: `my-modeline-right-segments' is positioned
+(via `my-modeline--right-align') to end exactly `my-modeline-right-gap'
+before `my-modeline-anchored-right-segments' begins, and that second zone
+gets its own, independent `my-modeline--right-align' call measuring only
+itself, so it always lands flush against the window edge regardless of
+how wide the first zone renders -- the git branch and tab2 view, say,
+don't just run together with everything else, or with the rest of the line.
+`my-modeline-right-margin' keeps the very last character from rendering
+flush against the true edge."
+  (if (my-modeline--dedicated-window-p)
+      (my-modeline--dedicated-render)
+    (let* ((left (my-modeline--eval-segments my-modeline-left-segments))
+           (general (my-modeline--eval-segments my-modeline-right-segments " "))
+           (anchored (my-modeline--eval-segments my-modeline-anchored-right-segments "  ")))
+      (concat left
+              (my-modeline--right-align
+               (concat general my-modeline-right-gap anchored my-modeline-right-margin))
+              general
+              my-modeline-right-gap
+              (my-modeline--right-align (concat anchored my-modeline-right-margin))
+              anchored
+              my-modeline-right-margin))))
+
+(defvar my-modeline-format
+  '("%e" (:eval (my-modeline--render)))
+  "Native replacement for doom-modeline's mode-line spec. Assign this to
+`mode-line-format' (see `my-modeline-mode') or `header-line-format' -- both
+work the same way.")
+
+;;; Global mode
+
+(defvar my-modeline--default-format (default-value 'mode-line-format)
+  "The stock `mode-line-format' saved before `my-modeline-mode' overrides it.")
+
+(define-minor-mode my-modeline-mode
+  "Install `my-modeline-format' as the mode-line, in place of the default."
+  :group 'my-modeline
+  :global t
+  (setq-default mode-line-format
+                (if my-modeline-mode my-modeline-format my-modeline--default-format)))
+
+
+;; The tab2 view segment. See tab-config.el
+(defvar tab2-mode-line-view-map
+  (my-modeline-mouse-map '((mouse-1 . tab2-next-view)
+                           (mouse-3 . tab2-prev-view))))
+
+(defun tab2-view-segment ()
+  "Show the current tab2 view, marked with a desktop icon."
+  (let ((icon (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
+                                       :face 'mode-line-emphasis)))
+    (propertize (concat (or icon "") " " (tab2-view-name (tab2-get-current-view)))
+                'help-echo "Current tab view - click to switch to the next one"
+                'mouse-face 'mode-line-highlight
+                'local-map tab2-mode-line-view-map)))
+
+(defvar my-flymake-modeline-map
+  (my-modeline-mouse-map '((mouse-1 . flymake-show-buffer-diagnostics))))
+
+(defun my-eglot-flymake-segment ()
+  "Flymake's error/warning/note counter, but only when eglot manages the buffer.
+Elsewhere (e.g. elisp buffers using plain flymake) stays silent.
+Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
+list for the buffer, even when it's currently empty."
+  (when (bound-and-true-p eglot--managed-mode)
+    (let ((counters (format-mode-line flymake-mode-line-counters)))
+      (propertize (if (string-empty-p counters) "  OK  " counters)
+                  'local-map my-flymake-modeline-map
+                  'mouse-face 'mode-line-highlight
+                  'help-echo "mouse-1: show flymake diagnostics"))))
+
+(defun my-modeline-zoom-in ()
+  "Increase the buffer's text scale (see `text-scale-adjust')."
+  (interactive)
+  (text-scale-adjust 1))
+
+(defun my-modeline-zoom-out ()
+  "Decrease the buffer's text scale (see `text-scale-adjust')."
+  (interactive)
+  (text-scale-adjust -1))
+
+(defvar my-modeline-zoom-menu
+  (let ((map (make-sparse-keymap "Zoom")))
+    (define-key map [zoom-out] '(menu-item "Zoom Out" my-modeline-zoom-out))
+    (define-key map [zoom-in] '(menu-item "Zoom In" my-modeline-zoom-in))
+    map)
+  "Context menu popped up by `my-modeline-segment-zoom' on click.")
+
+(defvar my-modeline-zoom-map
+  (my-modeline-mouse-map (list (cons 'mouse-1 my-modeline-zoom-menu))))
+
+(defun my-modeline-segment-zoom ()
+  "Magnifying-glass-plus icon that pops up a Zoom In/Zoom Out menu on click,
+followed by the buffer's current zoom amount (see `text-scale-mode-amount',
+e.g. \"-1\" or \"3\") whenever it isn't at its default of zero."
+  (let* ((icon (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-magnifying_glass"
+                                        :face 'mode-line-emphasis))
+         (amount (and (bound-and-true-p text-scale-mode)
+                      (format " %d" text-scale-mode-amount))))
+    (propertize (concat icon amount)
+                'help-echo "mouse-1: Zoom in/out menu"
+                'mouse-face 'mode-line-highlight
+                'local-map my-modeline-zoom-map)))
+
+(provide 'modeline)
+
+;;; modeline.el ends here
