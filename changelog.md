@@ -8,6 +8,9 @@ This will track major shifts I'm making in the config files for later reference
   was done because I've been recently adding more actively tweaking this
   behavior and its easier to deal with baseline code.
   
+* A reworking of the modeline in general. Biggest change is around the
+mode glyph which I'm leveraging on the far left
+  
 * Move over to Eglot from lsp-mode
   
 * Breakout imenu code into imenu.el since I also have invested a lot of focus
