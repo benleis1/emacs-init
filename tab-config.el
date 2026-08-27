@@ -450,30 +450,36 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 This command should be bound to a drag event.  It moves the tab
 at the mouse-down event to the position at mouse-up event."
   (interactive "e")
-  (let* ((from-str (posn-string (event-start event)))
-         (to-str (posn-string (event-end event)))
+  (let* ((from-str (car (posn-string (event-start event))))
+         (to-str (car (posn-string (event-end event))))
 	 (from-rowcol (posn-col-row (event-start event)))
 	 (to-rowcol (posn-col-row (event-end event)))
-	 (from (tab-line--get-tab-property 'tab (car from-str)))
-         (to (tab-line--get-tab-property 'tab (car to-str))))
+	 (from (and from-str (tab-line--get-tab-property 'tab from-str)))
+         (to (and to-str (tab-line--get-tab-property 'tab to-str)))
+	 (from-buffer (tab2-get-buffer-from-tab from))
+	 (to-buffer (tab2-get-buffer-from-tab to)))
 
 ;;    (message "move %s p:%s to %s p:%s" from-str (car from-rowcol) to-str (car to-rowcol))
 
-    ;; Only adjust if the two tabs are different
+    ;; Only adjust when the drag started and ended on two distinct real tabs.
+    ;; A drop that lands off the tab strip (blank fill area, scroll/filter
+    ;; buttons, or just off the strip) has to-str/to as nil; without this
+    ;; guard the dragged buffer got removed from the list below but never
+    ;; re-inserted (nothing matches a nil to-buffer), so it silently vanished.
     ;; if going left to right add on the right and vice versa if going right to left
-    (unless (or (eq from to) (eq from t) (eq to t))
+    (when (and from-buffer to-buffer (not (eq from-buffer to-buffer)))
       (tab2-set-buffer-list
 	    (reverse (let (value)
 		       (dolist (elt (tab2-get-buffer-list) value)
 			 ;; add the element in its new position moving leftwards
-			 (if (and (equal elt (tab2-get-buffer-from-tab to)) (> (car from-rowcol) (car to-rowcol)))
-			     (setq value (cons (tab2-get-buffer-from-tab from) value)))
+			 (if (and (equal elt to-buffer) (> (car from-rowcol) (car to-rowcol)))
+			     (setq value (cons from-buffer value)))
 			 ;; add all other elements in old position
-			 (if (not (equal elt (tab2-get-buffer-from-tab from)))
+			 (if (not (equal elt from-buffer))
 			     (setq value (cons elt value)))
 			 ;; add the element in its new position moving rightwards
-			 (if (and (equal elt (tab2-get-buffer-from-tab to)) (>= (car to-rowcol) (car from-rowcol)))
-			     (setq value (cons (tab2-get-buffer-from-tab from) value)))
+			 (if (and (equal elt to-buffer) (>= (car to-rowcol) (car from-rowcol)))
+			     (setq value (cons from-buffer value)))
 			 ))))
       (force-mode-line-update))))
 
@@ -734,6 +740,13 @@ at the mouse-down event to the position at mouse-up event."
 
 ;; Use custom tab grouping function.
 (setq tab-line-tabs-function 'tab2-get-tabs)
+
+;; Preserve manual tab ordering (drag-and-drop, shift left/right via the
+;; context menu). Stock tab-line defaults this to an alphabetical sort,
+;; which silently re-sorted the buffer list back into place on every
+;; redisplay -- right after a reorder took effect -- making drag-and-drop
+;; and the context-menu shift commands look like they did nothing.
+(setq tab-line-tabs-buffer-group-sort-function nil)
 
 ;; Set the list-function to use the same one I'm overriding in basic mode
 (setq tab-line-tabs-buffer-list-function 'tab2-get-filtered-buffer-list)
