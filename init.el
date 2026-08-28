@@ -102,6 +102,7 @@
 (defvar my-code-bright "goldenrod3")
 (defvar my-code-dark "goldenrod4")
 (defvar margin-tan-bg "#EEE8D5")
+(defvar margin-gray-bg "gray50")
 
 ;;; Font setup. This needs to be done prior to theme setup.
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
@@ -168,7 +169,6 @@
         (fg-prose-block-delimiter fg-dim)
 
 	;;diffs - duplicate modus deuteranopia colors (I don't like red/green)
-
 	(bg-added             bg-yellow-subtle)
         (bg-added-faint       bg-yellow-faint)
         (bg-added-refine      bg-yellow-refine)
@@ -221,6 +221,13 @@
 	(type unspecified)
 	(fnname yellow-cooler)
 	(fnname-call unspecified)
+	))
+
+;; TODO: fixup the modeline colors.
+(setq modus-vivendi-palette-overrides
+      `((fg-tab-current blue)
+	(bg-tab-bar ,margin-gray-bg)
+        (bg-tab-other ,margin-gray-bg)
 	))
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
@@ -334,24 +341,11 @@
   )
 
 (my-ignore (setq scroll-conservatively 10))
+;; don't allow overscrolling.
 
-;; WIP: Scroll only to the last line
-;; this is still a bit buggy and not quite the right behavior.
-(defun limit-scrolling (&optional win start)
-  ;; handle case where buffer is totally empty, or short enough that it
-  ;; already fits in the window without any scrolling being needed
-  (unless (or (= (buffer-size) 0)
-	      (<= (count-lines (point-min) (point-max)) (window-text-height)))
-    (let ((visible-lines (count-lines (or start (window-start)) (point-max)))
-          (lines-to-end (max 1 (count-lines (point) (point-max)))))
-      (when (< visible-lines (window-text-height))
-	(progn
-	  (recenter (- lines-to-end)))))))
 
-;; Only install the limit scrolling hook on gui modes where scrolling is enabled
 (when window-system
-  (setq use-system-tooltips nil)
-  (add-hook 'post-command-hook #'limit-scrolling))
+  (setq use-system-tooltips nil))
 
 ;; Use winner mode by default for managing window configurations
 ;; particularly useful when popping up a 2nd or 3rd window and
@@ -602,7 +596,10 @@
 ;; word wrap for normal text and stripe mode for tables
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-  (add-hook 'org-mode-hoom #'stripe-buffer-mode))
+  (add-hook 'org-mode-hoom #'stripe-buffer-mode)
+  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
+  (setq-local imenu-depth 4)
+  )
 
 ;; hide asterisks in headers
 ;; ignored because right now I'm using base org-bullets-mode instead
@@ -648,7 +645,14 @@
   :defer t
   :ensure t
   :hook (org-mode . org-modern-mode)
-  :config (setq org-modern-table nil) )
+  :config
+  (setq org-modern-table nil)
+  ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
+  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts,
+  ;; unlike the other levels' triangles (Geometric Shapes block). Swap it for
+  ;; the universally-supported Arrows block instead.
+  (setq org-modern-fold-stars
+        '(("▶" . "▼") ("▷" . "▽") ("→" . "↓") ("▹" . "▿") ("▸" . "▾"))))
 
 ;; Indent by heading depth
 (setq org-startup-indented t)
@@ -1004,6 +1008,12 @@ anything as useful as the `report' messages in between."
 	       (file-exists-p with-md))
 	  with-md
         filename))))
+
+;; insert a date function for use in the markdown snippets.
+(defun insert-date ()
+  "Insert the current date and time."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
 
 (setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
 
@@ -1541,7 +1551,7 @@ would just be redundant clutter."
 
 (use-package corfu
   :ensure t
-  :custom
+  :init
   (global-corfu-mode)
   )
 

@@ -122,6 +122,10 @@
 (defun tab2-default-view-p ()
   (equal (frame-parameter nul 'tab-line-sel-view)  0))
 
+;; Return how many views there are
+(defun tab2-num-views ()
+  (length tab2-views))
+
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
   (setf (tab2-view-wc (tab2-get-current-view)) (current-window-configuration)))
@@ -165,11 +169,10 @@
   (when (tab2-get-view-by-name name)
     (error "View %s already exists" name))
   (setq tab2-views (append tab2-views (list (make-tab2-view :name name))))
-  ;; Save the current wc
+  ;; Save the current wc into the view we're leaving
   (tab2-save-view-state)
   ;; Switch over
-  (set-window-parameter nil 'tab2-linesel-view (- (length tab2-views) 1))
-;;  (setq tab2-current-view (- (length tab2-views) 1))
+  (set-frame-parameter nil 'tab-line-sel-view (- (length tab2-views) 1))
   ;; Switch to an initial scratch buffer
   (switch-to-buffer "*scratch*")
   (delete-other-windows)
