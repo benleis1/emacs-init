@@ -113,23 +113,26 @@ is available. A no-op otherwise, leaving each face's own static
 other segment in this file -- instead of hooked to theme-change events, so
 it can't go stale."
   (when (fboundp 'modus-themes-get-color-value)
-    (let ((bg (modus-themes-get-color-value 'cursor)))
+    (let ((bg (modus-themes-get-color-value 'cursor))
+	  (fg (modus-themes-get-color-value 'bg-main)))
       (when (stringp bg)
-        (set-face-attribute 'my-modeline-file-icon-face nil :background bg)
+        (set-face-attribute 'my-modeline-file-icon-face nil :background bg :foreground fg)
         (set-face-attribute 'my-modeline-file-icon-divider-face nil :foreground bg)))))
 
-
-(modus-themes-get-color-value 'cursor)
+(defvar my-modeline-wellknown-buffers '((lisp-interaction-mode . "ELISP"))
+  "A map for translating well known buffers to a special name")
 
 (defun my-modeline--file-type-label ()
   "A short, upcased label for the current buffer's file type: its file
 extension when visiting a file, or the first few letters of `mode-name'
 otherwise."
-  (if buffer-file-name
-      (let ((ext (file-name-extension buffer-file-name)))
-        (upcase (or ext (file-name-base buffer-file-name) "")))
-    (let ((name (format-mode-line mode-name)))
-      (upcase (substring name 0 (min 4 (length name)))))))
+  (let* ((mode (or (cdr (assoc major-mode my-modeline-wellknown-buffers)) (format-mode-line mode-name)))
+	 (shortmode (upcase (substring mode 0 (min 9 (length mode))))))
+
+    (if buffer-file-name
+	(let ((ext (upcase (file-name-extension buffer-file-name))))
+          (or ext shortmode))
+      shortmode)))
 
 (defun my-modeline--file-type-icon ()
   "Plain file/mode icon glyph, recolored to `my-modeline-file-icon-face' to
@@ -278,11 +281,7 @@ dedicated-window reduced one."
 
 (defun my-modeline--buffer-id ()
   "Buffer name, styled like the stock `mode-line-buffer-identification'
-default, but rebuilt fresh on every call instead of being a plain
-propertized string set once via `setq-default' -- so a buffer whose major
-mode is listed in `my-modeline-dedicated-window-modes' gets the
-click-to-close binding and matching help text every time, not whatever was
-baked in by the first buffer to render this segment."
+default, but rebuilt fresh on every call so the help text is accurate"
   (if (my-modeline--dedicated-window-p)
       (propertize "%12b"
                   'face 'mode-line-buffer-id
@@ -316,22 +315,9 @@ would just show up as a mismatched sliver against the chip's background."
 (defun my-modeline--scroll-percent ()
   "Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
 a number with a trailing `%' in between. Computed directly from
-`window-start'/`window-end'/`point-min'/`point-max' rather than via a
-nested `format-mode-line' call on \"%p\" (calling `format-mode-line' from
-inside any `:eval' while a mode-line is already being computed is
-unreliable).
+`window-start'/`window-end'/`point-min'/`point-max' with enough escaped % signs to
+ work with multiple levels of evaluation."
 
-The string this returns is itself used as a mode-line construct -- per
-`:eval's own documented behavior -- and so gets `%'-decoded again just
-like any other mode-line string would: a lone `%' is consumed rather
-than displayed, and `%%' is the standard escape for a literal `%'. That
-decode happens TWICE here, not once: this segment's own
-`my-modeline--render-dual' call decodes it going into
-`my-modeline-segment-position''s return value, and the top-level `:eval'
-in `my-modeline-format' (see `my-modeline--render') decodes it AGAIN on
-the way out. Two decode passes need `%%%%' -- four literal percent
-characters -- to still read as one `%' at the end, the same way `%%'
-would survive a single pass."
   (let ((top (point-min))
         (bot (point-max))
         (start (window-start))
@@ -339,29 +325,51 @@ would survive a single pass."
     (cond ((and (<= start top) (>= end bot)) "All")
           ((<= start top) "Top")
           (t (format "%d%%%%%%%%" (round (* 100.0 (/ (float (- start top))
-                                                      (max 1 (- bot top))))))))))
+                                                     (max 1 (- bot top))))))))))
+
+(defvar my-modeline-show-percent nil "Set to t to add the scroll percentage segment or nil to not")
+
+(defface my-modeline-position-face
+  `((t :weight semi-bold
+       :background ,(modus-themes-get-color-value 'bg-mode-line-emphasis t) ))
+
+  "Face for `my-modeline-segment-position', giving it a subtly recessed
+look via a flat `:background' tint a bit darker than the mode-line's own
+background (\"gray75\" under the default `folio' theme)")
 
 (defun my-modeline-segment-position ()
   "Line/column position, per `my-modeline-position-format', followed by
 the window scroll percentage and, when `size-indication-mode' is on, a
 buffer size indication -- all with the same right-click menu (toggle
 line/column/size display) stock `mode-line-position' has, see
-`mode-line-column-line-number-mode-map'."
+`mode-line-column-line-number-mode-map'. The whole segment is boxed via
+`my-modeline-position-face' to look slightly depressed. Nested
+`:propertize' forms don't inherit an enclosing one's `face' -- each covers
+only the text it directly wraps -- so `face my-modeline-position-face' is
+listed explicitly in every one of them below, including the plain
+leading/trailing spaces, rather than relying on a single outer wrapper."
   (my-modeline--render-dual
-   `(" " (:propertize ,my-modeline-position-format
-                       local-map ,mode-line-column-line-number-mode-map
-                       mouse-face mode-line-highlight
-                       help-echo "Line number and Column number\nmouse-1: Display Line and Column Mode Menu")
-     " " (:propertize (:eval (my-modeline--scroll-percent))
-                       local-map ,mode-line-column-line-number-mode-map
-                       mouse-face mode-line-highlight
-                       help-echo "Window Scroll Percentage\nmouse-1: Display Line and Column Mode Menu")
+   `((:propertize " " face my-modeline-position-face)
+     (:propertize ,my-modeline-position-format
+                  face my-modeline-position-face
+                  local-map ,mode-line-column-line-number-mode-map
+                  mouse-face mode-line-highlight
+                  help-echo "Line number and Column number\nmouse-1: Display Line and Column Mode Menu")
+
+     (my-modeline-show-percent
+      ((:propertize " " face my-modeline-position-face)
+       (:propertize (:eval (my-modeline--scroll-percent))
+		    face my-modeline-position-face
+		    local-map ,mode-line-column-line-number-mode-map
+		    mouse-face mode-line-highlight
+		    help-echo "Window Scroll Percentage\nmouse-1: Display Line and Column Mode Menu")))
      (size-indication-mode
       (:propertize " of %I"
+                   face my-modeline-position-face
                    local-map ,mode-line-column-line-number-mode-map
                    mouse-face mode-line-highlight
                    help-echo "Size indication mode\nmouse-1: Display Line and Column Mode Menu"))
-     " ")))
+     (:propertize " " face my-modeline-position-face))))
 
 (defun my-modeline-segment-selection-info ()
   "Size of the active region, when there is one."
@@ -532,22 +540,49 @@ prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
 backend it is, so showing it twice is redundant."
   (and vc-mode (cadr (split-string (string-trim vc-mode) "^[A-Z]+[-:]+"))))
 
+(defvar my-modeline-vcs-collapsed nil
+  "When non-nil, `my-modeline-segment-vcs' shows only its icon, with the
+branch name omitted from the text (it's still available in the segment's
+help-echo tooltip). Toggled by mouse-3 on the segment, via
+`my-modeline-vcs-toggle-collapsed'.")
+
+(defun my-modeline-vcs-toggle-collapsed ()
+  "Toggle whether `my-modeline-segment-vcs' shows the branch name inline."
+  (interactive)
+  (setq my-modeline-vcs-collapsed (not my-modeline-vcs-collapsed))
+  (force-mode-line-update t))
+
+(defvar my-modeline-vcs-map
+  (my-modeline-mouse-map '((mouse-3 . my-modeline-vcs-toggle-collapsed)))
+  "Keymap composed on top of vc-mode's own click binding in
+`my-modeline-segment-vcs' (see `make-composed-keymap' there), adding
+mouse-3 as `my-modeline-vcs-toggle-collapsed' without disturbing whatever
+vc-mode itself already bound (typically mouse-1).")
+
 (defun my-modeline-segment-vcs ()
   "Version-control branch, when the buffer is under version control.
 Icon and coloring mirror doom-modeline's vcs segment: a git
 compare/merge/pull-request/branch glyph depending on `vc-state', with the
 icon and branch name both colored by that same state -- not just the text
 -- and the whole segment clickable via `vc-mode''s own binding, mirrored
-onto the header-line too (see `my-modeline--dualize-keymap')."
+onto the header-line too (see `my-modeline--dualize-keymap'). Mouse-3
+toggles `my-modeline-vcs-collapsed', collapsing the segment down to just
+the icon; the branch name stays in the help-echo tooltip either way, so
+it's still reachable by hovering while collapsed."
   (when vc-mode
     (let* ((state (my-modeline--vcs-state))
            (face (my-modeline--vcs-face state))
            (icon (my-modeline--vcs-icon state face))
            (name (my-modeline--vcs-branch-name))
-           (map (my-modeline--dualize-keymap
-                 (my-modeline--first-property vc-mode 'local-map)))
-           (help (my-modeline--first-property vc-mode 'help-echo)))
-      (propertize (concat (and icon (concat icon " ")) name)
+           (vc-map (my-modeline--dualize-keymap
+                    (my-modeline--first-property vc-mode 'local-map)))
+           (map (if vc-map (make-composed-keymap my-modeline-vcs-map vc-map)
+                  my-modeline-vcs-map))
+           (help (format "Branch: %s\n%s\nmouse-1: Version Control menu\nmouse-3: toggle collapsed view"
+                         name
+                         (nth 0 (vc-mode-line-state state)))))
+      (propertize (concat icon
+                          (and (not my-modeline-vcs-collapsed) name (concat " " name)))
                   'face face
                   'mouse-face 'mode-line-highlight
                   'help-echo help
@@ -614,7 +649,6 @@ the same standard way, rather than only the buffer name being clickable."
 (defvar my-modeline-left-segments
   '(my-modeline-segment-buffer-info
     my-modeline-segment-remote-host
-    my-modeline-segment-position
     my-modeline-segment-selection-info)
   "Segment functions rendered left-to-right on the left side of
 `my-modeline-format'.")
@@ -623,7 +657,9 @@ the same standard way, rather than only the buffer name being clickable."
   '(my-modeline-segment-misc-info
     my-modeline-segment-eglot
     my-eglot-flymake-segment
-    my-modeline-segment-vcs)
+    my-modeline-segment-position
+    my-modeline-segment-vcs
+    )
   "Segment functions rendered left-to-right immediately after the left-side
 segments in `my-modeline-format', each separated by a space (see
 `my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
@@ -645,12 +681,33 @@ SEPARATOR (default: none)."
   (let ((results (delq nil (mapcar #'funcall segments))))
     (if separator (mapconcat #'identity results separator) (apply #'concat results))))
 
-(defvar my-modeline-right-gap "   "
+(defvar my-modeline-right-gap " "
   "Fixed spacing kept between `my-modeline-right-segments' and
 `my-modeline-anchored-right-segments' in `my-modeline--render', on top of
 whatever space `my-modeline--right-align' leaves -- so e.g. the major
 mode name and the tab2 view never end up touching just because the rest
 of the line happened to fill the window exactly.")
+
+(defcustom my-modeline-box-line-width 4
+  "`:line-width' used by `my-modeline--sync-frame-box' to pad out the
+whole mode-line. The box is always drawn in its own background color, so
+this only ever adds height/seamless padding, never a visible border."
+  :type 'integer
+  :group 'my-modeline)
+
+(defun my-modeline--sync-frame-box ()
+  "Give `mode-line' (and `mode-line-active', where it exists) and
+`mode-line-inactive' a box `my-modeline-box-line-width' wide, each in its
+own `:background' -- so the box is invisible as a border and just adds
+padding/height, seamlessly, to both the active and inactive mode-line.
+Recomputed on every render, like every other theme-dependent bit in this
+file (see the file commentary), so a theme switch can't leave it stale."
+  (dolist (face (if (facep 'mode-line-active)
+                     '(mode-line mode-line-active mode-line-inactive)
+                   '(mode-line mode-line-inactive)))
+    (set-face-attribute face nil :box
+                         (list :line-width my-modeline-box-line-width
+                               :color (face-attribute face :background nil t)))))
 
 (defun my-modeline--render ()
   "The full mode-line, or, in a dedicated window (see
@@ -666,6 +723,7 @@ how wide the first zone renders -- the git branch and tab2 view, say,
 don't just run together with everything else, or with the rest of the line.
 `my-modeline-right-margin' keeps the very last character from rendering
 flush against the true edge."
+  (my-modeline--sync-frame-box)
   (if (my-modeline--dedicated-window-p)
       (my-modeline--dedicated-render)
     (let* ((left (my-modeline--eval-segments my-modeline-left-segments))
@@ -706,12 +764,13 @@ work the same way.")
 
 (defun tab2-view-segment ()
   "Show the current tab2 view, marked with a desktop icon."
-  (let ((icon (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
-                                       :face 'mode-line-emphasis)))
-    (propertize (concat (or icon "") " " (tab2-view-name (tab2-get-current-view)))
-                'help-echo "Current tab view - click to switch to the next one"
-                'mouse-face 'mode-line-highlight
-                'local-map tab2-mode-line-view-map)))
+  (when (> (tab2-num-views) 1)
+     (let ((icon (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
+					:face 'mode-line-emphasis)))
+      (propertize (concat (or icon "") " " (tab2-view-name (tab2-get-current-view)))
+                  'help-echo "Current tab view - click to switch to the next one"
+                  'mouse-face 'mode-line-highlight
+                  'local-map tab2-mode-line-view-map))))
 
 (defvar my-flymake-modeline-map
   (my-modeline-mouse-map '((mouse-1 . flymake-show-buffer-diagnostics))))
@@ -762,5 +821,14 @@ e.g. \"-1\" or \"3\") whenever it isn't at its default of zero."
                 'local-map my-modeline-zoom-map)))
 
 (provide 'modeline)
+
+;; Experimental use of header for the modeline
+(defun switch-to-header ()
+  (set-face-attribute 'header-line nil :background-mode "gray90")
+  (setq-default header-line-format mode-line-format)
+  (setq-default mode-line-format nil)
+  (set-face-attribute 'header-line nil :box
+                    (list :line-width 8
+                          :color "gray90")))
 
 ;;; modeline.el ends here

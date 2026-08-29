@@ -211,6 +211,7 @@
 
 	;; I like a slightly bolder mode-line background
 	(bg-mode-line-active "gray75")
+	(bg-mode-line-emphasis "gray85")
 
 	;; paren-matching
 	(fg-paren-match red)
@@ -1133,6 +1134,20 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 (add-hook 'markdown-mode-hook
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
+
+;; clutch - database access
+
+(use-package clutch
+  :ensure t
+  :custom
+  (setq clutch-connection-alist
+	'(("glide dataaccess" . (:backend pg
+				 :host "127.0.0.1"
+				 :port 3400
+				 :user "dbi_3400"
+				 :database "glide"
+                             ;; Set default schema using options search_path
+                             :options "-c search_path=glide_dataaccess,public")))))
 
 ;; Note: C-\ is bound to smart toggle.
 (use-package imenu-list
