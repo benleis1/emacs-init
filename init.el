@@ -1661,6 +1661,10 @@ tag, followed by the normal editable field."
 ;;  (add-hook 'markdown-mode-hook #'yas-minor-mode)
   )
 
+;; No key binding for now.
+(use-package consult-yasnippet
+  :ensure t)
+
 (use-package wikimode
   :ensure t
   :vc (:url "https://github.com/benleis1/wikimode")

@@ -71,25 +71,14 @@ My typical alias setup
 - [Code:](#code)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
-- [Font setup. This needs to be done prior to theming.](#font-setup-this-needs-to-be-done-prior-to-theming)
+- [Font setup. This needs to be done prior to theme setup.](#font-setup-this-needs-to-be-done-prior-to-theme-setup)
 - [modus theme configuration.](#modus-theme-configuration)
   - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
-  - [limit-scrolling](#limit-scrolling)
   - [my-before-save-hook](#my-before-save-hook)
-- [backup and autosave - put everything in ~/.saves](#backup-and-autosave---put-everything-in-saves)
+- [backup and autosave - put everything in .saves under .emacs.d](#backup-and-autosave---put-everything-in-saves-under-emacsd)
 - [Dired](#dired)
-- [Nano-like mode line styling](#nano-like-mode-line-styling)
-- [This has become complicated enough that I should probably stop using](#this-has-become-complicated-enough-that-i-should-probably-stop-using)
-- [doom modeline](#doom-modeline)
-  - [my/doom-modeline-recolor-file-icon](#mydoom-modeline-recolor-file-icon)
-  - [my/doom-modeline--height-spacer](#mydoom-modeline--height-spacer)
-  - [my/doom-modeline-hide-segment](#mydoom-modeline-hide-segment)
-  - [my/doom-modeline--icon-square](#mydoom-modeline--icon-square)
-  - [my/doom-modeline--squared-buffer-info](#mydoom-modeline--squared-buffer-info)
-  - [my/doom-modeline-buffer-info-override](#mydoom-modeline-buffer-info-override)
-  - [my/doom-modeline-buffer-info-simple-override](#mydoom-modeline-buffer-info-simple-override)
-  - [my/doom-modeline-bar-override](#mydoom-modeline-bar-override)
+- [modeline](#modeline)
 - [Global key bindings](#global-key-bindings)
   - [pbcopy-region](#pbcopy-region)
   - [pbcopy-kill-ring](#pbcopy-kill-ring)
@@ -118,6 +107,12 @@ My typical alias setup
 - [python - TODO turn on eglot integration later.](#python---todo-turn-on-eglot-integration-later)
 - [markdown mode](#markdown-mode)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
+  - [insert-date](#insert-date)
+  - [my-markdown-liquid-post-url-at-point](#my-markdown-liquid-post-url-at-point)
+  - [my-markdown-follow-liquid-post-url](#my-markdown-follow-liquid-post-url)
+  - [my-markdown-frontmatter-bounds](#my-markdown-frontmatter-bounds)
+  - [my-markdown-tags-line-value-start](#my-markdown-tags-line-value-start)
+  - [my-markdown-tags-capf](#my-markdown-tags-capf)
 - [elisp](#elisp)
 - [Excorporate setup.](#excorporate-setup)
   - [my-diary-cleanup](#my-diary-cleanup)
@@ -135,6 +130,7 @@ My typical alias setup
   - [my-ediff-install-nav-overlay](#my-ediff-install-nav-overlay)
   - [gc-notification](#gc-notification)
 - [Completion frameworks.](#completion-frameworks)
+- [Font name completion for customize buffers](#font-name-completion-for-customize-buffers)
   - [font-family-widget-p](#font-family-widget-p)
   - [complete-font-name](#complete-font-name)
   - [add-complete-font-name](#add-complete-font-name)
@@ -192,37 +188,18 @@ early on setup follow-symlinks to true for loaded files
 
 
 Color name redirection for use with custom faces
-requires manual editing of custom-set-faces to use ` back tick operator.
+requires manual editing of custom-set-faces or modus definitions
+to  use i.e with the  ` back tick operator.
 
 
 ```
 (defvar my-code-bright "goldenrod3")
 (defvar my-code-dark "goldenrod4")
 (defvar margin-tan-bg "#EEE8D5")
+(defvar margin-gray-bg "gray50")
 ```
 
-doom-themes provides the doom-solarized-light theme that custom.el enables
-via `custom-enabled-themes'. It has to be installed and on `load-path'
-*before* custom-file loads below.
-```
-(my-ignore (use-package doom-themes
-  :ensure t
-  :config
-  ;; Global settings (defaults)
-  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
-        doom-themes-enable-italic t) ; if nil, italics is universally disabled
-
-  ;; Enable flashing mode-line on errors
-  ;;  (doom-themes-visual-bell-config)
-  ;; or for treemacs users
-  (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
-  (doom-themes-treemacs-config)
-  ;; Corrects (and improves) org-mode's native fontification.
-  ;;  (doom-themes-org-config)
-  ))
-```
-
-# Font setup. This needs to be done prior to theming.
+# Font setup. This needs to be done prior to theme setup.
 Mixed-pitch mode. I use this in markdown and org modes currently.
 
 ```
@@ -241,6 +218,9 @@ Mixed-pitch mode. I use this in markdown and org modes currently.
   ;; Ensure the fixed-pitch face strictly inherits from the default font
   (set-face-attribute 'fixed-pitch nil
                       :inherit 'default)
+
+  ;; Leave cursor-type alone; don't let mixed-pitch swap it to a bar cursor.
+  (setq mixed-pitch-variable-pitch-cursor nil)
 
   :hook ((org-mode . mixed-pitch-mode)
 	 (markdown-mode . mixed-pitch-mode)))
@@ -269,7 +249,6 @@ Make headers all the same color as foreground
       `((bg-tab-bar ,margin-tan-bg)
         (bg-tab-current bg-main)
         (bg-tab-other ,margin-tan-bg)
-	(bg-line-number-inactive ,margin-tan-bg)
 
 	;; Tone down the headings: use the default foreground instead
         ;; of the theme's per-level accent colors.
@@ -290,7 +269,6 @@ Make headers all the same color as foreground
         (fg-prose-block-delimiter fg-dim)
 
 	;;diffs - duplicate modus deuteranopia colors (I don't like red/green)
-
 	(bg-added             bg-yellow-subtle)
         (bg-added-faint       bg-yellow-faint)
         (bg-added-refine      bg-yellow-refine)
@@ -330,7 +308,9 @@ Specific folio theme overrides
 ```
 (setq folio-theme-palette-overrides
       ;; headers need some color and overlines stripped
-      '((bg-heading-2 unspecified)
+      `(
+	(bg-line-number-inactive ,margin-tan-bg)
+	(bg-heading-2 unspecified)
 	(overline-heading-1 unspecified)
         (overline-heading-2 unspecified)
 	(overline-heading-3 unspecified)
@@ -350,15 +330,14 @@ Specific folio theme overrides
 	(fnname yellow-cooler)
 	(fnname-call unspecified)
 	))
+```
 
-(setq nano-like-palette-overrides
-      '((bg-tab-bar bg-inactive)
-        (bg-tab-current bg-main)
-        (bg-tab-other bg-inactive)
-	(bg-line-number-inactive bg-inactive)
-
-	;; hover select only lets you change the background by default.
-	(bg-hover bg-magenta-nuanced)
+TODO: fixup the modeline colors.
+```
+(setq modus-vivendi-palette-overrides
+      `((fg-tab-current blue)
+	(bg-tab-bar ,margin-gray-bg)
+        (bg-tab-other ,margin-gray-bg)
 	))
 ```
 
@@ -385,7 +364,7 @@ Loop through all the buffers and force mixed-pitch-mode ones to reload.
 
 (add-hook 'enable-theme-functions
           (lambda (theme)
-            (if (eq theme 'nano-like)
+            (if (eq theme 'nano-like-modus)
                 (progn
 		  (set-face-attribute 'default nil :family my-nano-fixed-pitch-font)
                   (set-face-attribute 'fixed-pitch nil :family my-nano-fixed-pitch-font)
@@ -396,13 +375,31 @@ Loop through all the buffers and force mixed-pitch-mode ones to reload.
                 (set-face-attribute 'fixed-pitch nil :family my-default-fixed-pitch-font)
                 (set-face-attribute 'variable-pitch nil :family my-default-variable-pitch-font)
 		(my-reload-fonts)
-		))))
+		))
+
+	    ;; I'd like to have select on the modeline change the foreground rather than
+	    ;; than the background and that needs a custom hook.
+	    (when (eq theme 'folio)
+	      (set-face-attribute 'mode-line-highlight nil :foreground "DarkOrange4"
+				  :background nil) )
+	    ))
+
+(set-face-attribute 'mode-line-highlight nil :background nil)
 ```
 
-Modus doesn't handle fonts so just set this directly here where all other styling is being done.
+Modus doesn't handle fonts so just set this directly here where all other styling is
+being done.
 ```
-(custom-set-faces
- '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3))))
+(if (< emacs-major-version 31)
+  (custom-set-faces
+   '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3))))
+
+  (progn
+    (custom-set-faces
+     '(tab-line-active ((t :family "San Francisco (SF Pro)" :height 1.3))))
+
+    (custom-set-faces
+     '(tab-line-inactive ((t :family "San Francisco (SF Pro)" :height 1.3))))))
 ```
 
 Currently trying out the folio theme as my main theme.
@@ -412,6 +409,9 @@ Currently trying out the folio theme as my main theme.
             :rev :newest)
   :config
   (load-theme 'folio t))
+
+(use-package nano-like-modus-theme
+  :load-path "~/dev/nano-like-modus-theme")
 ```
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -423,7 +423,7 @@ All customizations are stored on the side in custom.el
 ```
 
 # Basic Appearance and startup
-A set of configurations related to display style that are not covered by customized faces and variables
+A set of configurations related to display style that are not covered by themes or faces.
 
 Make things silently start.
 ```
@@ -436,6 +436,10 @@ Make things silently start.
 Initial major mode is text for new buffers
 ```
 (setq-default major-mode 'text-mode)
+```
+break paragraphs on after 80 characters.
+```
+(setq-default fill-column 80)
 ```
 
 turn off menu mode in text mode to save space
@@ -471,26 +475,12 @@ Add a faint window divider
 
 (my-ignore (setq scroll-conservatively 10))
 ```
+don't allow overscrolling.
 
-## limit-scrolling
-WIP: Scroll only to the last line
-this is still a bit buggy and not quite the right behavior.
-```
-(defun limit-scrolling (&optional win start)
-  ;; handle case where buffer is totally empty
-  (unless (= (buffer-size) 0)
-    (let ((visible-lines (count-lines (or start (window-start)) (buffer-size)))
-          (lines-to-end (count-lines (point) (buffer-size))))
-      (when (< visible-lines (window-text-height))
-	(progn
-	  (recenter (- lines-to-end)))))))
-```
 
-Only install the limit scrolling hook on gui modes where scrolling is enabled
 ```
 (when window-system
-  (setq use-system-tooltips nil)
-  (add-hook 'post-command-hook #'limit-scrolling))
+  (setq use-system-tooltips nil))
 ```
 
 Use winner mode by default for managing window configurations
@@ -501,7 +491,7 @@ wanting to go back to the previous config.
 ```
 
 ## my-before-save-hook
-Generally remove trailing white space except on markdown
+Generally remove trailing white space except on markdown where trailing space is meaningful
 ```
 (defun my-before-save-hook ()
   (unless (equal major-mode 'markdown-mode)
@@ -515,19 +505,6 @@ where tab auto indents
 ```
 (setq tab-always-indent 'complete)
 (add-to-list 'completion-styles 'initials t)
-```
-
-Switch buffer name context tip to actually be the buffer name
-```
-(setq-default mode-line-buffer-identification
-              (list (propertize
-                     "%12b"
-                     'face 'mode-line-buffer-id
-                     'help-echo
-                     '(format "%s\nmouse-1: Previou2 buffer\nmouse-3: Next buffer"
-                       (buffer-name))
-                     'mouse-face 'mode-line-highlight
-                     'local-map mode-line-buffer-identification-keymap)))
 ```
 
 Override the default value so isearch is always full screen. If set too low emacs
@@ -575,7 +552,7 @@ the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 ```
 
-# backup and autosave - put everything in ~/.saves
+# backup and autosave - put everything in .saves under .emacs.d
 
 Define a directory for auto-save files
 ```
@@ -602,7 +579,8 @@ Ensure the directory exists
 # Dired
 
 nerd icons setup.
-These are used by doom-modeline and color adjustments need to be done prior to loading it
+These are used by my-modeline (see modeline.el) and nerd-icons-dired; color
+adjustments need to be done prior to loading either.
 ```
 (use-package nerd-icons
   :config
@@ -631,195 +609,15 @@ allow find-alternate-file i.e. open and kill dired
 (put 'dired-find-alternate-file 'disabled nil)
 ```
 
-doom-modeline setup
+# modeline
+Native mode-line/header-line implementation, replacing doom-modeline (see
+modeline.el for the full rationale).
 Note: its important to have a nerd font installed for the icons to work properly
-I usd DejaVu Sans Mono with the Nerd Font extension. For now I leave the icons on
+I use DejaVu Sans Mono with the Nerd Font extension. For now I leave the icons on
 even in terminal mode although they are a bit too small there.
-It has to be installed here before tab-config.el (loaded right below) uses its
-`doom-modeline-def-segment'/`doom-modeline-def-modeline' macros at load time.
 ```
-(use-package doom-modeline
-  :ensure t
-  :init
-  (doom-modeline-mode 1)
-  :config
-  (setq doom-modeline-bar-width 0)
-  (setq doom-modeline-position-column-line-format '("L%l:%c")))
-```
-
-# Nano-like mode line styling
-# This has become complicated enough that I should probably stop using
-# doom modeline
-
-When the nano-like theme is active, flatten doom-modeline's buffer/file
-icon to white-on-gray instead of nerd-icons' per-filetype colors.
-```
-(defface my/doom-modeline-file-icon
-  '((t :foreground "white" :background "gray60"))
-  "Face for the doom-modeline buffer/file icon under the nano-like theme.")
-
-(defvar my/doom-modeline-file-icon-scale 1.6
-  "How much larger than normal text the file icon renders.")
-
-(defvar my/doom-modeline-file-icon-padding-scale 1.1
-  "How much larger than normal text the icon's side padding renders.")
-```
-
-## my/doom-modeline-recolor-file-icon
->Recolor ICON, doom-modeline's buffer/file icon, to `my/doom-modeline-file-icon'
-and enlarge it by `my/doom-modeline-file-icon-scale'.
-Meant as a `:filter-return' advice on `doom-modeline-icon-for-buffer'.
-
-```
-(defun my/doom-modeline-recolor-file-icon (icon)
-  "Recolor ICON, doom-modeline's buffer/file icon, to `my/doom-modeline-file-icon'
-and enlarge it by `my/doom-modeline-file-icon-scale'.
-Meant as a `:filter-return' advice on `doom-modeline-icon-for-buffer'."
-  (if (stringp icon)
-      (let ((props (get-text-property 0 'face icon)))
-        (if (listp props)
-            (let ((new-props (plist-put (copy-sequence props)
-                                         :inherit 'my/doom-modeline-file-icon)))
-              (setq new-props (plist-put new-props :height
-                                         (* my/doom-modeline-file-icon-scale
-                                            (or (plist-get props :height) 1.0))))
-              (propertize icon 'face new-props))
-          icon))
-    icon))
-
-
-(defvar my/doom-modeline-height-scale 1.3
-  "Safety margin on top of `my/doom-modeline-file-icon-scale' used to size
-the invisible height-regulating spacer in `my/doom-modeline--height-spacer'.
-Its half-height needs to exceed the enlarged icon's own ascent, or the icon
-(not the spacer) ends up dictating the line's height, and text goes back to
-sitting low. Raise this if text still looks low; lower it if the mode-line
-looks taller than it needs to.")
-```
-
-## my/doom-modeline--height-spacer
->An effectively invisible (1px wide), vertically-symmetric image that
-grows the mode-line equally above and below the baseline, so unscaled text
-stays centered against the enlarged file icon.
-
-```
-(defun my/doom-modeline--height-spacer ()
-  "An effectively invisible (1px wide), vertically-symmetric image that
-grows the mode-line equally above and below the baseline, so unscaled text
-stays centered against the enlarged file icon."
-  (when (and (display-graphic-p) (image-type-available-p 'pbm))
-    (let ((h (max 1 (round (* my/doom-modeline-height-scale
-                              my/doom-modeline-file-icon-scale
-                              (doom-modeline--font-height))))))
-      (ignore-errors
-        (create-image
-         (concat (format "P1\n1 %d\n" h) (make-string h ?1) "\n")
-         'pbm t :scale 1 :foreground "None" :ascent 'center)))))
-```
-
-## my/doom-modeline-hide-segment
->Unconditionally hide a segment.
-
-```
-(defun my/doom-modeline-hide-segment (&optional _result)
-  "Unconditionally hide a segment."
-  nil)
-```
-
-## my/doom-modeline--icon-square
->The file/major-mode icon padded into a gray square badge.
-Like `doom-modeline--buffer-mode-icon', but pads with
-`my/doom-modeline-file-icon' on both sides instead of appending a plain,
-differently-faced `doom-modeline-vspc'.
-
-```
-(defun my/doom-modeline--icon-square ()
-  "The file/major-mode icon padded into a gray square badge.
-Like `doom-modeline--buffer-mode-icon', but pads with
-`my/doom-modeline-file-icon' on both sides instead of appending a plain,
-differently-faced `doom-modeline-vspc'."
-  (when (and doom-modeline-icon doom-modeline-major-mode-icon)
-    (when-let* ((icon (or doom-modeline--buffer-file-icon
-                          (doom-modeline-update-buffer-file-icon))))
-      (unless (string-empty-p icon)
-        (let* ((pad-face `(:inherit my/doom-modeline-file-icon
-                           :height ,my/doom-modeline-file-icon-padding-scale))
-               (pad (propertize " " 'face pad-face))
-               ;; Same face as PAD so its 1px width blends into the badge
-               ;; instead of showing as a sliver of the default background.
-               (spacer (propertize " " 'face pad-face
-                                    'display (my/doom-modeline--height-spacer))))
-          (concat spacer pad icon pad))))))
-```
-
-## my/doom-modeline--squared-buffer-info
->Buffer-info, with the icon squared off via `my/doom-modeline--icon-square'
-instead of `doom-modeline--buffer-mode-icon', and no leading spacer so the
-square sits flush against the mode-line's left edge. NAME-FN supplies the
-buffer-name part, e.g. `doom-modeline--buffer-name' or `--buffer-simple-name'.
-
-```
-(defun my/doom-modeline--squared-buffer-info (name-fn)
-  "Buffer-info, with the icon squared off via `my/doom-modeline--icon-square'
-instead of `doom-modeline--buffer-mode-icon', and no leading spacer so the
-square sits flush against the mode-line's left edge. NAME-FN supplies the
-buffer-name part, e.g. `doom-modeline--buffer-name' or `--buffer-simple-name'."
-  (concat (my/doom-modeline--icon-square)
-          (doom-modeline-spc)
-          (doom-modeline--buffer-state-icon)
-          (funcall name-fn)))
-```
-
-## my/doom-modeline-buffer-info-override
-```
-(defun my/doom-modeline-buffer-info-override ()
-  (my/doom-modeline--squared-buffer-info #'doom-modeline--buffer-name))
-```
-
-## my/doom-modeline-buffer-info-simple-override
-```
-(defun my/doom-modeline-buffer-info-simple-override ()
-  (my/doom-modeline--squared-buffer-info #'doom-modeline--buffer-simple-name))
-```
-
-## my/doom-modeline-bar-override
->Just the height-regulating bar image, dropping doom-modeline's own
-trailing `doom-modeline-spc' (which otherwise leaves an uncolored gap
-between the bar and the icon square).
-
-```
-(defun my/doom-modeline-bar-override ()
-  "Just the height-regulating bar image, dropping doom-modeline's own
-trailing `doom-modeline-spc' (which otherwise leaves an uncolored gap
-between the bar and the icon square)."
-  (when (display-graphic-p)
-    (if doom-modeline-hud (doom-modeline--hud) (doom-modeline--bar))))
-
-(defvar my/doom-modeline-nano-advice
-  `((doom-modeline-icon-for-buffer :filter-return my/doom-modeline-recolor-file-icon)
-    (doom-modeline-segment--buffer-info :override my/doom-modeline-buffer-info-override)
-    (doom-modeline-segment--buffer-info-simple :override my/doom-modeline-buffer-info-simple-override)
-    (doom-modeline-segment--bar :override my/doom-modeline-bar-override)
-    ,@(mapcar (lambda (seg)
-                (list (intern (format "doom-modeline-segment--%s" seg))
-                      :filter-return 'my/doom-modeline-hide-segment))
-              '(window-state workspace-name window-number modals matches follow eldoc)))
-  "Advice applied to doom-modeline while the nano-like theme is active, as
-\(FUNCTION ADVICE-TYPE ADVICE-FN) triples.")
-
-(add-hook 'enable-theme-functions
-          (lambda (theme)
-            (let ((add (eq theme 'nano-like)))
-              (dolist (entry my/doom-modeline-nano-advice)
-                (let ((fn (nth 0 entry)) (type (nth 1 entry)) (advice (nth 2 entry)))
-                  (when (fboundp fn)
-                    (if add (advice-add fn type advice) (advice-remove fn advice)))))
-              ;; Buffers that already existed before this theme switch (e.g.
-              ;; *scratch*, whose icon is cached at startup, long before any
-              ;; theme is enabled) keep their stale, pre-advice icon otherwise.
-              (dolist (buf (buffer-list))
-                (with-current-buffer buf
-                  (doom-modeline-update-buffer-file-icon))))))
+(load (locate-user-emacs-file "modeline.el"))
+(my-modeline-mode 1)
 ```
 
 Load all of my custom tab-line config.
@@ -923,6 +721,13 @@ spelling and phonetic matches when generating suggestions.
 (setq ispell-extra-args '("--sug-mode=ultra"))
 ```
 
+Free up M-TAB/C-M-i (normally `flyspell-auto-correct-word') so it falls
+through to the default `completion-at-point' binding instead. I do corrections
+typically via right-click context menus.
+```
+(setq flyspell-use-meta-tab nil)
+```
+
 ## my-flyspell-prog-mode
 >Enable `flyspell-prog-mode' with buffer-local Aspell arguments.
 
@@ -1013,7 +818,10 @@ word wrap for normal text and stripe mode for tables
 ```
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-  (add-hook 'org-mode-hoom #'stripe-buffer-mode))
+  (add-hook 'org-mode-hoom #'stripe-buffer-mode)
+  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
+  (setq-local imenu-depth 4)
+  )
 ```
 
 hide asterisks in headers
@@ -1073,7 +881,14 @@ disable table formatting in favor of org-pretty-table because of header renderin
   :defer t
   :ensure t
   :hook (org-mode . org-modern-mode)
-  :config (setq org-modern-table nil) )
+  :config
+  (setq org-modern-table nil)
+  ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
+  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts,
+  ;; unlike the other levels' triangles (Geometric Shapes block). Swap it for
+  ;; the universally-supported Arrows block instead.
+  (setq org-modern-fold-stars
+        '(("▶" . "▼") ("▷" . "▽") ("→" . "↓") ("▹" . "▿") ("▸" . "▾"))))
 ```
 
 Indent by heading depth
@@ -1532,11 +1347,73 @@ This helps with compatibility with how github does relative links in its wiki mo
       filename
     (let ((with-md (concat filename ".md")))
       (if (and (not (string-suffix-p ".md" filename t))
-               (file-exists-p with-md))
-          with-md
+	       (file-exists-p with-md))
+	  with-md
         filename))))
+```
+
+## insert-date
+>Insert the current date and time.
+
+insert a date function for use in the markdown snippets.
+```
+(defun insert-date ()
+  "Insert the current date and time."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
 
 (setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
+
+(defconst my-markdown-liquid-post-url-regexp
+  "{% post_url[[:space:]]*\\([^ ]*\\)[[:space:]]*%}"
+  "Matches a Jekyll {% post_url NAME %} liquid tag; group 1 is NAME.")
+```
+
+## my-markdown-liquid-post-url-at-point
+>Return NAME if point is on a link/tag whose destination is {% post_url NAME %}.
+
+Fix up for liquid style pre-processed links used by jekyll.
+markdown-link-at-pos (called by markdown-link-url) splits an inline link's
+parenthesized destination on the first whitespace into a url/title pair,
+to support `[text](url "title")` syntax. That mangles a liquid tag like
+"{% post_url NAME %}" down to just "{%" before we'd ever see it via
+markdown-link-url. Detect the tag directly from
+the raw buffer text instead and otherwise defer to the original function.
+```
+(defun my-markdown-liquid-post-url-at-point ()
+  "Return NAME if point is on a link/tag whose destination is {% post_url NAME %}."
+  (let* ((values (and (markdown-link-p) (markdown-link-at-pos (point))))
+         (begin (nth 0 values))
+         (end (nth 1 values)))
+    (if (and begin end)
+        ;; Formal `[text](...)` link: search its whole span, since point may
+        ;; land on the visible text rather than the (possibly hidden) tag.
+        (save-excursion
+          (goto-char begin)
+          (when (re-search-forward my-markdown-liquid-post-url-regexp end t)
+            (match-string 1)))
+      ;; No recognized link syntax: only match a bare tag point is inside.
+      (save-excursion
+        (let ((pt (point)) (eol (line-end-position)))
+          (goto-char (line-beginning-position))
+          (catch 'found
+            (while (re-search-forward my-markdown-liquid-post-url-regexp eol t)
+              (when (and (<= (match-beginning 0) pt) (<= pt (match-end 0)))
+                (throw 'found (match-string 1))))))))))
+```
+
+## my-markdown-follow-liquid-post-url
+>Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN.
+
+```
+(defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
+  "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
+  (let ((name (my-markdown-liquid-post-url-at-point)))
+    (if name
+        (markdown--browse-url name)
+      (apply orig-fn args))))
+
+(advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url)
 
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
@@ -1563,6 +1440,79 @@ also be available via the context menus
 (setq imenu-auto-rescan t)
 ```
 
+## my-markdown-frontmatter-bounds
+>Return (START . END) of the current buffer's YAML frontmatter body, or nil.
+
+Complete a frontmatter "tags:" value against every tag already used
+elsewhere in the project, via wikimode's project-wide tag scan
+(`wikimode-project-tags').
+```
+(defun my-markdown-frontmatter-bounds ()
+  "Return (START . END) of the current buffer's YAML frontmatter body, or nil."
+  (save-excursion
+    (save-match-data
+      (goto-char (point-min))
+      (when (looking-at-p "---[ \t]*$")
+        (forward-line 1)
+        (let ((start (point)))
+          (when (re-search-forward "^---[ \t]*$" nil t)
+            (cons start (line-beginning-position))))))))
+```
+
+## my-markdown-tags-line-value-start
+>If point's line is a frontmatter tags entry, return where its value starts.
+Matches either the inline form ("tags: [a, b]" or "tags: a, b") or a
+block-list item ("  - a") under a bare "tags:" header line above it.
+
+```
+(defun my-markdown-tags-line-value-start ()
+  "If point's line is a frontmatter tags entry, return where its value starts.
+Matches either the inline form (\"tags: [a, b]\" or \"tags: a, b\") or a
+block-list item (\"  - a\") under a bare \"tags:\" header line above it."
+  (save-excursion
+    (beginning-of-line)
+    (cond
+     ((looking-at "tags:[ \t]*") (match-end 0))
+     ((looking-at "[ \t]*-[ \t]+")
+      (let ((value-start (match-end 0)) (found nil))
+        (while (and (not found) (zerop (forward-line -1)))
+          (cond
+           ((looking-at-p "[ \t]*-[ \t]+"))
+           ((looking-at-p "tags:[ \t]*$") (setq found t))
+           (t (setq found 'stop))))
+        (and (eq found t) value-start))))))
+```
+
+## my-markdown-tags-capf
+>`completion-at-point-functions' entry for markdown frontmatter tag values.
+
+```
+(defun my-markdown-tags-capf ()
+  "`completion-at-point-functions' entry for markdown frontmatter tag values."
+  (let ((fm (my-markdown-frontmatter-bounds)))
+    (when (and fm (<= (car fm) (point)) (< (point) (cdr fm)))
+      (let ((value-start (my-markdown-tags-line-value-start)))
+        (when value-start
+          (let* ((eol (line-end-position))
+                 (before (save-excursion
+                           (if (re-search-backward "[,[]" value-start t)
+                               (1+ (point))
+                             value-start)))
+                 (after (save-excursion
+                          (if (re-search-forward "[],]" eol t)
+                              (match-beginning 0)
+                            eol)))
+                 (start (save-excursion (goto-char before)
+                                        (skip-chars-forward " \t\"'") (point)))
+                 (end (save-excursion (goto-char after)
+                                      (skip-chars-backward " \t\"'" start) (point))))
+            (list (min start end) (max start end)
+                  (wikimode-project-tags) :exclusive 'no)))))))
+
+(add-hook 'markdown-mode-hook
+          (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
+```
+
 Note: C-\ is bound to smart toggle.
 ```
 (use-package imenu-list
@@ -1572,30 +1522,23 @@ Note: C-\ is bound to smart toggle.
   (setq imenu-list-focus-after-activation t
         imenu-list-auto-resize nil)
 
-  ;; doom-modeline renders its icons at `doom-modeline-icon-scale-factor'
-  ;; This invisible spacer forces the same line height here so the
-  ;; imenu-list mode-line matches the height of the main buffers' doom-modeline.
-  (defvar my-imenu-list-mode-line-height-spacer
-    (propertize " " 'display '(height 1.3))
-    "Zero-effect text used only to match doom-modeline's line height.")
-
-  ;; The icon glyphs below come from a Nerd Font's private-use-area range, so
-  ;; they only render when the mode-line is actually displayed in one. Force
-  ;; that family explicitly instead of inheriting `mode-line-buffer-id''s
-  ;; font, which under some themes (e.g. nano-like with Fira Code) doesn't
-  ;; contain those glyphs and shows blanks/boxes instead.
+  ;; Be care to set the font family to one with nerd fonts so the icon renders.
   (defface my-imenu-list-icon-face
     `((t (:inherit mode-line-buffer-id :family ,my-default-fixed-pitch-font)))
     "Face for the icon glyphs in `imenu-list-mode-line-format'.")
 
-  ;; Simplified buffer name with icon for the menu bar.
+  ;; Simplified buffer name with icon for the menu bar. The whole thing is
   (setq imenu-list-mode-line-format
-	`("%e" mode-line-frame-identification
-	  ,my-imenu-list-mode-line-height-spacer
-	  (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
-	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
-	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
-	  mode-line-end-spaces))
+	`("%e"
+	  (:propertize
+	   ("" mode-line-frame-identification
+	    (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
+	    (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+	    (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
+	    mode-line-end-spaces)
+	   help-echo "mouse-1: close the window"
+	   mouse-face mode-line-highlight
+	   local-map ,my-modeline-dedicated-window-map)))
 
   (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
 
@@ -1727,9 +1670,8 @@ Note: lookup-key is the way to find existing entry names
   'write-file)
 ```
 
-WIP - add zoom in/out to buffer menu
+Add zoom in/out to buffer menu
 TODO get the keybinding message straight?
-also add to context menu?
 ```
 (define-key-after
   (lookup-key global-map [menu-bar buffer])
@@ -1857,7 +1799,7 @@ the customizations done above
 >Function to be called before any buffers or window setup for
    ediff.
 
-Capture window state and turn off doom mode line
+Capture window state and turn off my-modeline
 ```
 (defun my-ediff-bsh ()
   "Function to be called before any buffers or window setup for
@@ -1865,7 +1807,7 @@ Capture window state and turn off doom mode line
   (setq my-ediff-buffers '())
   (setq my-ediff-bwin-config (current-window-configuration))
 ;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
-  (doom-modeline-mode -1))
+  (my-modeline-mode -1))
 ```
 
 ## simple-mode-line-buffer
@@ -1927,7 +1869,7 @@ Restore back the old states
 ```
 (defun my-ediff-qh ()
   "Function to be called when ediff quits."
-  (doom-modeline-mode 1)
+  (my-modeline-mode 1)
   (dolist (element my-ediff-buffers)
     (my-restore-buffer-state element))
   (when my-ediff-bwin-config
@@ -2063,11 +2005,13 @@ Trying out orderless completion
 
 (use-package corfu
   :ensure t
+  :init
+  (global-corfu-mode)
   )
 ```
 
-
-Font name completion for customize buffers
+# Font name completion for customize buffers
+This was added to base emacs in version 31 and I will remove it soon.
 
 
 ## font-family-widget-p
@@ -2204,8 +2148,15 @@ Yanippet used defines some markdown templates for the blog
   :ensure t
   :init (yas-global-mode 1)
   :config
-  (add-hook 'markdown-mode-hook #'yas-minor-mode)
+;; unblock emacs 31
+;;  (add-hook 'markdown-mode-hook #'yas-minor-mode)
   )
+```
+
+No key binding for now.
+```
+(use-package consult-yasnippet
+  :ensure t)
 
 (use-package wikimode
   :ensure t
