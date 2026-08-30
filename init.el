@@ -104,9 +104,10 @@
 (defvar margin-tan-bg "#EEE8D5")
 (defvar margin-gray-bg "gray20")
 
-;;; Font setup. This needs to be done prior to theme setup.
-;; Mixed-pitch mode. I use this in markdown and org modes currently.
+;;; Font setup
+;; This needs to be done prior to theme setup.
 
+;; Mixed-pitch mode. I use this in markdown and org modes currently.
 (defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
   "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font "Helvetica"
@@ -276,7 +277,8 @@
 				  :background 'unspecified))
 
 	    ;; I have my own handling for tab line modified outside of modus
-	    (set-face-attribute 'tab-line-tab-modified nil :foreground 'unspecified)
+	    (if (facep 'tab-line-tab-modified)
+		(set-face-attribute 'tab-line-tab-modified nil :foreground 'unspecified))
 
             ;; Additional color overrides modus doesn't control by default
 	    (if (facep 'tab-line-tab-inactive)
@@ -290,8 +292,6 @@
 	    (if (facep 'my-modeline-position-face)
 		(set-face-attribute 'my-modeline-position-face nil :background
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
-
-dad
 
 
 ;; Modus doesn't handle fonts so just set this directly here where all other styling is
@@ -530,13 +530,6 @@ dad
 (unless window-system
   (setq interprogram-cut-function 'paste-for-osx))
 
-;;; sql formatting setup for sqlformat-* functions.
-(use-package sqlformat
-  :defer t
-  :ensure t
-  :config (setq sqlformat-command 'pgformatter
-                sqlformat-args '("-s2" "-g")))
-
 ;;; flyspell config
 ;; currently not bound to a key
 
@@ -607,6 +600,163 @@ dad
 ;; Enable which key
 (setq-default which-key-mode t)
 (which-key-mode)
+
+;;; markdown mode
+
+(use-package markdown-mode
+   :ensure t)
+
+(use-package stripe-buffer
+   :ensure t)
+
+(setq markdown-header-scaling t)
+
+;; render remote images
+(setq markdown-display-remote-images t)
+
+;; Make markdown coding faces inherit as need from from fixed pitch
+(my-ignore (custom-set-faces
+ '(markdown-markup-face ((t (:inherit fixed-pitch))))
+ '(markdown-code-face ((t (:inherit fixed-pitch))))))
+
+;; When following a link whose target can't be found as-is, retry
+;; with a ".md" extension appended (e.g. a link to "foo" or "foo.html"
+;; falls back to "foo.md" if that file exists).
+;; This helps with compatibility with how github does relative links in its wiki mode
+(defun my-markdown-translate-filename-add-md-extension (filename)
+  "Return FILENAME, retrying with a \".md\" extension if it doesn't exist."
+  (if (file-exists-p filename)
+      filename
+    (let ((with-md (concat filename ".md")))
+      (if (and (not (string-suffix-p ".md" filename t))
+	       (file-exists-p with-md))
+	  with-md
+        filename))))
+
+;; insert a date function for use in the markdown snippets.
+(defun insert-date ()
+  "Insert the current date and time."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
+
+(setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
+
+(defconst my-markdown-liquid-post-url-regexp
+  "{% post_url[[:space:]]*\\([^ ]*\\)[[:space:]]*%}"
+  "Matches a Jekyll {% post_url NAME %} liquid tag; group 1 is NAME.")
+
+;; Fix up for liquid style pre-processed links used by jekyll.
+;; markdown-link-at-pos (called by markdown-link-url) splits an inline link's
+;; parenthesized destination on the first whitespace into a url/title pair,
+;; to support `[text](url "title")` syntax. That mangles a liquid tag like
+;; "{% post_url NAME %}" down to just "{%" before we'd ever see it via
+;; markdown-link-url. Detect the tag directly from
+;; the raw buffer text instead and otherwise defer to the original function.
+(defun my-markdown-liquid-post-url-at-point ()
+  "Return NAME if point is on a link/tag whose destination is {% post_url NAME %}."
+  (let* ((values (and (markdown-link-p) (markdown-link-at-pos (point))))
+         (begin (nth 0 values))
+         (end (nth 1 values)))
+    (if (and begin end)
+        ;; Formal `[text](...)` link: search its whole span, since point may
+        ;; land on the visible text rather than the (possibly hidden) tag.
+        (save-excursion
+          (goto-char begin)
+          (when (re-search-forward my-markdown-liquid-post-url-regexp end t)
+            (match-string 1)))
+      ;; No recognized link syntax: only match a bare tag point is inside.
+      (save-excursion
+        (let ((pt (point)) (eol (line-end-position)))
+          (goto-char (line-beginning-position))
+          (catch 'found
+            (while (re-search-forward my-markdown-liquid-post-url-regexp eol t)
+              (when (and (<= (match-beginning 0) pt) (<= pt (match-end 0)))
+                (throw 'found (match-string 1))))))))))
+
+(defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
+  "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
+  (let ((name (my-markdown-liquid-post-url-at-point)))
+    (if name
+        (markdown--browse-url name)
+      (apply orig-fn args))))
+
+(advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url)
+
+(add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
+(add-hook 'markdown-mode-hook 'stripe-table-mode)
+
+;;Prettify check boxes to use Unicode characters.
+;; I've also adjusted the faces to scale these up quite a bit so they're more visible
+(add-hook 'markdown-mode-hook (lambda ()
+  "Beautify md Checkbox Symbol"
+  (push '("[ ]" . "☐" ) prettify-symbols-alist)
+  (push '("[X]" . "☑" ) prettify-symbols-alist)
+  (push '("[x]" . "☑" ) prettify-symbols-alist)
+  (push '("[-]" . "❍" ) prettify-symbols-alist)
+  (prettify-symbols-mode)))
+
+
+;; Automatically add the index menu entry for org and markdown modes. This will
+;; also be available via the context menus
+(add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
+(add-hook 'orgmode-mode-hook 'imenu-add-menubar-index)
+
+;; Complete a frontmatter "tags:" value against every tag already used
+;; elsewhere in the project, via wikimode's project-wide tag scan
+;; (`wikimode-project-tags').
+(defun my-markdown-frontmatter-bounds ()
+  "Return (START . END) of the current buffer's YAML frontmatter body, or nil."
+  (save-excursion
+    (save-match-data
+      (goto-char (point-min))
+      (when (looking-at-p "---[ \t]*$")
+        (forward-line 1)
+        (let ((start (point)))
+          (when (re-search-forward "^---[ \t]*$" nil t)
+            (cons start (line-beginning-position))))))))
+
+(defun my-markdown-tags-line-value-start ()
+  "If point's line is a frontmatter tags entry, return where its value starts.
+Matches either the inline form (\"tags: [a, b]\" or \"tags: a, b\") or a
+block-list item (\"  - a\") under a bare \"tags:\" header line above it."
+  (save-excursion
+    (beginning-of-line)
+    (cond
+     ((looking-at "tags:[ \t]*") (match-end 0))
+     ((looking-at "[ \t]*-[ \t]+")
+      (let ((value-start (match-end 0)) (found nil))
+        (while (and (not found) (zerop (forward-line -1)))
+          (cond
+           ((looking-at-p "[ \t]*-[ \t]+"))
+           ((looking-at-p "tags:[ \t]*$") (setq found t))
+           (t (setq found 'stop))))
+        (and (eq found t) value-start))))))
+
+(defun my-markdown-tags-capf ()
+  "`completion-at-point-functions' entry for markdown frontmatter tag values."
+  (let ((fm (my-markdown-frontmatter-bounds)))
+    (when (and fm (<= (car fm) (point)) (< (point) (cdr fm)))
+      (let ((value-start (my-markdown-tags-line-value-start)))
+        (when value-start
+          (let* ((eol (line-end-position))
+                 (before (save-excursion
+                           (if (re-search-backward "[,[]" value-start t)
+                               (1+ (point))
+                             value-start)))
+                 (after (save-excursion
+                          (if (re-search-forward "[],]" eol t)
+                              (match-beginning 0)
+                            eol)))
+                 (start (save-excursion (goto-char before)
+                                        (skip-chars-forward " \t\"'") (point)))
+                 (end (save-excursion (goto-char after)
+                                      (skip-chars-backward " \t\"'" start) (point))))
+            (list (min start end) (max start end)
+                  (wikimode-project-tags) :exclusive 'no)))))))
+
+(add-hook 'markdown-mode-hook
+          (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
+
 
 ;;; org-mode
 ;; My typical usage of Org includes a main work tracking file, org-agenda, integration with my exchange calendar
@@ -700,6 +850,7 @@ dad
     ))
 
 ;; Show up to 4 levels of org headings in the imenu and imenu-list
+;; This is set due to how expensive building the org imenu tree is.
 (setq org-imenu-depth 4)
 
 ;; Older unused code to prettify check boxes to use Unicode characters.
@@ -993,176 +1144,20 @@ anything as useful as the `report' messages in between."
   (interactive "e")
   (quit-window nil (posn-window (event-start event))))
 
-(defvar-keymap flymake-buffer-id-keymap
+(defvar-keymap my-flymake-buffer-id-keymap
   "<mode-line> <mouse-1>" #'flymake-buffer-quit)
 
 (add-hook 'flymake-diagnostics-buffer-mode-hook
           (lambda ()
             (setq-local mode-line-buffer-identification-keymap
-                        flymake-buffer-id-keymap)))
+                        my-flymake-buffer-id-keymap)))
 
 ;; Save space by not showing zero warn/error counter in the mode line
 (setq flymake-suppress-zero-counters t)
 
 ;;; python - TODO turn on eglot integration later.
 
-;;; markdown mode
-
-(use-package markdown-mode
-   :ensure t)
-
-(use-package stripe-buffer
-   :ensure t)
-
-(setq markdown-header-scaling t)
-
-;; render remote images
-(setq markdown-display-remote-images t)
-
-;; Make markdown coding faces inherit as need from from fixed pitch
-(my-ignore (custom-set-faces
- '(markdown-markup-face ((t (:inherit fixed-pitch))))
- '(markdown-code-face ((t (:inherit fixed-pitch))))))
-
-;; When following a link whose target can't be found as-is, retry
-;; with a ".md" extension appended (e.g. a link to "foo" or "foo.html"
-;; falls back to "foo.md" if that file exists).
-;; This helps with compatibility with how github does relative links in its wiki mode
-(defun my-markdown-translate-filename-add-md-extension (filename)
-  "Return FILENAME, retrying with a \".md\" extension if it doesn't exist."
-  (if (file-exists-p filename)
-      filename
-    (let ((with-md (concat filename ".md")))
-      (if (and (not (string-suffix-p ".md" filename t))
-	       (file-exists-p with-md))
-	  with-md
-        filename))))
-
-;; insert a date function for use in the markdown snippets.
-(defun insert-date ()
-  "Insert the current date and time."
-  (interactive)
-  (insert (format-time-string "%Y-%m-%d")))
-
-(setq markdown-translate-filename-function #'my-markdown-translate-filename-add-md-extension)
-
-(defconst my-markdown-liquid-post-url-regexp
-  "{% post_url[[:space:]]*\\([^ ]*\\)[[:space:]]*%}"
-  "Matches a Jekyll {% post_url NAME %} liquid tag; group 1 is NAME.")
-
-;; Fix up for liquid style pre-processed links used by jekyll.
-;; markdown-link-at-pos (called by markdown-link-url) splits an inline link's
-;; parenthesized destination on the first whitespace into a url/title pair,
-;; to support `[text](url "title")` syntax. That mangles a liquid tag like
-;; "{% post_url NAME %}" down to just "{%" before we'd ever see it via
-;; markdown-link-url. Detect the tag directly from
-;; the raw buffer text instead and otherwise defer to the original function.
-(defun my-markdown-liquid-post-url-at-point ()
-  "Return NAME if point is on a link/tag whose destination is {% post_url NAME %}."
-  (let* ((values (and (markdown-link-p) (markdown-link-at-pos (point))))
-         (begin (nth 0 values))
-         (end (nth 1 values)))
-    (if (and begin end)
-        ;; Formal `[text](...)` link: search its whole span, since point may
-        ;; land on the visible text rather than the (possibly hidden) tag.
-        (save-excursion
-          (goto-char begin)
-          (when (re-search-forward my-markdown-liquid-post-url-regexp end t)
-            (match-string 1)))
-      ;; No recognized link syntax: only match a bare tag point is inside.
-      (save-excursion
-        (let ((pt (point)) (eol (line-end-position)))
-          (goto-char (line-beginning-position))
-          (catch 'found
-            (while (re-search-forward my-markdown-liquid-post-url-regexp eol t)
-              (when (and (<= (match-beginning 0) pt) (<= pt (match-end 0)))
-                (throw 'found (match-string 1))))))))))
-
-(defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
-  "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
-  (let ((name (my-markdown-liquid-post-url-at-point)))
-    (if name
-        (markdown--browse-url name)
-      (apply orig-fn args))))
-
-(advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url)
-
-(add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
-(add-hook 'markdown-mode-hook 'stripe-table-mode)
-
-;;Prettify check boxes to use Unicode characters.
-;; I've also adjusted the faces to scale these up quite a bit so they're more visible
-(add-hook 'markdown-mode-hook (lambda ()
-  "Beautify md Checkbox Symbol"
-  (push '("[ ]" . "☐" ) prettify-symbols-alist)
-  (push '("[X]" . "☑" ) prettify-symbols-alist)
-  (push '("[x]" . "☑" ) prettify-symbols-alist)
-  (push '("[-]" . "❍" ) prettify-symbols-alist)
-  (prettify-symbols-mode)))
-
-
-;; Automatically add the index menu entry for org and markdown modes. This will
-;; also be available via the context menus
-(add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
-(add-hook 'orgmode-mode-hook 'imenu-add-menubar-index)
-(setq imenu-auto-rescan t)
-
-;; Complete a frontmatter "tags:" value against every tag already used
-;; elsewhere in the project, via wikimode's project-wide tag scan
-;; (`wikimode-project-tags').
-(defun my-markdown-frontmatter-bounds ()
-  "Return (START . END) of the current buffer's YAML frontmatter body, or nil."
-  (save-excursion
-    (save-match-data
-      (goto-char (point-min))
-      (when (looking-at-p "---[ \t]*$")
-        (forward-line 1)
-        (let ((start (point)))
-          (when (re-search-forward "^---[ \t]*$" nil t)
-            (cons start (line-beginning-position))))))))
-
-(defun my-markdown-tags-line-value-start ()
-  "If point's line is a frontmatter tags entry, return where its value starts.
-Matches either the inline form (\"tags: [a, b]\" or \"tags: a, b\") or a
-block-list item (\"  - a\") under a bare \"tags:\" header line above it."
-  (save-excursion
-    (beginning-of-line)
-    (cond
-     ((looking-at "tags:[ \t]*") (match-end 0))
-     ((looking-at "[ \t]*-[ \t]+")
-      (let ((value-start (match-end 0)) (found nil))
-        (while (and (not found) (zerop (forward-line -1)))
-          (cond
-           ((looking-at-p "[ \t]*-[ \t]+"))
-           ((looking-at-p "tags:[ \t]*$") (setq found t))
-           (t (setq found 'stop))))
-        (and (eq found t) value-start))))))
-
-(defun my-markdown-tags-capf ()
-  "`completion-at-point-functions' entry for markdown frontmatter tag values."
-  (let ((fm (my-markdown-frontmatter-bounds)))
-    (when (and fm (<= (car fm) (point)) (< (point) (cdr fm)))
-      (let ((value-start (my-markdown-tags-line-value-start)))
-        (when value-start
-          (let* ((eol (line-end-position))
-                 (before (save-excursion
-                           (if (re-search-backward "[,[]" value-start t)
-                               (1+ (point))
-                             value-start)))
-                 (after (save-excursion
-                          (if (re-search-forward "[],]" eol t)
-                              (match-beginning 0)
-                            eol)))
-                 (start (save-excursion (goto-char before)
-                                        (skip-chars-forward " \t\"'") (point)))
-                 (end (save-excursion (goto-char after)
-                                      (skip-chars-backward " \t\"'" start) (point))))
-            (list (min start end) (max start end)
-                  (wikimode-project-tags) :exclusive 'no)))))))
-
-(add-hook 'markdown-mode-hook
-          (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
-
+;;; SQL
 ;; clutch - database access
 (use-package clutch
   :ensure t
@@ -1176,8 +1171,15 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
                              ;; Set default schema using options search_path
                              :options "-c search_path=glide_dataaccess,public")))))
 
+;; sql formatting setup for sqlformat-* functions.
+(use-package sqlformat
+  :defer t
+  :ensure t
+  :config (setq sqlformat-command 'pgformatter
+                sqlformat-args '("-s2" "-g")))
 
 
+;;; imenu-list
 ;; Note: C-\ is bound to smart toggle.
 (use-package imenu-list
   :ensure t
@@ -1354,16 +1356,23 @@ would just be redundant clutter."
 
 ;;; elisp
 
-;; Group `use-package' declarations under their own imenu heading --
-;; the default `lisp-imenu-generic-expression' only covers def* forms,
-;; so use-package calls otherwise don't show up at all.
+;; Group `use-package` declarations under their own imenu heading.
+;; Also extract all the ;;; sections.
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
             (add-to-list 'imenu-generic-expression
                           (list "Use-package"
                                 (concat "^\\s-*(use-package\\s-+\\("
                                         lisp-mode-symbol-regexp "\\)")
-                                1))))
+                                1))
+
+	    (add-to-list 'imenu-generic-expression
+                         '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
+
+	    (setq-local imenu-depth 2)
+
+            (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
+
 
 ;;; Excorporate setup.
 ;; I've modified this quite a bit to directly generate org files.
@@ -1601,7 +1610,6 @@ would just be redundant clutter."
 ;;; Font name completion for customize buffers
 ;; This was added to base emacs in version 31 and I will remove it soon.
 
-
 ;; return if the current position is a Font Family widget. Checks one
 ;; character back too since widget-at looks at the char *after* point, which
 ;; falls outside the field once you've typed up to its end.
@@ -1695,7 +1703,8 @@ tag, followed by the normal editable field."
   (when (and spec (not (plist-member spec :value-create)))
     (nconc spec (list :value-create #'my-face-family-value-create))))
 
-;; Yanippet used defines some markdown templates for the blog
+;;; Snippets
+;; This is currently used in org and markdown mode
 (use-package yasnippet
   :ensure t
   :init (yas-global-mode 1)
@@ -1708,6 +1717,7 @@ tag, followed by the normal editable field."
 (use-package consult-yasnippet
   :ensure t)
 
+;;; Wikimode
 (use-package wikimode
   :ensure t
   :vc (:url "https://github.com/benleis1/wikimode")

@@ -828,7 +828,7 @@ e.g. \"-1\" or \"3\") whenever it isn't at its default of zero."
 
 ;; Experimental use of header for the modeline
 (defun switch-to-header ()
-  (set-face-attribute 'header-line nil :background-mode "gray90")
+  (set-face-attribute 'header-line nil :background "gray90")
   (setq-default header-line-format mode-line-format)
   (setq-default mode-line-format nil)
   (set-face-attribute 'header-line nil :box

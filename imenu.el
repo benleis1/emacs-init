@@ -1,5 +1,4 @@
 ;; -*- lexical-binding: t; -*-
-
 ;;; Commentary
 
 ;;
@@ -10,7 +9,8 @@
 ;; * Arrow icons
 ;; * sorting
 ;; * custom mode-line formatting
-
+;; * fixes for highlighting even empty headers
+;; * special handling for org mode
 
 ;;; Code
 
@@ -202,6 +202,106 @@
       (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
       result)))
 
+;;
+;; Elisp: fold `defun'/`use-package' entries under the ";;; Section" comment
+;; header they're physically located under (see the "Sections"/"Use-package"
+;; imenu-generic-expression patterns added by the emacs-lisp-mode-hook in
+;; init.el), leaving every other category (Variables, ...) untouched at the
+;; top level.
+;;
+
+;; (NAME BEG END) for each section in SECTIONS (an alist of (name . marker),
+;; already sorted by position by `imenu--generic-function'), covering from
+;; the section's own marker up to the next section's marker, or point-max
+;; for the last one.
+(defun my/imenu-elisp-section-ranges (sections)
+  (let (ranges)
+    (while sections
+      (push (list (caar sections) (cdar sections)
+                  (if (cadr sections) (cdadr sections) (point-max)))
+            ranges)
+      (setq sections (cdr sections)))
+    (nreverse ranges)))
+
+;; Name of the section in RANGES that POS falls inside, or nil
+;; if POS precedes the first section (or there are no sections at all).
+(defun my/imenu-elisp-find-section (ranges pos)
+  (catch 'found
+    (dolist (range ranges)
+      (when (and (>= pos (nth 1 range)) (< pos (nth 2 range)))
+        (throw 'found (nth 0 range))))))
+
+;; Bucket ENTRIES (sorted ascending by position) into RANGES by
+;; `my/imenu-elisp-find-section', returning (BUCKETS . ORPHANS): BUCKETS is a
+;; hash table of section name -> entries (ascending), ORPHANS the entries
+;; (ascending) that precede every section.
+(defun my/imenu-elisp-bucket-by-section (entries ranges)
+  (let ((buckets (make-hash-table :test 'equal))
+        (orphans nil))
+    (dolist (entry entries)
+      (let ((section (my/imenu-elisp-find-section ranges (cdr entry))))
+        (if section
+            (puthash section (cons entry (gethash section buckets)) buckets)
+          (push entry orphans))))
+    (maphash (lambda (k v) (puthash k (nreverse v) buckets)) buckets)
+    (cons buckets (nreverse orphans))))
+
+;; If one of SECTIONS is named "Code" (the ";;; Code:" boilerplate header
+;; conventional in Elisp files), nest every section that follows it
+;; underneath it instead of leaving them as top-level siblings, since
+;; everything after ";;; Code:" belongs to "the code" rather than being a
+;; peer of Commentary/Code/etc.
+(defun my/imenu-elisp-nest-under-code (sections)
+  (let ((rest sections) before)
+    (catch 'done
+      (while rest
+        (if (equal (caar rest) "Code:")
+            (throw 'done (append (nreverse before)
+                                  (list (cons "Code" (append (cdar rest) (cdr rest))))))
+          (push (car rest) before)
+          (setq rest (cdr rest))))
+      sections)))
+
+;; Custom imenu-create-index-function for emacs-lisp-mode. `defun's are
+;; returned by `imenu--generic-function' as plain top-level leaves (Elisp's
+;; own `lisp-imenu-generic-expression' files them under a nil menu-title),
+;; and "Use-package" is our own added category -- both get regrouped here
+;; under their enclosing "Sections" header, with use-package calls kept in
+;; their own "Use-package" sub-header within each section (mirroring the
+;; top-level category they'd otherwise be filed under). Anything else
+;; (e.g. "Variables") is passed through untouched. Every section also gets
+;; a leading "." entry jumping to the section header itself (mirroring the
+;; "declaration" entry `my/walk-object-declaration' adds for a class), so a
+;; section with no functions or use-package calls is still navigable.
+(defun my/imenu-elisp-index ()
+  (let ((raw (imenu--generic-function imenu-generic-expression))
+        sections usepkg other functions)
+    (dolist (entry raw)
+      (cond ((equal (car entry) "Sections") (setq sections (cdr entry)))
+            ((equal (car entry) "Use-package") (setq usepkg (cdr entry)))
+            ((listp (cdr entry)) (push entry other))
+            (t (push entry functions))))
+    (setq functions (sort functions (lambda (left right) (< (cdr left) (cdr right)))))
+    (setq usepkg (sort usepkg (lambda (left right) (< (cdr left) (cdr right)))))
+    (let* ((ranges (my/imenu-elisp-section-ranges sections))
+           (fn-bucketed (my/imenu-elisp-bucket-by-section functions ranges))
+           (pkg-bucketed (my/imenu-elisp-bucket-by-section usepkg ranges))
+           (fn-buckets (car fn-bucketed))
+           (pkg-buckets (car pkg-bucketed))
+           (pkg-orphans (cdr pkg-bucketed)))
+      (append (nreverse other)
+              (my/imenu-elisp-nest-under-code
+               (mapcar (lambda (range)
+                         (let* ((name (car range))
+                                (fns (gethash name fn-buckets))
+                                (pkgs (gethash name pkg-buckets)))
+                           (cons name (append (list (cons "." (nth 1 range)))
+                                              (when pkgs (list (cons "Use-package" pkgs)))
+                                              fns))))
+                       ranges))
+              (when pkg-orphans (list (cons "Use-package" pkg-orphans)))
+              (cdr fn-bucketed)))))
+
   ;; `imenu-list--current-entry' deliberately skips subalist (container)
   ;; entries when deciding which line to highlight, since a plain subalist
   ;; cons has no position of its own. But `org-imenu-get-tree' still stamps
@@ -256,3 +356,6 @@ since the last rescan; reuse the existing `imenu--index-alist' instead."
       (setq my-imenu-list--last-tick (buffer-chars-modified-tick))))
 
  (advice-add 'imenu-list-collect-entries :around #'my-imenu-list--skip-rescan-if-unmodified)
+
+;; Turn on auto rescan
+(setq imenu-auto-rescan t)
