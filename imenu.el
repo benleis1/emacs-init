@@ -201,3 +201,58 @@
         (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
       (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
       result)))
+
+  ;; `imenu-list--current-entry' deliberately skips subalist (container)
+  ;; entries when deciding which line to highlight, since a plain subalist
+  ;; cons has no position of its own. But `org-imenu-get-tree' still stamps
+  ;; each entry's *name* string with an `org-imenu-marker' text property
+  ;; pointing at that heading's own position, even for headings that end up
+  ;; container-only (i.e. any heading with a child heading, like "IMenu" in
+  ;; tour.org). Recover that so point-in-container also highlights the
+  ;; container's own line instead of falling back to the previous sibling.
+  (defun my-imenu-list--entry-position (entry)
+    "Return a comparable buffer position for ENTRY, or nil if none exists."
+    (if (imenu--subalist-p entry)
+        (get-text-property 0 'org-imenu-marker (car entry))
+      (funcall (imenu-list-position-translator)
+               (if (listp (cdr entry)) (cadr entry) (cdr entry)))))
+
+  (defun my-imenu-list--current-entry ()
+    "Like `imenu-list--current-entry', but also matches container entries
+that carry an `org-imenu-marker' text property on their name."
+    (let ((point-pos (point-marker))
+          (offset (point-min-marker))
+          match-entry)
+      (dolist (entry imenu-list--line-entries match-entry)
+        (let ((entry-pos (my-imenu-list--entry-position entry)))
+          (when (and entry-pos (imenu-list-<= offset entry-pos point-pos))
+            (setq offset entry-pos)
+            (setq match-entry entry))))))
+
+  (advice-add 'imenu-list--current-entry :override #'my-imenu-list--current-entry)
+
+
+  ;;; Org mode optimization. Its not completely clear if its needed.
+
+  ;; `imenu-list-collect-entries' unconditionally makes imenu rescan the
+  ;; whole buffer for headings every time `imenu-list-update' runs (driven by
+  ;; `imenu-list-idle-update-delay'), even when nothing has changed since the
+  ;; last scan. Skip that rescan for org buffers that haven't been modified
+  ;; since we last collected entries, and just keep reusing the previously
+  ;; generated tree.
+  (defvar-local my-imenu-list--last-tick nil
+    "`buffer-chars-modified-tick' as of the last `imenu-list-collect-entries' rescan.")
+
+  (defun my-imenu-list--skip-rescan-if-unmodified (orig-fn)
+    "Skip ORIG-FN's imenu rescan in org-mode buffers that are unmodified
+since the last rescan; reuse the existing `imenu--index-alist' instead."
+    (if (and (derived-mode-p 'org-mode)
+             imenu--index-alist
+             my-imenu-list--last-tick
+             (= my-imenu-list--last-tick (buffer-chars-modified-tick)))
+        (setq imenu-list--imenu-entries imenu--index-alist
+              imenu-list--displayed-buffer (current-buffer))
+      (funcall orig-fn)
+      (setq my-imenu-list--last-tick (buffer-chars-modified-tick))))
+
+ (advice-add 'imenu-list-collect-entries :around #'my-imenu-list--skip-rescan-if-unmodified)

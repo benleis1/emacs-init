@@ -36,7 +36,8 @@
 ;;
 ;;; Code:
 
-;; Set tab-line always on
+;; Set tab-line always on except for the exclude modes list
+(setq tab-line-exclude-modes '(completion-list-mode help-mode ediff-mode special-mode debugger-mode clutch-result-mode clutch-describe-mode ))
 (global-tab-line-mode t)
 
 ;; Always suppress the tab line separator in both windows and term mode
@@ -122,10 +123,6 @@
 (defun tab2-default-view-p ()
   (equal (frame-parameter nul 'tab-line-sel-view)  0))
 
-;; Return how many views there are
-(defun tab2-num-views ()
-  (length tab2-views))
-
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
   (setf (tab2-view-wc (tab2-get-current-view)) (current-window-configuration)))
@@ -169,10 +166,11 @@
   (when (tab2-get-view-by-name name)
     (error "View %s already exists" name))
   (setq tab2-views (append tab2-views (list (make-tab2-view :name name))))
-  ;; Save the current wc into the view we're leaving
+  ;; Save the current wc
   (tab2-save-view-state)
   ;; Switch over
   (set-frame-parameter nil 'tab-line-sel-view (- (length tab2-views) 1))
+;;  (setq tab2-current-view (- (length tab2-views) 1))
   ;; Switch to an initial scratch buffer
   (switch-to-buffer "*scratch*")
   (delete-other-windows)
@@ -202,6 +200,10 @@
 (defun tab2-list-views ()
   (interactive)
   (mapcar 'tab2-view-name tab2-views))
+
+;; Number of views currently tracked
+(defun tab2-num-views ()
+  (length tab2-views))
 
 ;; Switch between views
 (defun tab2-switch-view-by-name (name)
@@ -543,7 +545,7 @@ at the mouse-down event to the position at mouse-up event."
 	    (cond ((and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
 		   (if selected-p
 		       (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
-		     (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))
+		     (propertize (format "%s " tab2-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))
 
 		  ((and buffer (buffer-file-name buffer)
 			(string= (tab2-git-state buffer) "edited"))
@@ -551,7 +553,7 @@ at the mouse-down event to the position at mouse-up event."
 ;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
 		    (if selected-p
 			(propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
-		      (propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :height .9 :slant normal ))))))
+		      (propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))))
 
             (let ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
@@ -800,22 +802,20 @@ at the mouse-down event to the position at mouse-up event."
 ;; use in doing relative open of resource files
 (setq tab2-load-dir (file-name-directory load-file-name))
 
-(setq tab2-load-dir "~/.emacs.d/")
-
 ;; Add on filter button at the front of the tab list via advice to
 ;; tab-line-format-template
 (defun tab2-add-on-filter-button (tabs)
   (let* ((group-view (window-parameter nil 'tab-line-groups))
 	 (viewp (window-parameter nil 'tab-line-views))
 	 (icon-file (if viewp "desktop2.png" "funnel4.png"))
+	 (icon-color (modus-themes-get-color-value 'bg-tab-bar t))
 	 (icon-name (format "%s%s" tab2-load-dir icon-file)))
 
     ;; Only prepend the filter button when in buffer-groups mode
     (if (eq  tab-line-tabs-function 'tab2-get-tabs)
 	(cons
 	 (propertize "▼"
-		     'face '(:box (:line-width (0 . 4) :color "#DED8C5" ))
-		     ;; todo: change me.
+		     'face `(:box (:line-width (0 . 4) :color ,icon-color ))
 		     'keymap tab-line-button-map
 		     'help-echo "Click to change tab filtering"
 		     'follow-link 'ignore
@@ -829,6 +829,12 @@ at the mouse-down event to the position at mouse-up event."
 	 tabs)
       tabs)))
 
+;; Update the current tabline. Used during theme load.
+(defun tab2-force-update (theme)
+  (tab-line-force-update nil))
+
+;; Add a hook to enable themes that will force an update so we pickup the icon background color
+(add-hook 'enable-theme-functions 'tab2-force-update)
 
 ;; keymap action for when the filter button is selected
 ;; Swaps between group and file mode

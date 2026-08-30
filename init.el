@@ -36,7 +36,7 @@
 ;; facilitate this. See tab-config.el for more details.
 ;;
 ;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
-;; based on the builtin  modus-themes and have changed most faces to just  use the same default
+;; based on the builtin modus-themes and have changed most faces to just use the same default
 ;; foreground color or a bolder one for emphasis. I really only want color in critical locations.
 ;;
 ;; Sample screen:
@@ -102,7 +102,7 @@
 (defvar my-code-bright "goldenrod3")
 (defvar my-code-dark "goldenrod4")
 (defvar margin-tan-bg "#EEE8D5")
-(defvar margin-gray-bg "gray50")
+(defvar margin-gray-bg "gray20")
 
 ;;; Font setup. This needs to be done prior to theme setup.
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
@@ -146,9 +146,14 @@
 ;; Make headers all the same color as foreground
 
 (setq modus-themes-common-palette-overrides
-      `((bg-tab-bar ,margin-tan-bg)
+      `((bg-margins ,margin-tan-bg)  ;; common setup for a color alias to override.
+	(bg-tab-bar bg-margins)
         (bg-tab-current bg-main)
-        (bg-tab-other ,margin-tan-bg)
+        (bg-tab-other bg-margins)
+	(bg-line-number-inactive bg-margins)
+
+	;; custom hl face for imenu-list
+	(fg-hl-imenu  "DarkOrange2")
 
 	;; Tone down the headings: use the default foreground instead
         ;; of the theme's per-level accent colors.
@@ -201,7 +206,7 @@
 (setq folio-theme-palette-overrides
       ;; headers need some color and overlines stripped
       `(
-	(bg-line-number-inactive ,margin-tan-bg)
+	(bg-margins ,margin-tan-bg)
 	(bg-heading-2 unspecified)
 	(overline-heading-1 unspecified)
         (overline-heading-2 unspecified)
@@ -224,11 +229,11 @@
 	(fnname-call unspecified)
 	))
 
-;; TODO: fixup the modeline colors.
 (setq modus-vivendi-palette-overrides
-      `((fg-tab-current blue)
-	(bg-tab-bar ,margin-gray-bg)
-        (bg-tab-other ,margin-gray-bg)
+      `((bg-margins ,margin-gray-bg)
+;;	(fg-dim blue)
+	(bg-mode-line-emphasis "gray50")
+	(fg-hl-imenu magenta-cooler)
 	))
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
@@ -248,6 +253,7 @@
       (when (bound-and-true-p mixed-pitch-mode)
 	(mixed-pitch-mode)))))
 
+;; Add the font changes onto the enable theme hook
 (add-hook 'enable-theme-functions
           (lambda (theme)
             (if (eq theme 'nano-like-modus)
@@ -267,10 +273,26 @@
 	    ;; than the background and that needs a custom hook.
 	    (when (eq theme 'folio)
 	      (set-face-attribute 'mode-line-highlight nil :foreground "DarkOrange4"
-				  :background nil) )
-	    ))
+				  :background 'unspecified))
 
-(set-face-attribute 'mode-line-highlight nil :background nil)
+	    ;; I have my own handling for tab line modified outside of modus
+	    (set-face-attribute 'tab-line-tab-modified nil :foreground 'unspecified)
+
+            ;; Additional color overrides modus doesn't control by default
+	    (if (facep 'tab-line-tab-inactive)
+		(set-face-attribute 'tab-line-tab-inactive nil :foreground
+				    (modus-themes-get-color-value 'fg-dim t)))
+
+	    (if (facep 'my-hl-imenu-face)
+		(set-face-attribute 'my-hl-imenu-face nil :foreground
+				    (modus-themes-get-color-value 'fg-hl-imenu t)))
+
+	    (if (facep 'my-modeline-position-face)
+		(set-face-attribute 'my-modeline-position-face nil :background
+				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
+
+dad
+
 
 ;; Modus doesn't handle fonts so just set this directly here where all other styling is
 ;; being done.
@@ -294,6 +316,12 @@
 
 (use-package nano-like-modus-theme
   :load-path "~/dev/nano-like-modus-theme")
+
+;; Deal with dark/light mode macos ui elements like the scrollbar
+(use-package ns-auto-titlebar
+  :ensure t
+  :config
+  (ns-auto-titlebar-mode 1))
 
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 ;; All customizations are stored on the side in custom.el
@@ -387,10 +415,10 @@
   (defun track-mouse (e))
   (setq mouse-sel-mode t))
 
-;; Setup recent files mode
+;; Setup recent files mode - this is much more in use now that I have consult
 (recentf-mode 1)
 (setq recentf-max-menu-items 25)
-(setq recentf-max-saved-items 25)
+(setq recentf-max-saved-items 50)
 
 ;; Every 10 minutes up date the list since I usually either run the server or keep
 ;; the gui app open for long periods of time
@@ -1136,10 +1164,9 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
 
 ;; clutch - database access
-
 (use-package clutch
   :ensure t
-  :custom
+  :init
   (setq clutch-connection-alist
 	'(("glide dataaccess" . (:backend pg
 				 :host "127.0.0.1"
@@ -1148,6 +1175,8 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 				 :database "glide"
                              ;; Set default schema using options search_path
                              :options "-c search_path=glide_dataaccess,public")))))
+
+
 
 ;; Note: C-\ is bound to smart toggle.
 (use-package imenu-list
@@ -1189,8 +1218,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
   ;; I need a more visible highlight for the current block
   (defface my-hl-imenu-face
-    ;;  '((t (:foreground "ivory" :background "DarkOrange2" :weight bold)))
-    '((t (:foreground "DarkOrange2" :weight bold)))
+    `((t (:foreground ,(modus-themes-get-color-value 'fg-hl-imenu t)  :weight bold)))
   "A new custom face for highlighting."
   :group 'my-custom-group)
 

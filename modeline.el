@@ -330,12 +330,16 @@ a number with a trailing `%' in between. Computed directly from
 (defvar my-modeline-show-percent nil "Set to t to add the scroll percentage segment or nil to not")
 
 (defface my-modeline-position-face
-  `((t :weight semi-bold
+  `((t :inherit 'mode-line
+       :weight semi-bold
        :background ,(modus-themes-get-color-value 'bg-mode-line-emphasis t) ))
 
   "Face for `my-modeline-segment-position', giving it a subtly recessed
 look via a flat `:background' tint a bit darker than the mode-line's own
 background (\"gray75\" under the default `folio' theme)")
+
+
+;;(set-face-attribute 'my-modeline-position-face nil :background "gray50")
 
 (defun my-modeline-segment-position ()
   "Line/column position, per `my-modeline-position-format', followed by

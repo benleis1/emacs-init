@@ -6,7 +6,15 @@
  ;; If there is more than one, they won't work right.
  '(custom-enabled-themes '(folio))
  '(custom-safe-themes
-   '("e759984e3274da0dd3b87648cf8220ae79f44e6cc7fc626c8d457c16fa3407f5"
+   '("4938392745a249fa3fe1a3c85e49ca6d9fe0c39e85408cd63444229c12843e44"
+     "1079dc658d1fb65bb0fbabc006faf8eb908e425ea3b4b90fa06d9c47df92b48c"
+     "2b7f112c78b4b779a5328333441373c00e2ab49da72f3091ec16d456382e078e"
+     "81a9fa0be5b479a8f0327703dc3a5a839f6798945d064dcc6c78044ef0278c35"
+     "fe5cfefb06e56bcc2e09d65abe8d6d3daee747c489eb23b056ef3c861d8032af"
+     "4bed8b8eb86c644b3921e151181649de809569e59163f639d0ce70b23b036100"
+     "8273dd7169e466f033d6f5edbb9a3b69acc8d73e61016a81017d79d7908dfb7f"
+     "967c23e9ba179b80560774419f081df22e7674aac23c5c550b817e4a1ce7d058"
+     "e759984e3274da0dd3b87648cf8220ae79f44e6cc7fc626c8d457c16fa3407f5"
      "aa05031fde757caa957b3993a9e36933b3f283b780f5dd9a61e97af465418d9a"
      "8b7486d4dfb06867fefb13deb20da1e7383135c29158533a3324708d31eae05e"
      "2dd2fe7575d76094652d9e04de604db1cd1cdf1582e1494bc646b2a6e402afb0"
@@ -25,8 +33,7 @@
      "0f1341c0096825b1e5d8f2ed90996025a0d013a0978677956a9e61408fcd2c77"
      "ffafb0e9f63935183713b204c11d22225008559fa62133a69848835f4f4a758c"
      "7964b513f8a2bb14803e717e0ac0123f100fb92160dcf4a467f530868ebaae3e"
-     "6f96a9ece5fdd0d3e04daea6aa63e13be26b48717820aa7b5889c602764cf23a"
-     default))
+     "6f96a9ece5fdd0d3e04daea6aa63e13be26b48717820aa7b5889c602764cf23a" default))
  '(excorporate-configuration
    '(("resource-url" . "https://outlook.office365.com/EWS/Exchange.asmx")
      ("resource-url-prefixes" "https://outlook.office365.com/EWS/")
@@ -38,10 +45,8 @@
      ("scope"
       . "openid offline_access profile Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared Calendars.ReadWrite Calendars.ReadWrite.Shared Contacts.ReadWrite Contacts.ReadWrite.Shared Tasks.ReadWrite Tasks.ReadWrite.Shared MailboxSettings.ReadWrite People.Read User.ReadBasic.All")
      ("authorization-extra-arguments"
-      ("resource" . "https://outlook.office.com")
-      ("response_mode" . "query")
-      ("login_hint" . "benjamin.leis@servicenow.com")
-      ("prompt" . "login")
+      ("resource" . "https://outlook.office.com") ("response_mode" . "query")
+      ("login_hint" . "benjamin.leis@servicenow.com") ("prompt" . "login")
       ("redirect_uri"
        . "https://login.microsoftonline.com/common/oauth2/nativeclient")
       ("" . ""))
@@ -50,24 +55,26 @@
  '(org-agenda-files
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
  '(package-selected-packages
-   '(all-the-icons-dired consult corfu doom-modeline doom-themes
-			 ef-themes ef-theses eglot-booster excorporate
-			 folio folio-theme groovy-mode grove
-			 imenu-list lsp-java lsp-ui magit marginalia
-			 markdown-mermaid markdown-toc
-			 markdown-ts-mode math-preview mixed-pitch
-			 modus-themes nerd-icons-dired orderless
-			 org-autolist org-modern org-pretty-table
-			 org-roam sqlformat stripe-buffer treemacs
+   '(all-the-icons-dired clutch consult consult-yasnippet corfu cursor-breath-mode
+			 cursor-breathe-mode doom-themes ef-themes ef-theses
+			 eglot-booster excorporate folio folio-theme groovy-mode
+			 grove imenu-list lsp-java lsp-ui magit marginalia
+			 markdown-mermaid markdown-toc markdown-ts-mode
+			 math-preview mini-frame mixed-pitch modus-themes
+			 nerd-icons-dired ns-auto-titlebar orderless
+			 org-autolist org-modern org-pretty-table org-roam pg
+			 pg-el pgmacs pgsql sqlformat stripe-buffer treemacs
 			 treesit-fold undo-tree vc-use-package vertico
-			 wikimode yasnippet))
+			 vertico-posframe wikimode yasnippet))
  '(package-vc-selected-packages
-   '((modus-themes :url "https://github.com/protesilaos/modus-themes.git")
-     (treesit-fold :url
-		   "https://github.com/emacs-tree-sitter/treesit-fold")
+   '((pgmacs :vc-backend Git :url "https://github.com/emarsden/pgmacs")
+     (pg-el :url "https://github.com/emarsden/pg-el")
      (wikimode :url "https://github.com/benleis1/wikimode")
-     (org-pretty-table :url
-		       "https://github.com/Fuco1/org-pretty-table")
+     (cursor-breathe-mode :url "https://git.etenil.net/cursor-breathe-mode.el")
+     (cursor-breath-mode :url "https://git.etenil.net/cursor-breathe-mode.el")
+     (modus-themes :url "https://github.com/protesilaos/modus-themes.git")
+     (treesit-fold :url "https://github.com/emacs-tree-sitter/treesit-fold")
+     (org-pretty-table :url "https://github.com/Fuco1/org-pretty-table")
      (vc-use-package :vc-backend Git :url
 		     "https://github.com/slotThe/vc-use-package")))
  '(treesit-fold-summary-format " %s "))
@@ -76,7 +83,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(default ((t (:inherit nil :extend nil :stipple nil :foreground "gray33" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight regular :height 160 :width normal :foundry "nil" :family "DejaVuSansM Nerd Font"))))
+ '(default ((t (:inherit nil :extend nil :stipple nil :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight regular :height 160 :width normal :foundry "nil" :family "DejaVuSansM Nerd Font"))))
  '(font-lock-constant-face ((t (:foreground "gray33" :weight bold))))
  '(font-lock-variable-use-face ((t (:inherit font-lock-variable-name-face :foreground "gray33"))))
  '(imenu-list-entry-face ((t (:family "DejaVu Sans Mono for Powerline"))))
@@ -84,13 +91,6 @@
  '(imenu-list-entry-face-1 ((t (:inherit imenu-list-entry-face :foreground "#556b72"))))
  '(imenu-list-entry-face-2 ((t (:inherit imenu-list-entry-face :foreground "#556b72"))))
  '(imenu-list-entry-face-3 ((t (:inherit imenu-list-entry-face))))
-;; '(markdown-header-face ((t (:inherit bold :foreground "gray0" :underline nil :height 1.5))))
-;; '(markdown-italic-face ((t (:inherit italic :foreground "gray27")))) ;
-;; '(markdown-list-face ((t (:foreground "gray0"))))
-;; '(markdown-metadata-key-face ((t (:foreground "black" :weight medium))))
-;; '(markdown-pre-face ((t (:foreground "SlateGray4" :family "DejaVu Sans Mono for Powerline"))))
-;; '(markdown-table-face ((t (:inherit markdown-code-face :family "DejaVu Sans Mono for Powerline"))))
-;; '(markdown-url-face ((t (:foreground "gray0" :weight normal))))
  '(org-checkbox ((t (:inherit org-todo :height 1.7))))
  '(org-date ((t (:foreground "DodgerBlue1"))))
  '(org-document-info ((t (:foreground "black"))))
@@ -107,7 +107,6 @@
  '(shadow ((t (:foreground "gray56"))))
  '(stripe-hl-line ((t (:background "DarkOrange2" :foreground "ivory"))))
  '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3)))
- '(tab-line-tab-modified ((t (:inherit font-lock-doc-face :foreground "DarkOrange1" :weight bold :family "DejaVu "))))
  '(tooltip ((t (:background "#EEE8D5" :foreground "#556b72" :height 1.3))))
  '(treesit-fold-replacement-face ((t (:background "goldenrod4" :foreground "white" :box (:line-width (1 . -1) :color "black" :style pressed-button)))))
  '(vertical-border ((t (:background "gray50" :foreground "gray50")))))
