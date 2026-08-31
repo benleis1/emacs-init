@@ -1,9 +1,17 @@
 ;; -*- lexical-binding: t; -*-
+
 ;;; Commentary
 
-;;
+;;  o8o
+;;  `"'
+;; oooo  ooo. .oo.  .oo.    .ooooo.  ooo. .oo.   oooo  oooo
+;; `888  `888P"Y88bP"Y88b  d88' `88b `888P"Y88b  `888  `888
+;;  888   888   888   888  888ooo888  888   888   888   888
+;;  888   888   888   888  888    .o  888   888   888   888
+;; o888o o888o o888o o888o `Y8bod8P' o888o o888o  `V88V"V8P'
+
+
 ;; Imenu and imenu-list extensions
-;;
 
 ;; Included here are all of the extensions off of Imenu-List
 ;; * Arrow icons
@@ -11,6 +19,7 @@
 ;; * custom mode-line formatting
 ;; * fixes for highlighting even empty headers
 ;; * special handling for org mode
+;; * custom indexing for elisp
 
 ;;; Code
 
@@ -36,8 +45,8 @@
 
 ;; Simple wrapper to make an imenu leaf from a treesitter node
 (defun my/imenu-leaf (node buffer name-func)
-       (cons (funcall name-func node)
-             (my/make-marker buffer (treesit-node-start node))))
+  (cons (funcall name-func node)
+        (my/make-marker buffer (treesit-node-start node))))
 
 ;; Compare two imenu nodes
 (defun my/imenu-compare (left right)
@@ -92,9 +101,9 @@
 
     ;; Sort the top level leaf entries
     (setq sorted-entries (append sorted-entries
-            (sort leaf-entries
-                  (lambda (left right)
-                    (string-lessp (car left) (car right))))))
+				 (sort leaf-entries
+				       (lambda (left right)
+					 (string-lessp (car left) (car right))))))
     ))
 
 ;; Interactive command to make it easy to swap how the symbols are sorted
@@ -105,7 +114,7 @@
      (unless (eq imenu-create-index-function 'my/generate-ts-imenu)
        (user-error "Sort switching is only available for treesitter class/interface imenus"))
      (let ((choices '(("alphabetical"  . my/imenu-list-sort-alphabetically)
-		       ("by position" . nil )))) ;; default no override needed
+		      ("by position" . nil )))) ;; default no override needed
        (list (alist-get
 	      (completing-read "Choose: " choices)
 	      choices nil nil 'equal)))))
@@ -115,8 +124,15 @@
     (force-mode-line-update))
   (imenu-list-refresh))
 
+;; Work around an upstream imenu-list bug: `imenu-list-major-mode's docstring
+;; references `\{imenu-list-mode-map}' for its `describe-mode' (bound to "h")
+;; substitution, but no such variable exists -- only `imenu-list-major-mode-map'
+;; does -- so pressing "h" errors instead of showing the bindings.
+(defvaralias 'imenu-list-mode-map 'imenu-list-major-mode-map)
+
 ;; Let "s" in the *Ilist* buffer itself switch sort order, since that's
 (define-key imenu-list-major-mode-map (kbd "s") #'imenu-list-switch-sort)
+(define-key imenu-list-major-mode-map (kbd "c") #'hs-hide-evel)
 
 ;; Sort a list of imenu nodes
 (defun my/imenu-sort (seq)
@@ -263,8 +279,7 @@
       sections)))
 
 ;; Custom imenu-create-index-function for emacs-lisp-mode. `defun's are
-;; returned by `imenu--generic-function' as plain top-level leaves (Elisp's
-;; own `lisp-imenu-generic-expression' files them under a nil menu-title),
+;; returned by `imenu--generic-function' as plain top-level leaves,
 ;; and "Use-package" is our own added category -- both get regrouped here
 ;; under their enclosing "Sections" header, with use-package calls kept in
 ;; their own "Use-package" sub-header within each section (mirroring the
@@ -295,7 +310,7 @@
                          (let* ((name (car range))
                                 (fns (gethash name fn-buckets))
                                 (pkgs (gethash name pkg-buckets)))
-                           (cons name (append (list (cons "." (nth 1 range)))
+                           (cons name (append (list (cons "" (nth 1 range)))
                                               (when pkgs (list (cons "Use-package" pkgs)))
                                               fns))))
                        ranges))

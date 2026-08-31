@@ -28,6 +28,14 @@
 ;; ones for both reading and modifying. This may shift in the future but currently I only move
 ;; code out to  a new file if it reaches a "sufficiently" large size.
 ;;
+;; Two areas in particular are key to many of my workflows. First, is imenu and imenu-list which I
+;; use in multiple modes to see document structure and leave open on the right side at almost all
+;; times. I've invested a fair amount of configuration tailoring this via custom indexing, styling
+;; key mode maps, sorting and modeline changes. Second, is the completion framework which I
+;; have increasingly found to be fundamental. I use the modern completion stack of vertico, orderless
+;; marginalia and consult. And where needed I have added additional completion at point routines
+;; like the ones I added for markdown tags.
+;;
 ;; I have a work style where I want to have a manageable small set of files open in a tabbed format.
 ;; I'll save these to a desktop and reload them when I start things up again. I've plumbed
 ;; save/load desktop into the system menus and also extensively modified tab-line to fit my work flow.
@@ -38,6 +46,9 @@
 ;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
 ;; based on the builtin modus-themes and have changed most faces to just use the same default
 ;; foreground color or a bolder one for emphasis. I really only want color in critical locations.
+;; Likewise, I currently  have a very minimal custom mode line that only features segments I
+;; actually use and leverages the hover help text to convey extra information like a full buffer file
+;; path.
 ;;
 ;; Sample screen:
 ;; ![sample screen](./sample-screen.png)
@@ -763,10 +774,9 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; and simple daily journal for which I have a capture template to add standup entries
 
 ;; mouse support
-;; This is fairly expensive so we defer it until idle
-(use-package emacs
-  :defer 2
-  :config
+;; This is fairly expensive so we defer it until org is actually loaded
+;; rather than paying the cost on every startup.
+(with-eval-after-load 'org
   (require 'org-mouse))
 
 ;; hide emphasis markers
@@ -882,7 +892,8 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
   :ensure t)
 
 (use-package magit
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (defun my-common-prog-mode-setup ()
   (display-line-numbers-mode)
@@ -1161,6 +1172,7 @@ anything as useful as the `report' messages in between."
 ;; clutch - database access
 (use-package clutch
   :ensure t
+  :defer t
   :init
   (setq clutch-connection-alist
 	'(("glide dataaccess" . (:backend pg
