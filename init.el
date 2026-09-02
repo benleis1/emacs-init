@@ -10,6 +10,7 @@
 ;; ```
 
 ;; Emacs configuration file
+;;
 ;; Author: Benjamin Leis
 
 ;;; Commentary:
@@ -65,12 +66,13 @@
 ;;  }
 ;; ```
 ;;
-;; ## Major modes configured
+;; ## Major areas configured
 ;; - Markdown
 ;; - Org
 ;; - Java
 ;; - Ediff
 ;; - Python (partly)
+;; - SQL
 
 ;;; Code:
 
@@ -1001,7 +1003,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
           #'treesit-fold-summary-java))
   (add-hook 'context-menu-functions #'context-menu-fold-line))
 
-;;; Java
+;;;; Java
 
 ;; set java home
 (setq java-home "/Users/benjamin.leis/.jenv/versions/21.0")
@@ -1025,7 +1027,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 (setq dap-java-java-command (concat java-home "/bin/java"))
 
-;;; eglot
+;;;; eglot
 
 ;; eglot configuration.
 (setq eglot-max-file-watches 5000)
@@ -1134,7 +1136,7 @@ anything as useful as the `report' messages in between."
                               :initializationOptions
                               (list :settings my-jdtls-settings)))))))
 
-;;; flymake
+;;;; flymake
 
 ;; Dock the diagnostics list as a bottom "problems panel" instead of
 ;; letting it split whatever window happens to be current.
@@ -1166,7 +1168,41 @@ anything as useful as the `report' messages in between."
 ;; Save space by not showing zero warn/error counter in the mode line
 (setq flymake-suppress-zero-counters t)
 
-;;; python - TODO turn on eglot integration later.
+;; Configure lightbulbs with corresponding diagnostic colors/faces'
+;; And place them in the margin rather than the fringe
+(setq flymake-indicator-type 'margins)
+(setq flymake-margin-indicators-string
+ `((error   ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-error)
+   (warning ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-warning)
+   (note    ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-info)))
+
+;;;; python
+
+;; TODO turn on eglot integration later.
+
+
+;;;; elisp
+
+;; Group `use-package` declarations under their own imenu heading.
+;; Also extract all the ;;; sections.
+(add-hook 'emacs-lisp-mode-hook
+          (lambda ()
+            (add-to-list 'imenu-generic-expression
+                          (list "Use-package"
+                                (concat "^\\s-*(use-package\\s-+\\("
+                                        lisp-mode-symbol-regexp "\\)")
+                                1))
+
+	    (add-to-list 'imenu-generic-expression
+                         '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
+
+	    (add-to-list 'imenu-generic-expression
+                         '("Subsections" "^;;;;\\s-+\\(.*\\)$" 1))
+
+	    (setq-local imenu-depth 2)
+
+            (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
+
 
 ;;; SQL
 ;; clutch - database access
@@ -1365,25 +1401,6 @@ would just be redundant clutter."
   '("Next Buffer" . next-buffer)
   'zoom-out)
 
-
-;;; elisp
-
-;; Group `use-package` declarations under their own imenu heading.
-;; Also extract all the ;;; sections.
-(add-hook 'emacs-lisp-mode-hook
-          (lambda ()
-            (add-to-list 'imenu-generic-expression
-                          (list "Use-package"
-                                (concat "^\\s-*(use-package\\s-+\\("
-                                        lisp-mode-symbol-regexp "\\)")
-                                1))
-
-	    (add-to-list 'imenu-generic-expression
-                         '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
-
-	    (setq-local imenu-depth 2)
-
-            (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
 
 
 ;;; Excorporate setup.
@@ -1756,3 +1773,14 @@ tag, followed by the normal editable field."
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
+
+;;; Testing diff-hl - should go after flyspell probably if I keep it.
+(use-package diff-hl
+  :ensure t
+  :init
+  (global-diff-hl-mode +1)
+  (diff-hl-flydiff-mode +1)
+  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
+    (set-face-attribute 'diff-hl-insert nil :background changed-color)
+    (set-face-attribute 'diff-hl-change nil :background changed-color)
+    (set-face-attribute 'diff-hl-delete nil :background changed-color)))

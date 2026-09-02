@@ -2,6 +2,7 @@
 
 ;;; Commentary
 
+;; ```
 ;;  o8o
 ;;  `"'
 ;; oooo  ooo. .oo.  .oo.    .ooooo.  ooo. .oo.   oooo  oooo
@@ -9,6 +10,7 @@
 ;;  888   888   888   888  888ooo888  888   888   888   888
 ;;  888   888   888   888  888    .o  888   888   888   888
 ;; o888o o888o o888o o888o `Y8bod8P' o888o o888o  `V88V"V8P'
+;; ```
 
 
 ;; Imenu and imenu-list extensions
@@ -132,7 +134,7 @@
 
 ;; Let "s" in the *Ilist* buffer itself switch sort order, since that's
 (define-key imenu-list-major-mode-map (kbd "s") #'imenu-list-switch-sort)
-(define-key imenu-list-major-mode-map (kbd "c") #'hs-hide-evel)
+(define-key imenu-list-major-mode-map (kbd "c") #'hs-hide-level)
 
 ;; Sort a list of imenu nodes
 (defun my/imenu-sort (seq)
@@ -218,39 +220,35 @@
       (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
       result)))
 
-;;
-;; Elisp: fold `defun'/`use-package' entries under the ";;; Section" comment
-;; header they're physically located under (see the "Sections"/"Use-package"
-;; imenu-generic-expression patterns added by the emacs-lisp-mode-hook in
-;; init.el), leaving every other category (Variables, ...) untouched at the
-;; top level.
-;;
+;;; Elisp custom header handling
 
-;; (NAME BEG END) for each section in SECTIONS (an alist of (name . marker),
-;; already sorted by position by `imenu--generic-function'), covering from
-;; the section's own marker up to the next section's marker, or point-max
-;; for the last one.
-(defun my/imenu-elisp-section-ranges (sections)
+;; fold `defun'/`use-package' entries under the ";;; Section" comment
+;; header they're physically located under (see the "Sections"/"Use-package";;
+
+;; (NAME BEG END) for each entry in ENTRIES (an alist of (name . marker),
+;; already sorted by position), covering from the entry's own marker up to
+;; the next entry's marker, or point-max for the last one.
+(defun my/imenu-elisp-ranges (entries)
   (let (ranges)
-    (while sections
-      (push (list (caar sections) (cdar sections)
-                  (if (cadr sections) (cdadr sections) (point-max)))
+    (while entries
+      (push (list (caar entries) (cdar entries)
+                  (if (cadr entries) (cdadr entries) (point-max)))
             ranges)
-      (setq sections (cdr sections)))
+      (setq entries (cdr entries)))
     (nreverse ranges)))
 
-;; Name of the section in RANGES that POS falls inside, or nil
-;; if POS precedes the first section (or there are no sections at all).
+;; Name of the range in RANGES that POS falls inside, or nil
+;; if POS precedes the first range (or there are no ranges at all).
 (defun my/imenu-elisp-find-section (ranges pos)
   (catch 'found
     (dolist (range ranges)
       (when (and (>= pos (nth 1 range)) (< pos (nth 2 range)))
         (throw 'found (nth 0 range))))))
 
-;; Bucket ENTRIES (sorted ascending by position) into RANGES by
-;; `my/imenu-elisp-find-section', returning (BUCKETS . ORPHANS): BUCKETS is a
-;; hash table of section name -> entries (ascending), ORPHANS the entries
-;; (ascending) that precede every section.
+;; Bucket ENTRIES (an alist of (name . marker), sorted ascending by
+;; position) into RANGES by `my/imenu-elisp-find-section', returning
+;; (BUCKETS . ORPHANS): BUCKETS is a hash table of range name -> entries
+;; (ascending), ORPHANS the entries (ascending) that precede every range.
 (defun my/imenu-elisp-bucket-by-section (entries ranges)
   (let ((buckets (make-hash-table :test 'equal))
         (orphans nil))
@@ -278,43 +276,78 @@
           (setq rest (cdr rest))))
       sections)))
 
+;; Build a nested imenu alist entry for a header named NAME at buffer
+;; position START, with CHILDREN (already-built nested entries, if any --
+;; used to nest a Section's Subsections underneath it) appended after this
+;; header's own Use-package/function entries.
+(defun my/imenu-elisp-build-header (name start fn-buckets pkg-buckets &optional children)
+  (let ((fns (gethash name fn-buckets))
+        (pkgs (gethash name pkg-buckets)))
+    (cons name (append (list (cons "" start))
+                        (when pkgs (list (cons "Use-package" pkgs)))
+                        fns
+                        children))))
+
 ;; Custom imenu-create-index-function for emacs-lisp-mode. `defun's are
 ;; returned by `imenu--generic-function' as plain top-level leaves,
 ;; and "Use-package" is our own added category -- both get regrouped here
 ;; under their enclosing "Sections" header, with use-package calls kept in
 ;; their own "Use-package" sub-header within each section (mirroring the
-;; top-level category they'd otherwise be filed under). Anything else
-;; (e.g. "Variables") is passed through untouched. Every section also gets
-;; a leading "." entry jumping to the section header itself (mirroring the
-;; "declaration" entry `my/walk-object-declaration' adds for a class), so a
-;; section with no functions or use-package calls is still navigable.
+;; top-level category they'd otherwise be filed under). "Subsections"
+;; (";;;; " headers) nest under whichever "Sections" (";;; ") header they
+;; physically fall inside. Anything else (e.g. "Variables") is passed
+;; through untouched. Every section/subsection also gets a leading "." entry
+;; jumping to its own header (mirroring the "declaration" entry
+;; `my/walk-object-declaration' adds for a class), so one with no functions
+;; or use-package calls is still navigable.
 (defun my/imenu-elisp-index ()
   (let ((raw (imenu--generic-function imenu-generic-expression))
-        sections usepkg other functions)
+        sections subsections usepkg other functions)
     (dolist (entry raw)
       (cond ((equal (car entry) "Sections") (setq sections (cdr entry)))
+            ((equal (car entry) "Subsections") (setq subsections (cdr entry)))
             ((equal (car entry) "Use-package") (setq usepkg (cdr entry)))
             ((listp (cdr entry)) (push entry other))
             (t (push entry functions))))
     (setq functions (sort functions (lambda (left right) (< (cdr left) (cdr right)))))
     (setq usepkg (sort usepkg (lambda (left right) (< (cdr left) (cdr right)))))
-    (let* ((ranges (my/imenu-elisp-section-ranges sections))
-           (fn-bucketed (my/imenu-elisp-bucket-by-section functions ranges))
-           (pkg-bucketed (my/imenu-elisp-bucket-by-section usepkg ranges))
+    (setq subsections (sort subsections (lambda (left right) (< (cdr left) (cdr right)))))
+    (let* ((section-ranges (my/imenu-elisp-ranges sections))
+           ;; Functions/use-package calls attach to whichever header --
+           ;; Section or Subsection -- most closely precedes them, so
+           ;; bucket them against both levels merged together...
+           ;; `sort' on a list is destructive, and `append' reuses its last
+           ;; argument's cons cells verbatim (only earlier arguments get
+           ;; copied) -- so sorting `(append sections subsections)' in place
+           ;; would silently corrupt `subsections' itself, which is still
+           ;; needed below. `copy-sequence' gives the merge its own cells.
+           (fine-ranges (my/imenu-elisp-ranges
+                         (sort (copy-sequence (append sections subsections))
+                               (lambda (left right) (< (cdr left) (cdr right))))))
+           (fn-bucketed (my/imenu-elisp-bucket-by-section functions fine-ranges))
+           (pkg-bucketed (my/imenu-elisp-bucket-by-section usepkg fine-ranges))
+           ;; ...but a Subsection's *parent* is decided against Sections
+           ;; alone, since a Subsection always nests directly under the
+           ;; Section it physically falls inside, regardless of any
+           ;; intervening Subsection siblings.
+           (sub-bucketed (my/imenu-elisp-bucket-by-section subsections section-ranges))
            (fn-buckets (car fn-bucketed))
            (pkg-buckets (car pkg-bucketed))
-           (pkg-orphans (cdr pkg-bucketed)))
+           (sub-buckets (car sub-bucketed))
+           (pkg-orphans (cdr pkg-bucketed))
+           (sub-orphans (cdr sub-bucketed)))
       (append (nreverse other)
               (my/imenu-elisp-nest-under-code
                (mapcar (lambda (range)
-                         (let* ((name (car range))
-                                (fns (gethash name fn-buckets))
-                                (pkgs (gethash name pkg-buckets)))
-                           (cons name (append (list (cons "" (nth 1 range)))
-                                              (when pkgs (list (cons "Use-package" pkgs)))
-                                              fns))))
-                       ranges))
+                         (my/imenu-elisp-build-header
+                          (car range) (nth 1 range) fn-buckets pkg-buckets
+                          (mapcar (lambda (sub)
+                                    (my/imenu-elisp-build-header (car sub) (cdr sub) fn-buckets pkg-buckets))
+                                  (gethash (car range) sub-buckets))))
+                       section-ranges))
               (when pkg-orphans (list (cons "Use-package" pkg-orphans)))
+              (mapcar (lambda (sub) (my/imenu-elisp-build-header (car sub) (cdr sub) fn-buckets pkg-buckets))
+                      sub-orphans)
               (cdr fn-bucketed)))))
 
   ;; `imenu-list--current-entry' deliberately skips subalist (container)
@@ -325,7 +358,7 @@
   ;; container-only (i.e. any heading with a child heading, like "IMenu" in
   ;; tour.org). Recover that so point-in-container also highlights the
   ;; container's own line instead of falling back to the previous sibling.
-  (defun my-imenu-list--entry-position (entry)
+(defun my-imenu-list--entry-position (entry)
     "Return a comparable buffer position for ENTRY, or nil if none exists."
     (if (imenu--subalist-p entry)
         (get-text-property 0 'org-imenu-marker (car entry))
@@ -345,6 +378,131 @@ that carry an `org-imenu-marker' text property on their name."
             (setq match-entry entry))))))
 
   (advice-add 'imenu-list--current-entry :override #'my-imenu-list--current-entry)
+
+
+;;; VC Highlighting
+
+;; Highlight imenu entries whose corresponding source section has an
+;; uncommitted VC change, per `diff-hl' hunk overlays (each hunk gets one
+;; overlay spanning its changed lines, tagged with the `diff-hl-hunk'
+;; property).
+
+(defface my-imenu-list-modified-face
+    `((t (:background ,(modus-themes-get-color-value 'bg-changed))))
+    "Face for imenu-list entries covering a source section with a pending `diff-hl' change."
+    :group 'my-custom-group)
+
+  (defun my-imenu-list--flatten-entries (index-alist depth)
+    "Flatten INDEX-ALIST into (ENTRY . DEPTH) pairs, in the order `imenu-list' displays them."
+    (apply #'nconc
+           (mapcar (lambda (entry)
+                     (cons (cons entry depth)
+                           (when (imenu--subalist-p entry)
+                             (my-imenu-list--flatten-entries (cdr entry) (1+ depth)))))
+                   index-alist)))
+
+  (defun my-imenu-list--section-modified-p (start end buffer)
+    "Return non-nil if BUFFER has a `diff-hl' hunk overlapping [START, END)."
+    (when (and start end)
+      (with-current-buffer buffer
+        (let ((ovs (overlays-in start end))
+              found)
+          (while (and ovs (not found))
+            (setq found (overlay-get (car ovs) 'diff-hl-hunk))
+            (setq ovs (cdr ovs)))
+          found))))
+
+  (defun my-imenu-list--section-start (pos buffer)
+    "Back POS up over any contiguous comment-only/blank lines immediately
+preceding it in BUFFER, and return that earlier position.
+A `diff-hl' hunk touching a doc-comment that introduces the entry at POS
+(rather than code inside the entry before it) should count as a change
+to THIS entry, not to whatever precedes the comment -- since the comment
+lines themselves aren't separate imenu entries, the naive per-entry span
+`[this entry's marker, next entry's marker)' would otherwise attribute
+them to the previous entry."
+    (when pos
+      (with-current-buffer buffer
+        (save-excursion
+          (goto-char pos)
+          (beginning-of-line)
+          (let ((start (point)))
+            (while (and (not (bobp))
+                        (progn (forward-line -1)
+                               (looking-at "^[ \t]*\\(;.*\\)?$")))
+              (setq start (point)))
+            start)))))
+
+  (defun my-imenu-list--sorted-positions (flat buffer)
+    "Return a sorted vector of every distinct `my-imenu-list--section-start'
+among FLAT's (ENTRY . DEPTH) pairs, computed against BUFFER.
+Only entries with a position of their own count (see `my-imenu-list--entry-position') --
+plain container entries (no position) are excluded."
+    (vconcat (sort (delq nil (mapcar (lambda (pair)
+                                        (my-imenu-list--section-start
+                                         (my-imenu-list--entry-position (car pair)) buffer))
+                                      flat))
+                   #'<)))
+
+  (defun my-imenu-list--next-position-after (pos positions)
+    "Return the smallest element of the sorted vector POSITIONS greater than POS, or nil."
+    (let ((n (length positions)) (i 0) result)
+      (while (and (< i n) (not result))
+        (when (> (aref positions i) pos)
+          (setq result (aref positions i)))
+        (setq i (1+ i)))
+      result))
+
+  (defun my-imenu-list-highlight-modified-entries ()
+    "Overlay `my-imenu-list-modified-face' on *Ilist* lines covering a source
+section with a pending `diff-hl' change.
+A leaf entry's section runs from its own position up to whichever
+positioned entry comes next *by buffer position*, not by list order --
+several of this file's custom imenu indexers (category grouping,
+alphabetical sort, elisp section-bucketing) reorder siblings so that
+list order no longer tracks physical position. A container entry
+(e.g. a \"Sections\"/\"Types\"/\"Classes\" header) is marked modified if any
+of its descendants are, found via its depth-delimited subtree in the
+flattened list -- that structural nesting is always order-preserving
+even when positions are not."
+    (let ((src-buf imenu-list--displayed-buffer))
+      (when (buffer-live-p src-buf)
+        (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+               (n (length flat))
+               (depths (vconcat (mapcar #'cdr flat)))
+               (leaf-modified (make-vector n nil)))
+          (with-current-buffer src-buf
+            (let ((sorted-positions (my-imenu-list--sorted-positions flat src-buf))
+                  (buffer-max (point-max))
+                  (i 0))
+              (dolist (pair flat)
+                (let ((pos (my-imenu-list--section-start
+                            (my-imenu-list--entry-position (car pair)) src-buf)))
+                  (when (and pos (my-imenu-list--section-modified-p
+                                  pos
+                                  (or (my-imenu-list--next-position-after pos sorted-positions) buffer-max)
+                                  src-buf))
+                    (aset leaf-modified i t)))
+                (setq i (1+ i)))))
+          (with-current-buffer imenu-list-buffer-name
+            (remove-overlays (point-min) (point-max) 'my-imenu-list-modified t)
+            (let ((inhibit-read-only t))
+              (dotimes (i n)
+                (let* ((depth (aref depths i))
+                       (boundary (1+ i))
+                       (modified (aref leaf-modified i)))
+                  (while (and (< boundary n) (> (aref depths boundary) depth))
+                    (when (aref leaf-modified boundary) (setq modified t))
+                    (setq boundary (1+ boundary)))
+                  (when modified
+                    (save-excursion
+                      (goto-char (point-min))
+                      (forward-line i)
+                      (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
+                        (overlay-put ov 'my-imenu-list-modified t)
+                        (overlay-put ov 'face 'my-imenu-list-modified-face))))))))))))
+
+  (add-hook 'imenu-list-update-hook #'my-imenu-list-highlight-modified-entries)
 
 
   ;;; Org mode optimization. Its not completely clear if its needed.
