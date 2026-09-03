@@ -613,6 +613,17 @@
 (setq-default which-key-mode t)
 (which-key-mode)
 
+;;; diff-hl
+(use-package diff-hl
+  :ensure t
+  :init
+  (global-diff-hl-mode +1)
+  (diff-hl-flydiff-mode +1)
+  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
+    (set-face-attribute 'diff-hl-insert nil :background changed-color)
+    (set-face-attribute 'diff-hl-change nil :background changed-color)
+    (set-face-attribute 'diff-hl-delete nil :background changed-color)))
+
 ;;; markdown mode
 
 (use-package markdown-mode
@@ -903,7 +914,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'my-common-prog-mode-setup)
 
-;; Project.el settings.
+;;;; Project.el settings.
 
 ;; I prefer to have project-switch-project to just change the project for the next project
 ;; command. bear in mind, project mostly uses the current directory of the buffer to
@@ -912,7 +923,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; Set project boundary at the first build.gradle found as well
 (setopt project-vc-extra-root-markers '("build.gradle"))
 
-;; treesit-fold - useful for folding things like imports in java
+;;;; treesit-fold - useful for folding things like imports in java
 ;;
 ;; Java's grammar has no single node wrapping all the imports -- each
 ;; import_declaration is just a sibling of the next, so folding on
@@ -1649,14 +1660,3 @@ tag, followed by the normal editable field."
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
-
-;;; Testing diff-hl - should go after flyspell probably if I keep it.
-(use-package diff-hl
-  :ensure t
-  :init
-  (global-diff-hl-mode +1)
-  (diff-hl-flydiff-mode +1)
-  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
-    (set-face-attribute 'diff-hl-insert nil :background changed-color)
-    (set-face-attribute 'diff-hl-change nil :background changed-color)
-    (set-face-attribute 'diff-hl-delete nil :background changed-color)))

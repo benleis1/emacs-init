@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Commentary
+;;; Commentary:
 
 ;; ```
 ;;  o8o
@@ -24,7 +24,7 @@
 ;; * custom indexing for elisp
 ;; * custom indexing for treesitter java mode
 
-;;; Code
+;;; Code:
 
 ;;; General UI changes
 
@@ -150,14 +150,18 @@ entry, of N total)."
 ;;; Autofolding
 (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
 
-;; Track whether we autofolded per buffer.
+;; Track whether we've shown this buffer's imenu-list at least once, and
+;; if so, which containers were folded the last time we looked -- both
+;; are buffer-local to the *source* buffer (not the shared *Ilist*
+;; buffer), so each buffer remembers its own fold state independently.
 (defvar-local imenu-list--folded-once nil
   "`my-imenu-list-fold-below-depth' has folded this buffer's imenu-list.")
 
-;; Track whether the user has manually toggled a fold since the last
-;; auto-fold, so a reindex-triggered rebuild doesn't stomp on their choice.
-(defvar-local imenu-list--user-toggled nil
-  "Non-nil once the user has manually toggled a fold in this buffer's imenu-list.")
+(defvar-local imenu-list--folded-paths nil
+  "Ancestor-name paths (see `my-imenu-list--flatten-paths') of the
+containers that were folded the last time this buffer's *Ilist* was
+displayed. Restored by `my-imenu-list--restore-folded-paths' whenever
+the *Ilist* buffer is rebuilt for this buffer again.")
 
 (defun my-imenu-list-fold-below-depth (&optional depth)
   "Collapse imenu-list entries nested deeper than DEPTH (default `imenu-depth'). Top-level entries are depth 1."
@@ -175,18 +179,85 @@ entry, of N total)."
                      (span (my-imenu-list--line-span n i end-i)))
                 (my-imenu-list--hide-region (car span) (cdr span))))))))))
 
+(defun my-imenu-list--flatten-paths (index-alist path)
+  "Parallel traversal to `my-imenu-list--flatten-entries', returning each
+entry's ancestor-name PATH (a list of strings, root to leaf) in the same
+flattened order -- so `(nth i (my-imenu-list--flatten-paths tree nil))'
+identifies the same entry as `(nth i (my-imenu-list--flatten-entries tree 0))'.
+Used as a position-independent identity for saving/restoring fold state."
+  (apply #'nconc
+         (mapcar (lambda (entry)
+                   (let ((entry-path (append path (list (car entry)))))
+                     (cons entry-path
+                           (when (imenu--subalist-p entry)
+                             (my-imenu-list--flatten-paths (cdr entry) entry-path)))))
+                 index-alist)))
+
+(defun my-imenu-list--record-folded-paths ()
+  "Snapshot which containers are currently folded in the *Ilist* buffer
+and save that snapshot on `imenu-list--displayed-buffer' as
+`imenu-list--folded-paths', so `my-imenu-list--restore-folded-paths' can
+reapply it the next time this buffer's *Ilist* is rebuilt -- e.g. after
+switching to another buffer and back, or after a reindex."
+  (let ((ilist (get-buffer imenu-list-buffer-name))
+        (src imenu-list--displayed-buffer))
+    (when (and ilist (buffer-live-p src))
+      (let (folded)
+        (with-current-buffer ilist
+          (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+                 (paths (my-imenu-list--flatten-paths imenu-list--imenu-entries nil))
+                 (n (length flat)))
+            (dotimes (i n)
+              (let* ((pair (nth i flat))
+                     (entry (car pair))
+                     (entry-depth (1+ (cdr pair))))
+                (when (imenu--subalist-p entry)
+                  (let* ((end-i (my-imenu-list--subtree-end flat n i entry-depth))
+                         (span (my-imenu-list--line-span n i end-i)))
+                    (when (my-imenu-list--folded-p (car span))
+                      (push (nth i paths) folded))))))))
+        (with-current-buffer src
+          (setq imenu-list--folded-paths folded))))))
+
+(defun my-imenu-list--restore-folded-paths (paths)
+  "Fold every container in the *Ilist* buffer (current buffer) whose
+ancestor-name path is a member of PATHS, as produced by
+`my-imenu-list--record-folded-paths'. Matching by name path rather than
+position means folds survive a rebuild even if entries shifted lines."
+  (when paths
+    (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+           (flat-paths (my-imenu-list--flatten-paths imenu-list--imenu-entries nil))
+           (n (length flat)))
+      (dotimes (i n)
+        (let* ((pair (nth i flat))
+               (entry (car pair))
+               (entry-depth (1+ (cdr pair))))
+          (when (and (imenu--subalist-p entry)
+                     (member (nth i flat-paths) paths))
+            (let* ((end-i (my-imenu-list--subtree-end flat n i entry-depth))
+                   (span (my-imenu-list--line-span n i end-i)))
+              (my-imenu-list--hide-region (car span) (cdr span)))))))))
+
 (defun my-imenu-list-fold-below-depth-once (&optional depth)
-  "Run default folding once per buffer, then refresh fold markers.
-`imenu-list-update-hook' (which calls this) always runs with the
-*source* buffer as current, not the *Ilist* buffer -- so operate on
-`imenu-list--folded-once' explicitly via `imenu-list-buffer-name'
-rather than relying on whatever happens to be current."
-  (let ((ilist (get-buffer imenu-list-buffer-name)))
-    (when ilist
+  "The first time this buffer's *Ilist* is shown, apply the default
+depth-based fold; every time after, restore this buffer's own saved
+fold snapshot instead (see `imenu-list--folded-paths'), then refresh
+fold markers. `imenu-list-update-hook' (which calls this) always runs
+with the *source* buffer as current, not the *Ilist* buffer -- so
+`imenu-list--folded-once' and `imenu-list--folded-paths' are read and
+written explicitly via `imenu-list--displayed-buffer' rather than
+relying on whatever happens to be current."
+  (let ((ilist (get-buffer imenu-list-buffer-name))
+        (src imenu-list--displayed-buffer))
+    (when (and ilist (buffer-live-p src))
       (with-current-buffer ilist
-        (unless imenu-list--folded-once
-          (setq imenu-list--folded-once t)
-          (my-imenu-list-fold-below-depth depth))
+        (if (buffer-local-value 'imenu-list--folded-once src)
+            (my-imenu-list--restore-folded-paths
+             (buffer-local-value 'imenu-list--folded-paths src))
+          (my-imenu-list-fold-below-depth depth)
+          (with-current-buffer src (setq imenu-list--folded-once t))))
+      (my-imenu-list--record-folded-paths)
+      (with-current-buffer ilist
         (my-imenu-list-update-fold-markers)))))
 
 (defun my-imenu-list-fold-children (&optional depth)
@@ -219,9 +290,7 @@ under point from a clean, fully-shown state before refolding it."
                   (my-imenu-list--hide-region (car span) (cdr span)))))
             (setq i (1+ i)))))))
   (my-imenu-list-update-fold-markers)
-  (when (buffer-live-p imenu-list--displayed-buffer)
-    (with-current-buffer imenu-list--displayed-buffer
-      (setq imenu-list--user-toggled t))))
+  (my-imenu-list--record-folded-paths))
 
 (defun my-imenu-list-toggle-at-point ()
   "Toggle folding of the container entry at point in the *Ilist* buffer.
@@ -240,10 +309,12 @@ Replaces hideshow's `hs-toggle-hiding' (formerly bound to TAB/\"f\")."
           (if (my-imenu-list--folded-p (car span))
               (my-imenu-list--show-region (car span) (cdr span))
             (my-imenu-list--hide-region (car span) (cdr span)))))))
-  (my-imenu-list--set-marker-at-point)
-  (when (buffer-live-p imenu-list--displayed-buffer)
-    (with-current-buffer imenu-list--displayed-buffer
-      (setq imenu-list--user-toggled t))))
+  ;; A full marker refresh, not just the toggled line's -- `show-region'
+  ;; removes every nested fold overlay in the span, so any child
+  ;; containers that were folded need their own arrow flipped back to
+  ;; expanded too.
+  (my-imenu-list-update-fold-markers)
+  (my-imenu-list--record-folded-paths))
 
 ;; Run before any other `imenu-list-update-hook' member (e.g. imenu.el's
 ;; VC highlighter) so folding always settles first each update cycle.
@@ -251,20 +322,10 @@ Replaces hideshow's `hs-toggle-hiding' (formerly bound to TAB/\"f\")."
 
 ;; `imenu-list-insert-entries' erases and rebuilds the whole *Ilist* buffer
 ;; whenever the source buffer's imenu entries actually change (e.g. a real
-;; edit triggers a reindex) -- that wipes our fold overlays right
-;; out from under `imenu-list--folded-once', which otherwise never fires
-;; again for this buffer.  Clear the flag whenever a reinsert just
-;; happened so the very next hook run re-folds instead of leaving the
-;; list permanently expanded -- but only while the user hasn't manually
-;; toggled anything yet, so a reindex after they've hand-adjusted folds
-;; doesn't stomp on their choice.
-(defun my-imenu-list--reset-fold-flag-on-reinsert (&rest _)
-  (when (buffer-live-p imenu-list--displayed-buffer)
-    (with-current-buffer imenu-list--displayed-buffer
-      (unless imenu-list--user-toggled
-        (setq imenu-list--folded-once nil)))))
-
-(advice-add 'imenu-list-insert-entries :after #'my-imenu-list--reset-fold-flag-on-reinsert)
+;; edit triggers a reindex, or the displayed buffer changed) -- that wipes
+;; our fold overlays. `my-imenu-list-fold-below-depth-once' (run from
+;; `imenu-list-update-hook' right after every such rebuild) recreates them
+;; from `imenu-list--folded-paths', so nothing extra is needed here.
 
 ;; The simplified hide/show toggle at a mouse click event
 (defun imenu-list--action-toggle-hs (event)
@@ -309,8 +370,8 @@ Idempotent -- cheap enough to call on every marker refresh."
     (with-current-buffer buf
       (when (local-variable-p 'imenu-list--folded-once)
 	(setq imenu-list--folded-once nil))
-      (when (local-variable-p 'imenu-list--user-toggled)
-	(setq imenu-list--user-toggled nil)))))
+      (when (local-variable-p 'imenu-list--folded-paths)
+	(setq imenu-list--folded-paths nil)))))
 
 (advice-add 'imenu-list-smart-toggle :before #'my-after-imenu-list-toggle)
 
@@ -945,7 +1006,7 @@ section with a pending `diff-hl' change, via `my-imenu-list--mark-modified'."
 (add-hook 'imenu-list-update-hook #'my-imenu-list-highlight-modified-entries 10)
 
 
-  ;;; Org mode optimization. Its not completely clear if its needed.
+;;; Org mode optimization. Its not completely clear if its needed.
 
 ;; `imenu-list-collect-entries' unconditionally makes imenu rescan the
 ;; whole buffer for headings every time `imenu-list-update' runs (driven by
