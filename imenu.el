@@ -22,12 +22,313 @@
 ;; * fixes for highlighting even empty headers
 ;; * special handling for org mode
 ;; * custom indexing for elisp
+;; * custom indexing for treesitter java mode
 
 ;;; Code
 
-;;
-;; Custom hierarchical parsing of the treesitter tree
-;;
+;;; General UI changes
+
+;; Be care to set the font family to one with nerd fonts so the icon renders.
+(defface my-imenu-list-icon-face
+  `((t (:inherit mode-line-buffer-id :family ,my-default-fixed-pitch-font)))
+  "Face for the icon glyphs in `imenu-list-mode-line-format'.")
+
+;; Simplified buffer name with icon for the menu bar. The whole thing is
+(setq imenu-list-mode-line-format
+      `("%e"
+	(:propertize
+	 ("" mode-line-frame-identification
+	  (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
+	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
+	  mode-line-end-spaces)
+	 help-echo "mouse-1: close the window"
+	 mouse-face mode-line-highlight
+	 local-map ,my-modeline-dedicated-window-map)))
+
+(defconst my-imenu-list-collapsed-marker "▶"
+  "Marker shown before a folded (hidden) imenu-list entry.")
+
+(defconst my-imenu-list-expanded-marker "▼"
+  "Marker shown before an unfolded (visible) imenu-list entry.")
+
+;; I need a more visible highlight for the current block
+(defface my-hl-imenu-face
+  `((t (:foreground ,(modus-themes-get-color-value 'fg-hl-imenu t)  :weight bold)))
+  "A new custom face for highlighting."
+  :group 'my-custom-group)
+
+(defun my-imenu-list--set-marker-at-point ()
+  "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
+  (save-excursion
+    (beginning-of-line)
+    (when (looking-at "^ *\\(\\+\\) ")
+      (let ((inhibit-read-only t))
+        (put-text-property (match-beginning 1) (match-end 1)
+                           'display
+                           ;; Our fold overlays start at the beginning of
+                           ;; the *next* line (see `my-imenu-list--line-span'),
+                           (if (my-imenu-list--folded-p (min (point-max) (1+ (line-end-position))))
+                               my-imenu-list-collapsed-marker
+                             my-imenu-list-expanded-marker))))))
+
+(defun my-imenu-list-update-fold-markers ()
+  "Update every foldable entry's marker in the *Ilist* buffer to match its current hidden/shown state."
+  (when (get-buffer imenu-list-buffer-name)
+    (with-current-buffer imenu-list-buffer-name
+      (my-imenu-list--rebind-buttons)
+      (save-excursion
+        (goto-char (point-min))
+        (while (not (eobp))
+          (my-imenu-list--set-marker-at-point)
+          (forward-line 1))))))
+
+
+;;; Direct, hideshow-free folding.
+;; Emacs 31 rewrote hideshow.el, and its new engine has a reproducible
+;; bug where hiding several blocks within one command silently fails
+;; partway through, with no error -- confirmed across every hideshow
+(defvar my-imenu-list--invisible-spec 'my-imenu-fold
+  "Symbol used as the `invisible' overlay property for folded *Ilist* blocks.")
+
+(defun my-imenu-list--hide-region (beg end)
+  "Fold BEG..END in the *Ilist* buffer via our own overlay."
+  (let ((ov (make-overlay beg end)))
+    (overlay-put ov 'invisible my-imenu-list--invisible-spec)
+    (overlay-put ov 'my-imenu-fold t)
+    (overlay-put ov 'evaporate t)
+    ov))
+
+(defun my-imenu-list--show-region (beg end)
+  "Unfold BEG..END in the *Ilist* buffer."
+  (remove-overlays beg end 'my-imenu-fold t))
+
+(defun my-imenu-list--folded-p (pos)
+  "Non-nil if our fold overlay covers POS."
+  (eq (get-char-property pos 'invisible) my-imenu-list--invisible-spec))
+
+(defun my-imenu-list--subtree-end (flat n start base-depth)
+  "Index in FLAT (length N) of the first entry after START whose
+depth is not greater than BASE-DEPTH -- i.e. the end of the subtree
+rooted at START."
+  (let ((i (1+ start)))
+    (while (and (< i n) (> (1+ (cdr (nth i flat))) base-depth))
+      (setq i (1+ i)))
+    i))
+
+(defun my-imenu-list--line-span (n i end-i)
+  "Character range to hide for the subtree at line I: from the start of
+line I+1 (i.e. *after* I's own header line and its newline, so the
+header keeps its own line break and stays on its own visual line) to
+the start of line END-I (or `point-max' if END-I runs past the last
+entry, of N total)."
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (1+ i))
+    (let ((beg (point)))
+      (cons beg (if (>= end-i n)
+                    (point-max)
+                  (goto-char (point-min))
+                  (forward-line end-i)
+                  (point))))))
+
+;; Hook for setup of the mode,
+(add-hook 'imenu-list-major-mode-hook
+          (lambda ()
+            ;; Wire in my custom highlight face.
+            (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
+            ;; High enough priority for this face so it takes precedence
+            ;; unlike normal I don't want to preserve the underlying foreground color
+            (setq-local hl-line-overlay-priority 10)
+            ;; Setup the custom invisibility spec we use for folding.
+            (add-to-invisibility-spec my-imenu-list--invisible-spec)
+            (setq-local line-move-ignore-invisible t)))
+
+;; hideshow's own activation is no longer wanted we fold via our own overlays above instead.
+(remove-hook 'imenu-list-major-mode-hook #'hs-minor-mode)
+
+;;; Autofolding
+(defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
+
+;; Track whether we autofolded per buffer.
+(defvar-local imenu-list--folded-once nil
+  "`my-imenu-list-fold-below-depth' has folded this buffer's imenu-list.")
+
+;; Track whether the user has manually toggled a fold since the last
+;; auto-fold, so a reindex-triggered rebuild doesn't stomp on their choice.
+(defvar-local imenu-list--user-toggled nil
+  "Non-nil once the user has manually toggled a fold in this buffer's imenu-list.")
+
+(defun my-imenu-list-fold-below-depth (&optional depth)
+  "Collapse imenu-list entries nested deeper than DEPTH (default `imenu-depth'). Top-level entries are depth 1."
+  (interactive)
+  (let ((depth (or depth imenu-depth)))
+    (with-current-buffer imenu-list-buffer-name
+      (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+             (n (length flat)))
+        (dotimes (i n)
+          (let* ((pair (nth i flat))
+                 (entry (car pair))
+                 (entry-depth (1+ (cdr pair))))
+            (when (and (imenu--subalist-p entry) (= entry-depth depth))
+              (let* ((end-i (my-imenu-list--subtree-end flat n i entry-depth))
+                     (span (my-imenu-list--line-span n i end-i)))
+                (my-imenu-list--hide-region (car span) (cdr span))))))))))
+
+(defun my-imenu-list-fold-below-depth-once (&optional depth)
+  "Run default folding once per buffer, then refresh fold markers.
+`imenu-list-update-hook' (which calls this) always runs with the
+*source* buffer as current, not the *Ilist* buffer -- so operate on
+`imenu-list--folded-once' explicitly via `imenu-list-buffer-name'
+rather than relying on whatever happens to be current."
+  (let ((ilist (get-buffer imenu-list-buffer-name)))
+    (when ilist
+      (with-current-buffer ilist
+        (unless imenu-list--folded-once
+          (setq imenu-list--folded-once t)
+          (my-imenu-list-fold-below-depth depth))
+        (my-imenu-list-update-fold-markers)))))
+
+(defun my-imenu-list-fold-children (&optional depth)
+  "Fold the entries DEPTH levels (default 1, i.e. the entry's direct
+children) below the entry at point in the *Ilist* buffer -- folding a
+child hides ITS content, which is what makes the grandchildren (DEPTH+1)
+disappear from view while the children themselves stay visible, just
+collapsed. Discards any manual toggles within that subtree; the rest of
+the tree is left untouched. Bound to \"c\"; always resets the subtree
+under point from a clean, fully-shown state before refolding it."
+  (interactive)
+  (let ((depth (or depth 1)))
+    (with-current-buffer imenu-list-buffer-name
+      (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+             (n (length flat))
+             (start (1- (line-number-at-pos (point))))
+             (base-depth (1+ (cdr (nth start flat))))
+             (target-depth (+ base-depth depth))
+             (end (my-imenu-list--subtree-end flat n start base-depth)))
+        (let ((span (my-imenu-list--line-span n start end)))
+          (my-imenu-list--show-region (car span) (cdr span)))
+        (let ((i (1+ start)))
+          (while (< i end)
+            (let* ((pair (nth i flat))
+                   (entry (car pair))
+                   (entry-depth (1+ (cdr pair))))
+              (when (and (imenu--subalist-p entry) (= entry-depth target-depth))
+                (let* ((sub-end (my-imenu-list--subtree-end flat n i entry-depth))
+                       (span (my-imenu-list--line-span n i sub-end)))
+                  (my-imenu-list--hide-region (car span) (cdr span)))))
+            (setq i (1+ i)))))))
+  (my-imenu-list-update-fold-markers)
+  (when (buffer-live-p imenu-list--displayed-buffer)
+    (with-current-buffer imenu-list--displayed-buffer
+      (setq imenu-list--user-toggled t))))
+
+(defun my-imenu-list-toggle-at-point ()
+  "Toggle folding of the container entry at point in the *Ilist* buffer.
+Replaces hideshow's `hs-toggle-hiding' (formerly bound to TAB/\"f\")."
+  (interactive)
+  (with-current-buffer imenu-list-buffer-name
+    (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+           (n (length flat))
+           (start (1- (line-number-at-pos (point))))
+           (pair (nth start flat))
+           (entry (car pair)))
+      (when (imenu--subalist-p entry)
+        (let* ((base-depth (1+ (cdr pair)))
+               (end (my-imenu-list--subtree-end flat n start base-depth))
+               (span (my-imenu-list--line-span n start end)))
+          (if (my-imenu-list--folded-p (car span))
+              (my-imenu-list--show-region (car span) (cdr span))
+            (my-imenu-list--hide-region (car span) (cdr span)))))))
+  (my-imenu-list--set-marker-at-point)
+  (when (buffer-live-p imenu-list--displayed-buffer)
+    (with-current-buffer imenu-list--displayed-buffer
+      (setq imenu-list--user-toggled t))))
+
+;; Run before any other `imenu-list-update-hook' member (e.g. imenu.el's
+;; VC highlighter) so folding always settles first each update cycle.
+(add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once -10)
+
+;; `imenu-list-insert-entries' erases and rebuilds the whole *Ilist* buffer
+;; whenever the source buffer's imenu entries actually change (e.g. a real
+;; edit triggers a reindex) -- that wipes our fold overlays right
+;; out from under `imenu-list--folded-once', which otherwise never fires
+;; again for this buffer.  Clear the flag whenever a reinsert just
+;; happened so the very next hook run re-folds instead of leaving the
+;; list permanently expanded -- but only while the user hasn't manually
+;; toggled anything yet, so a reindex after they've hand-adjusted folds
+;; doesn't stomp on their choice.
+(defun my-imenu-list--reset-fold-flag-on-reinsert (&rest _)
+  (when (buffer-live-p imenu-list--displayed-buffer)
+    (with-current-buffer imenu-list--displayed-buffer
+      (unless imenu-list--user-toggled
+        (setq imenu-list--folded-once nil)))))
+
+(advice-add 'imenu-list-insert-entries :after #'my-imenu-list--reset-fold-flag-on-reinsert)
+
+;; The simplified hide/show toggle at a mouse click event
+(defun imenu-list--action-toggle-hs (event)
+  (let ((window (posn-window (event-end event)))
+        (pos (posn-point (event-end event)))
+        (ilist-buffer (get-buffer imenu-list-buffer-name)))
+    (when (and (windowp window) (eql (window-buffer window) ilist-buffer))
+      (with-current-buffer ilist-buffer
+        (goto-char pos)
+        (my-imenu-list-toggle-at-point)))))
+
+;; TAB is a separate, keyboard-only concern: `button-map' (which
+;; every button's `keymap' overlay property is `eq' to -- not a
+;; per-button copy) binds TAB to `forward-button', and overlay
+;; keymaps take priority over the buffer's local map, so
+;; give *Ilist*'s buttons their own child
+;; keymap (parented to `button-map', so RET/mouse-2 still work) with
+;; just TAB overridden, and swap each button's `keymap' to point at
+;; it. (No mouse bindings here -- clicking goes through the button's
+;; own `follow-link'+`action' above, not through this keymap.)
+(defvar my-imenu-list-button-keymap
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map button-map)
+    (define-key map (kbd "TAB") #'my-imenu-list-toggle-at-point)
+    map)
+  "Like `button-map', but TAB toggles the *Ilist* fold instead of
+navigating between buttons.")
+
+(defun my-imenu-list--rebind-buttons ()
+  "Point every button overlay in the *Ilist* buffer at
+`my-imenu-list-button-keymap' instead of the shared global `button-map'.
+Idempotent -- cheap enough to call on every marker refresh."
+  (dolist (ov (overlays-in (point-min) (point-max)))
+    (when (and (overlay-get ov 'button)
+               (eq (overlay-get ov 'keymap) button-map))
+      (overlay-put ov 'keymap my-imenu-list-button-keymap))))
+
+;; Refold
+(defun my-after-imenu-list-toggle (&rest args)
+  "Run custom code after `imenu-list-smart-toggle` occurs."
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (local-variable-p 'imenu-list--folded-once)
+	(setq imenu-list--folded-once nil))
+      (when (local-variable-p 'imenu-list--user-toggled)
+	(setq imenu-list--user-toggled nil)))))
+
+(advice-add 'imenu-list-smart-toggle :before #'my-after-imenu-list-toggle)
+
+;; When the tracked entry is inside a currently-folded block, `hl-line-mode'
+;; highlights the (invisible) entry line, which visually collapses to just
+;; the fold ellipsis at the end of the header line.  Move point up to the
+;; visible header line instead so the highlight bar actually shows.
+(defun my-imenu-list-reveal-current-entry (&rest _)
+  (when (get-buffer-window imenu-list-buffer-name)
+    (with-selected-window (get-buffer-window imenu-list-buffer-name)
+      (when (invisible-p (point))
+        (goto-char (previous-single-char-property-change (point) 'invisible))
+        (beginning-of-line)
+        (hl-line-highlight)))))
+
+(advice-add 'imenu-list--show-current-entry :after #'my-imenu-list-reveal-current-entry)
+
+;;; Hierarchical treesitter tree parsing
 
 ;; Generate a marker for the given node
 ;; This can only be done while in the buffer
@@ -69,8 +370,8 @@
 ;; String for which sorting mode we're in for use in the mode-line
 (defun my/imenu-current-sort (&optional buffer)
   (let ((strategy (if buffer
-                       (buffer-local-value 'my-imenu-list-sort-strategy buffer)
-                     my-imenu-list-sort-strategy)))
+                      (buffer-local-value 'my-imenu-list-sort-strategy buffer)
+                    my-imenu-list-sort-strategy)))
     (cond ((eq strategy 'alphabetical) "alpha")
           ((eq strategy 'by-type) "by-type")
           (t "pos"))))
@@ -128,9 +429,9 @@
      (unless (memq imenu-create-index-function '(my/generate-ts-imenu my/imenu-elisp-index))
        (user-error "Sort switching is only available for treesitter or elisp imenus"))
      (let ((choices (append '(("alphabetical" . alphabetical)
-                               ("by position" . position))
-                             (when (eq imenu-create-index-function 'my/imenu-elisp-index)
-                               '(("by type" . by-type))))))
+                              ("by position" . position))
+                            (when (eq imenu-create-index-function 'my/imenu-elisp-index)
+                              '(("by type" . by-type))))))
        (list (alist-get
 	      (completing-read "Choose: " choices)
 	      choices nil nil 'equal)))))
@@ -162,37 +463,37 @@
 ;; construct a list of all fields, constructors and methods.
 ;; Recursion occurs when there is an inner class.
 (defun my/walk-object-declaration (classnode buffer)
-    (let ((constructors ())
-          (fields ())
-          (methods ())
-          (inner-classes ())
-          (result ())
-          (orderfn (if (eq my-imenu-list-sort-strategy 'alphabetical) 'my/imenu-sort 'reverse)))
-      (dolist (node (treesit-node-children classnode))
-        (progn
-          (cond ((equal (treesit-node-type node) "constructor_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
+  (let ((constructors ())
+        (fields ())
+        (methods ())
+        (inner-classes ())
+        (result ())
+        (orderfn (if (eq my-imenu-list-sort-strategy 'alphabetical) 'my/imenu-sort 'reverse)))
+    (dolist (node (treesit-node-children classnode))
+      (progn
+        (cond ((equal (treesit-node-type node) "constructor_declaration")
+               (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
 
-                ((equal (treesit-node-type node) "method_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
+              ((equal (treesit-node-type node) "method_declaration")
+               (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
 
-                ((equal (treesit-node-type node) "class_declaration")
-                 (let* ((body (treesit-node-child-by-field-name node "body"))
-                        (classname (my/get-def-name node))
-			(subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
-					(my/walk-object-declaration body buffer))))
+              ((equal (treesit-node-type node) "class_declaration")
+               (let* ((body (treesit-node-child-by-field-name node "body"))
+                      (classname (my/get-def-name node))
+		      (subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
+				      (my/walk-object-declaration body buffer))))
 
-                   (push (cons classname subleafs) inner-classes)))
+                 (push (cons classname subleafs) inner-classes)))
 
-                ((equal (treesit-node-type node) "field_declaration")
-                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
+              ((equal (treesit-node-type node) "field_declaration")
+               (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
 
-      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
-      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
-      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
-      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
-      ;; final value
-      result))
+    (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
+    (when methods (push (cons "Methods" (funcall orderfn methods)) result))
+    (when fields (push (cons "Fields" (funcall orderfn fields)) result))
+    (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
+    ;; final value
+    result))
 
 (setq my/first-level-ts-filters '(("Classes" "class_declaration")
                                   ("Interfaces" "interface_declaration")
@@ -384,7 +685,7 @@
       (while rest
         (if (equal (caar rest) "Code:")
             (throw 'done (append (nreverse before)
-                                  (list (cons "Code" (append (cdar rest) (cdr rest))))))
+                                 (list (cons "Code" (append (cdar rest) (cdr rest))))))
           (push (car rest) before)
           (setq rest (cdr rest))))
       sections)))
@@ -401,13 +702,13 @@
   (let ((fns (gethash name fn-buckets))
         (pkgs (gethash name pkg-buckets)))
     (cons name (append (list (cons "" start))
-                        (when pkgs (list (cons "Use-package" pkgs)))
-                        (delq nil (mapcar (lambda (cb)
-                                            (let ((entries (gethash name (cdr cb))))
-                                              (when entries (cons (car cb) entries))))
-                                          category-buckets))
-                        fns
-                        children))))
+                       (when pkgs (list (cons "Use-package" pkgs)))
+                       (delq nil (mapcar (lambda (cb)
+                                           (let ((entries (gethash name (cdr cb))))
+                                             (when entries (cons (car cb) entries))))
+                                         category-buckets))
+                       fns
+                       children))))
 
 ;; Custom imenu-create-index-function for emacs-lisp-mode, dispatching on
 ;; `my-imenu-list-sort-strategy' between the header-nested view (the
@@ -464,9 +765,9 @@
            ;; these have nothing to nest under, so they stay flat
            ;; top-level siblings, same as PKG-ORPHANS.
            (category-orphans (delq nil (mapcar (lambda (c)
-                                                  (let ((orphans (cdr (cdr c))))
-                                                    (when orphans (cons (car c) orphans))))
-                                                category-bucketed))))
+                                                 (let ((orphans (cdr (cdr c))))
+                                                   (when orphans (cons (car c) orphans))))
+                                               category-bucketed))))
       (append (my/imenu-elisp-nest-under-code
                (mapcar (lambda (range)
                          (my/imenu-elisp-build-header
@@ -508,33 +809,33 @@
                     categories))))
 
 ;; `imenu-list--current-entry' deliberately skips subalist (container)
-  ;; entries when deciding which line to highlight, since a plain subalist
-  ;; cons has no position of its own. But `org-imenu-get-tree' still stamps
-  ;; each entry's *name* string with an `org-imenu-marker' text property
-  ;; pointing at that heading's own position, even for headings that end up
-  ;; container-only (i.e. any heading with a child heading, like "IMenu" in
-  ;; tour.org). Recover that so point-in-container also highlights the
-  ;; container's own line instead of falling back to the previous sibling.
+;; entries when deciding which line to highlight, since a plain subalist
+;; cons has no position of its own. But `org-imenu-get-tree' still stamps
+;; each entry's *name* string with an `org-imenu-marker' text property
+;; pointing at that heading's own position, even for headings that end up
+;; container-only (i.e. any heading with a child heading, like "IMenu" in
+;; tour.org). Recover that so point-in-container also highlights the
+;; container's own line instead of falling back to the previous sibling.
 (defun my-imenu-list--entry-position (entry)
-    "Return a comparable buffer position for ENTRY, or nil if none exists."
-    (if (imenu--subalist-p entry)
-        (get-text-property 0 'org-imenu-marker (car entry))
-      (funcall (imenu-list-position-translator)
-               (if (listp (cdr entry)) (cadr entry) (cdr entry)))))
+  "Return a comparable buffer position for ENTRY, or nil if none exists."
+  (if (imenu--subalist-p entry)
+      (get-text-property 0 'org-imenu-marker (car entry))
+    (funcall (imenu-list-position-translator)
+             (if (listp (cdr entry)) (cadr entry) (cdr entry)))))
 
-  (defun my-imenu-list--current-entry ()
-    "Like `imenu-list--current-entry', but also matches container entries
+(defun my-imenu-list--current-entry ()
+  "Like `imenu-list--current-entry', but also matches container entries
 that carry an `org-imenu-marker' text property on their name."
-    (let ((point-pos (point-marker))
-          (offset (point-min-marker))
-          match-entry)
-      (dolist (entry imenu-list--line-entries match-entry)
-        (let ((entry-pos (my-imenu-list--entry-position entry)))
-          (when (and entry-pos (imenu-list-<= offset entry-pos point-pos))
-            (setq offset entry-pos)
-            (setq match-entry entry))))))
+  (let ((point-pos (point-marker))
+        (offset (point-min-marker))
+        match-entry)
+    (dolist (entry imenu-list--line-entries match-entry)
+      (let ((entry-pos (my-imenu-list--entry-position entry)))
+        (when (and entry-pos (imenu-list-<= offset entry-pos point-pos))
+          (setq offset entry-pos)
+          (setq match-entry entry))))))
 
-  (advice-add 'imenu-list--current-entry :override #'my-imenu-list--current-entry)
+(advice-add 'imenu-list--current-entry :override #'my-imenu-list--current-entry)
 
 
 ;;; VC Highlighting
@@ -545,32 +846,32 @@ that carry an `org-imenu-marker' text property on their name."
 ;; property).
 
 (defface my-imenu-list-modified-face
-    `((t (:background ,(modus-themes-get-color-value 'bg-changed))))
-    "Face for imenu-list entries covering a source section with a pending `diff-hl' change."
-    :group 'my-custom-group)
+  `((t (:background ,(modus-themes-get-color-value 'bg-changed))))
+  "Face for imenu-list entries covering a source section with a pending `diff-hl' change."
+  :group 'my-custom-group)
 
-  (defun my-imenu-list--flatten-entries (index-alist depth)
-    "Flatten INDEX-ALIST into (ENTRY . DEPTH) pairs, in the order `imenu-list' displays them."
-    (apply #'nconc
-           (mapcar (lambda (entry)
-                     (cons (cons entry depth)
-                           (when (imenu--subalist-p entry)
-                             (my-imenu-list--flatten-entries (cdr entry) (1+ depth)))))
-                   index-alist)))
+(defun my-imenu-list--flatten-entries (index-alist depth)
+  "Flatten INDEX-ALIST into (ENTRY . DEPTH) pairs, in the order `imenu-list' displays them."
+  (apply #'nconc
+         (mapcar (lambda (entry)
+                   (cons (cons entry depth)
+                         (when (imenu--subalist-p entry)
+                           (my-imenu-list--flatten-entries (cdr entry) (1+ depth)))))
+                 index-alist)))
 
-  (defun my-imenu-list--section-modified-p (start end buffer)
-    "Return non-nil if BUFFER has a `diff-hl' hunk overlapping [START, END)."
-    (when (and start end)
-      (with-current-buffer buffer
-        (let ((ovs (overlays-in start end))
-              found)
-          (while (and ovs (not found))
-            (setq found (overlay-get (car ovs) 'diff-hl-hunk))
-            (setq ovs (cdr ovs)))
-          found))))
+(defun my-imenu-list--section-modified-p (start end buffer)
+  "Return non-nil if BUFFER has a `diff-hl' hunk overlapping [START, END)."
+  (when (and start end)
+    (with-current-buffer buffer
+      (let ((ovs (overlays-in start end))
+            found)
+        (while (and ovs (not found))
+          (setq found (overlay-get (car ovs) 'diff-hl-hunk))
+          (setq ovs (cdr ovs)))
+        found))))
 
-  (defun my-imenu-list--entry-range (entry buffer)
-    "ENTRY's true (BEG . END) span, or nil if it has no position of its
+(defun my-imenu-list--entry-range (entry buffer)
+  "ENTRY's true (BEG . END) span, or nil if it has no position of its
 own or BUFFER's indexer doesn't tag ranges (see
 `my-imenu-list--range-table', elisp-only via
 `my/imenu-elisp-parse-and-tag-ranges'). Looks up ENTRY's own
@@ -580,14 +881,14 @@ BUFFER's range table -- this works for the synthetic \"\" declaration leaf
 `my/imenu-elisp-build-header' fabricates for a Section/Subsection header
 too, since that leaf's position is the same raw position the header's own
 leaf in RAW was keyed under when the table was built."
-    (let ((pos (my-imenu-list--entry-position entry)))
-      (when pos
-        (let ((key (if (markerp pos) (marker-position pos) pos))
-              (table (buffer-local-value 'my-imenu-list--range-table buffer)))
-          (and table (gethash key table))))))
+  (let ((pos (my-imenu-list--entry-position entry)))
+    (when pos
+      (let ((key (if (markerp pos) (marker-position pos) pos))
+            (table (buffer-local-value 'my-imenu-list--range-table buffer)))
+        (and table (gethash key table))))))
 
-  (defun my-imenu-list--mark-modified (entries buffer index-table leaf-modified)
-    "Mark LEAF-MODIFIED (via INDEX-TABLE, a hash table from entry to its
+(defun my-imenu-list--mark-modified (entries buffer index-table leaf-modified)
+  "Mark LEAF-MODIFIED (via INDEX-TABLE, a hash table from entry to its
 index in the flattened, display-order list) for every leaf in ENTRIES --
 any nesting depth -- whose own `my-imenu-list--entry-range' overlaps a
 `diff-hl' hunk in BUFFER, per `my-imenu-list--section-modified-p'. A
@@ -600,74 +901,71 @@ correctly partition the buffer; there's no leftover \"gap between
 children\" a container could need to separately claim.
 
 Returns non-nil if anything in ENTRIES or their descendants got marked."
-    (let (any-modified)
-      (dolist (entry entries)
-        (let ((modified
-               (if (imenu--subalist-p entry)
-                   (my-imenu-list--mark-modified (cdr entry) buffer index-table leaf-modified)
-                 (let ((range (my-imenu-list--entry-range entry buffer)))
-                   (and range (my-imenu-list--section-modified-p (car range) (cdr range) buffer))))))
-          (when modified
-            (aset leaf-modified (gethash entry index-table) t)
-            (setq any-modified t))))
-      any-modified))
+  (let (any-modified)
+    (dolist (entry entries)
+      (let ((modified
+             (if (imenu--subalist-p entry)
+                 (my-imenu-list--mark-modified (cdr entry) buffer index-table leaf-modified)
+               (let ((range (my-imenu-list--entry-range entry buffer)))
+                 (and range (my-imenu-list--section-modified-p (car range) (cdr range) buffer))))))
+        (when modified
+          (aset leaf-modified (gethash entry index-table) t)
+          (setq any-modified t))))
+    any-modified))
 
-  (defun my-imenu-list-highlight-modified-entries ()
-    "Overlay `my-imenu-list-modified-face' on *Ilist* lines covering a source
+(defun my-imenu-list-highlight-modified-entries ()
+  "Overlay `my-imenu-list-modified-face' on *Ilist* lines covering a source
 section with a pending `diff-hl' change, via `my-imenu-list--mark-modified'."
-    (let ((src-buf imenu-list--displayed-buffer))
-      (when (buffer-live-p src-buf)
-        (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
-               (n (length flat))
-               (leaf-modified (make-vector n nil))
-               (index-table (make-hash-table :test 'eq))
-               (i 0))
-          (dolist (pair flat)
-            (puthash (car pair) i index-table)
-            (setq i (1+ i)))
-          (my-imenu-list--mark-modified imenu-list--imenu-entries src-buf index-table leaf-modified)
-          (with-current-buffer imenu-list-buffer-name
-            (remove-overlays (point-min) (point-max) 'my-imenu-list-modified t)
-            (let ((inhibit-read-only t))
-              (dotimes (i n)
-                (when (aref leaf-modified i)
-                  (save-excursion
-                    (goto-char (point-min))
-                    (forward-line i)
-                    (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
-                      (overlay-put ov 'my-imenu-list-modified t)
-                      (overlay-put ov 'face 'my-imenu-list-modified-face)))))))))))
+  (let ((src-buf imenu-list--displayed-buffer))
+    (when (buffer-live-p src-buf)
+      (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+             (n (length flat))
+             (leaf-modified (make-vector n nil))
+             (index-table (make-hash-table :test 'eq))
+             (i 0))
+        (dolist (pair flat)
+          (puthash (car pair) i index-table)
+          (setq i (1+ i)))
+        (my-imenu-list--mark-modified imenu-list--imenu-entries src-buf index-table leaf-modified)
+        (with-current-buffer imenu-list-buffer-name
+          (remove-overlays (point-min) (point-max) 'my-imenu-list-modified t)
+          (let ((inhibit-read-only t))
+            (dotimes (i n)
+              (when (aref leaf-modified i)
+                (save-excursion
+                  (goto-char (point-min))
+                  (forward-line i)
+                  (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
+                    (overlay-put ov 'my-imenu-list-modified t)
+                    (overlay-put ov 'face 'my-imenu-list-modified-face)))))))))))
 
-  ;; Explicit positive depth so this always runs after the fold hook
-  ;; (negative depth, in init.el) has settled the buffer's hs overlays for
-  ;; this update cycle, regardless of load order between the two files.
-  (add-hook 'imenu-list-update-hook #'my-imenu-list-highlight-modified-entries 10)
+;; Explicit positive depth so this always runs after the fold hook
+;; (negative depth, in init.el) has settled the buffer's hs overlays for
+;; this update cycle, regardless of load order between the two files.
+(add-hook 'imenu-list-update-hook #'my-imenu-list-highlight-modified-entries 10)
 
 
   ;;; Org mode optimization. Its not completely clear if its needed.
 
-  ;; `imenu-list-collect-entries' unconditionally makes imenu rescan the
-  ;; whole buffer for headings every time `imenu-list-update' runs (driven by
-  ;; `imenu-list-idle-update-delay'), even when nothing has changed since the
-  ;; last scan. Skip that rescan for org buffers that haven't been modified
-  ;; since we last collected entries, and just keep reusing the previously
-  ;; generated tree.
-  (defvar-local my-imenu-list--last-tick nil
-    "`buffer-chars-modified-tick' as of the last `imenu-list-collect-entries' rescan.")
+;; `imenu-list-collect-entries' unconditionally makes imenu rescan the
+;; whole buffer for headings every time `imenu-list-update' runs (driven by
+;; `imenu-list-idle-update-delay'), even when nothing has changed since the
+;; last scan. Skip that rescan for org buffers that haven't been modified
+;; since we last collected entries, and just keep reusing the previously
+;; generated tree.
+(defvar-local my-imenu-list--last-tick nil
+  "`buffer-chars-modified-tick' as of the last `imenu-list-collect-entries' rescan.")
 
-  (defun my-imenu-list--skip-rescan-if-unmodified (orig-fn)
-    "Skip ORIG-FN's imenu rescan in org-mode buffers that are unmodified
+(defun my-imenu-list--skip-rescan-if-unmodified (orig-fn)
+  "Skip ORIG-FN's imenu rescan in org-mode buffers that are unmodified
 since the last rescan; reuse the existing `imenu--index-alist' instead."
-    (if (and (derived-mode-p 'org-mode)
-             imenu--index-alist
-             my-imenu-list--last-tick
-             (= my-imenu-list--last-tick (buffer-chars-modified-tick)))
-        (setq imenu-list--imenu-entries imenu--index-alist
-              imenu-list--displayed-buffer (current-buffer))
-      (funcall orig-fn)
-      (setq my-imenu-list--last-tick (buffer-chars-modified-tick))))
+  (if (and (derived-mode-p 'org-mode)
+           imenu--index-alist
+           my-imenu-list--last-tick
+           (= my-imenu-list--last-tick (buffer-chars-modified-tick)))
+      (setq imenu-list--imenu-entries imenu--index-alist
+            imenu-list--displayed-buffer (current-buffer))
+    (funcall orig-fn)
+    (setq my-imenu-list--last-tick (buffer-chars-modified-tick))))
 
- (advice-add 'imenu-list-collect-entries :around #'my-imenu-list--skip-rescan-if-unmodified)
-
-;; Turn on auto rescan
-(setq imenu-auto-rescan t)
+(advice-add 'imenu-list-collect-entries :around #'my-imenu-list--skip-rescan-if-unmodified)
