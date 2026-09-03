@@ -31,14 +31,15 @@ Requirements
    at defface time for my-hl-imenu-face and my-imenu-list-modified-face and my-hl-imenu-face.
 3. Recommended: a fg-hl-imenu entry in modus-themes-common-palette-overrides — without it the
      highlight face has no foreground color.
-4. Hookup the elisp and/or java indexers in a hook with a default autofold depth.
+4. Hookup the elisp and/or java indexers (my/imenu-elisp-index and my/imenu-java-ts-index)
+  in a hook with a default autofold depth.
 
-example: (add-hook 'emacs-lisp-mode-hook
+```
+(add-hook 'emacs-lisp-mode-hook
                 (lambda ()
             	      (setq-local imenu-depth 2)
                    (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
-
-  the java-ts-mode indexer is  my/imenu-java-ts-index
+```
 5. diff-hl package + global-diff-hl-mode enabled, for the VC-modified highlighting to work
 
 # Code:
@@ -224,11 +225,12 @@ partway through, with no error -- confirmed across every hideshow
     (overlay-put ov 'my-imenu-fold t)
     (overlay-put ov 'evaporate t)
     ov))
+oi
 ```
 
 ## my-imenu-list--show-region
->Unfold BEG..END in the *Ilist* buffer.
 
+>Unfold BEG..END in the *Ilist* buffer.
 ```
 (defun my-imenu-list--show-region (beg end)
   "Unfold BEG..END in the *Ilist* buffer."
