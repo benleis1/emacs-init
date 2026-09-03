@@ -28,7 +28,7 @@ Included here are all of the extensions off of Imenu-List
 Requirements
 1. imenu-list package installed and loaded before imenu.el ((use-package imenu-list :ensure t))
 2. Recommended: modus-themes loaded with a theme active — modus-themes-get-color-value is called
-   at defface time for my-hl-imenu-face and my-imenu-list-modified-face and my-hl-imenu-face.
+   at defface time for my-hl-imenu-face and my-imenu-list-modified-face.
 3. Recommended: a fg-hl-imenu entry in modus-themes-common-palette-overrides — without it the
      highlight face has no foreground color.
 4. Hookup the elisp and/or java indexers (my/imenu-elisp-index and my/imenu-java-ts-index)
