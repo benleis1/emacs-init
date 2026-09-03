@@ -1241,6 +1241,12 @@ anything as useful as the `report' messages in between."
 ;; Load all of my custom imenu extensions.
 (load-file (locate-user-emacs-file "imenu.el"))
 
+;; Now that modeline.el (loaded above) has defined the richer dedicated-window
+;; keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
+;; self-contained fallback.
+(setq imenu-list-mode-line-format
+      (my-imenu-list--build-mode-line-format my-modeline-dedicated-window-map))
+
 ;; Setup file menu to include load/save desktop
 ;; Note: lookup-key is the way to find existing entry names
 (define-key-after

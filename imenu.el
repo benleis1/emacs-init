@@ -28,17 +28,18 @@
 ;; Requirements
 ;; 1. imenu-list package installed and loaded before imenu.el ((use-package imenu-list :ensure t))
 ;; 2. Recommended: modus-themes loaded with a theme active — modus-themes-get-color-value is called
-;;    at defface time for my-hl-imenu-face and my-imenu-list-modified-face and my-hl-imenu-face.
+;;    at defface time for my-hl-imenu-face and my-imenu-list-modified-face.
 ;; 3. Recommended: a fg-hl-imenu entry in modus-themes-common-palette-overrides — without it the
 ;;      highlight face has no foreground color.
-;; 4. Hookup the elisp and/or java indexers in a hook with a default autofold depth.
+;; 4. Hookup the elisp and/or java indexers (my/imenu-elisp-index and my/imenu-java-ts-index)
+;;   in a hook with a default autofold depth.
 ;;
-;; example: (add-hook 'emacs-lisp-mode-hook
+;; ```
+;; (add-hook 'emacs-lisp-mode-hook
 ;;                 (lambda ()
 ;;             	      (setq-local imenu-depth 2)
 ;;                    (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
-;;
-;;   the java-ts-mode indexer is  my/imenu-java-ts-index
+;; ```
 ;; 5. diff-hl package + global-diff-hl-mode enabled, for the VC-modified highlighting to work
 
 ;;; Code:
@@ -430,20 +431,26 @@ Idempotent -- cheap enough to call on every marker refresh."
   (with-current-buffer buffer
     (copy-marker point)))
 
-;; Treesitter node name function for most node types
-(defun my/get-def-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name node "name") t))
+;; Guard the treesitter-dependent helpers below: `treesit' is only present
+;; when Emacs was built with tree-sitter support. `require' both loads it
+;; (so these no longer rely on some treesit-based major mode having been
+;; activated first) and doubles as the availability check.
+(when (require 'treesit nil t)
 
-;; Treesitter node name function for class fields
-(defun my/get-field-name (node)
-  (treesit-node-text
-   (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name") t))
+  ;; Treesitter node name function for most node types
+  (defun my/get-def-name (node)
+    (treesit-node-text
+     (treesit-node-child-by-field-name node "name") t))
 
-;; Simple wrapper to make an imenu leaf from a treesitter node
-(defun my/imenu-leaf (node buffer name-func)
-  (cons (funcall name-func node)
-        (my/make-marker buffer (treesit-node-start node))))
+  ;; Treesitter node name function for class fields
+  (defun my/get-field-name (node)
+    (treesit-node-text
+     (treesit-node-child-by-field-name (treesit-node-child-by-field-name node "declarator") "name") t))
+
+  ;; Simple wrapper to make an imenu leaf from a treesitter node
+  (defun my/imenu-leaf (node buffer name-func)
+    (cons (funcall name-func node)
+          (my/make-marker buffer (treesit-node-start node)))))
 
 ;; Compare two imenu nodes
 (defun my/imenu-compare (left right)
@@ -549,89 +556,93 @@ Idempotent -- cheap enough to call on every marker refresh."
 (define-key imenu-list-major-mode-map (kbd "TAB") #'my-imenu-list-toggle-at-point)
 (define-key imenu-list-major-mode-map (kbd "f") #'my-imenu-list-toggle-at-point)
 
-;; Sort a list of imenu nodes
-(defun my/imenu-sort (seq)
-  (sort seq 'my/imenu-compare))
+;; Guard the java-ts indexer and its helpers the same way as the treesit
+;; node-name helpers above: only defined when `treesit' is available.
+(when (require 'treesit nil t)
 
-;; Walk the parent node class of an interface, class or enum and
-;; construct a list of all fields, constructors and methods.
-;; Recursion occurs when there is an inner class.
-(defun my/walk-object-declaration (classnode buffer)
-  (let ((constructors ())
-        (fields ())
-        (methods ())
-        (inner-classes ())
-        (result ())
-        (orderfn (if (eq my-imenu-list-sort-strategy 'alphabetical) 'my/imenu-sort 'reverse)))
-    (dolist (node (treesit-node-children classnode))
-      (progn
-        (cond ((equal (treesit-node-type node) "constructor_declaration")
-               (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
+  ;; Sort a list of imenu nodes
+  (defun my/imenu-sort (seq)
+    (sort seq 'my/imenu-compare))
 
-              ((equal (treesit-node-type node) "method_declaration")
-               (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
+  ;; Walk the parent node class of an interface, class or enum and
+  ;; construct a list of all fields, constructors and methods.
+  ;; Recursion occurs when there is an inner class.
+  (defun my/walk-object-declaration (classnode buffer)
+    (let ((constructors ())
+          (fields ())
+          (methods ())
+          (inner-classes ())
+          (result ())
+          (orderfn (if (eq my-imenu-list-sort-strategy 'alphabetical) 'my/imenu-sort 'reverse)))
+      (dolist (node (treesit-node-children classnode))
+        (progn
+          (cond ((equal (treesit-node-type node) "constructor_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) constructors))
 
-              ((equal (treesit-node-type node) "class_declaration")
-               (let* ((body (treesit-node-child-by-field-name node "body"))
-                      (classname (my/get-def-name node))
-		      (subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
-				      (my/walk-object-declaration body buffer))))
+                ((equal (treesit-node-type node) "method_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-def-name) methods))
 
-                 (push (cons classname subleafs) inner-classes)))
+                ((equal (treesit-node-type node) "class_declaration")
+                 (let* ((body (treesit-node-child-by-field-name node "body"))
+                        (classname (my/get-def-name node))
+			(subleafs (cons (cons "declaration" (my/make-marker buffer (treesit-node-start node)))
+					(my/walk-object-declaration body buffer))))
 
-              ((equal (treesit-node-type node) "field_declaration")
-               (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
+                   (push (cons classname subleafs) inner-classes)))
 
-    (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
-    (when methods (push (cons "Methods" (funcall orderfn methods)) result))
-    (when fields (push (cons "Fields" (funcall orderfn fields)) result))
-    (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
-    ;; final value
-    result))
+                ((equal (treesit-node-type node) "field_declaration")
+                 (push (my/imenu-leaf node buffer 'my/get-field-name) fields)))))
 
-(setq my/first-level-ts-filters '(("Classes" "class_declaration")
-                                  ("Interfaces" "interface_declaration")
-                                  ("Records" "record_declaration")))
+      (when inner-classes (push (cons "Inner Classes" (funcall orderfn inner-classes)) result))
+      (when methods (push (cons "Methods" (funcall orderfn methods)) result))
+      (when fields (push (cons "Fields" (funcall orderfn fields)) result))
+      (when constructors (push (cons "Constructors" (funcall orderfn constructors)) result))
+      ;; final value
+      result))
 
-;; Main routine that walks top level of the grammar tree and constructs imenu nodes
-;; to turn on - (setq imenu-create-index-function 'my/imenu-java-ts-index)
-(defun my/imenu-java-ts-index (&optional buffer)
-  (interactive)
-  (unless buffer (setq buffer (current-buffer)))
-  (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
-    (let ((classes '())
-          (interfaces '())
-          (enums '())
-          (class_declaration '())
-          (subresults '())
-          (result '()))
+  (setq my/first-level-ts-filters '(("Classes" "class_declaration")
+                                    ("Interfaces" "interface_declaration")
+                                    ("Records" "record_declaration")))
 
-      (dolist (node (treesit-node-children (treesit-buffer-root-node)))
-        (let ((type (treesit-node-type node)))
-          (when (or (equal type "class_declaration")
-                    (equal type "interface_declaration")
-                    (equal type "enum_declaration"))
-            (let* ((body (treesit-node-child-by-field-name node "body"))
-                   (subleafs  (when body (my/walk-object-declaration body buffer)))
-                   (objectname (my/get-def-name node))
-                   (object-start (treesit-node-start node)))
+  ;; Main routine that walks top level of the grammar tree and constructs imenu nodes
+  ;; to turn on - (setq imenu-create-index-function 'my/imenu-java-ts-index)
+  (defun my/imenu-java-ts-index (&optional buffer)
+    (interactive)
+    (unless buffer (setq buffer (current-buffer)))
+    (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
+      (let ((classes '())
+            (interfaces '())
+            (enums '())
+            (class_declaration '())
+            (subresults '())
+            (result '()))
 
-              (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
-              (unless (assoc type subresults) (push (cons type nil) subresults))
-              (push (cons objectname subleafs) (cdr (assoc type subresults)))
+        (dolist (node (treesit-node-children (treesit-buffer-root-node)))
+          (let ((type (treesit-node-type node)))
+            (when (or (equal type "class_declaration")
+                      (equal type "interface_declaration")
+                      (equal type "enum_declaration"))
+              (let* ((body (treesit-node-child-by-field-name node "body"))
+                     (subleafs  (when body (my/walk-object-declaration body buffer)))
+                     (objectname (my/get-def-name node))
+                     (object-start (treesit-node-start node)))
 
-              (cond ((equal type "class_declaration")
-                     (push (cons objectname subleafs) classes))
-                    ((equal type "enum_declaration")
-                     (push (cons objectname subleafs) enums))
-                    ((equal type "interface_declaration")
-                     (push (cons objectname subleafs) interfaces)))))))
+                (push (cons "declaration" (my/make-marker buffer object-start)) subleafs)
+                (unless (assoc type subresults) (push (cons type nil) subresults))
+                (push (cons objectname subleafs) (cdr (assoc type subresults)))
 
-      (when enums (push (cons "Enums" (reverse enums)) result))
-      (when (assoc "class_declaration" subresults)
-        (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
-      (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
-      result)))
+                (cond ((equal type "class_declaration")
+                       (push (cons objectname subleafs) classes))
+                      ((equal type "enum_declaration")
+                       (push (cons objectname subleafs) enums))
+                      ((equal type "interface_declaration")
+                       (push (cons objectname subleafs) interfaces)))))))
+
+        (when enums (push (cons "Enums" (reverse enums)) result))
+        (when (assoc "class_declaration" subresults)
+          (push (cons "Classes" (reverse (cdr (assoc "class_declaration" subresults)))) result))
+        (when interfaces (push (cons "Interfaces" (reverse interfaces)) result))
+        result))))
 
 ;;; Elisp custom header handling
 
