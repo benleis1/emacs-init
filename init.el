@@ -1024,7 +1024,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
         tab-width 4
         indent-tabs-mode t)
   (setq-local imenu-depth 3)
-  (setq-local imenu-create-index-function 'my/generate-ts-imenu)
+  (setq-local imenu-create-index-function 'my/imenu-java-ts-index)
   (treesit-fold-mode)
   (treesit-fold-close-java-imports))
 
@@ -1197,20 +1197,7 @@ anything as useful as the `report' messages in between."
 ;; Also extract all the ;;; sections.
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
-            (add-to-list 'imenu-generic-expression
-                          (list "Use-package"
-                                (concat "^\\s-*(use-package\\s-+\\("
-                                        lisp-mode-symbol-regexp "\\)")
-                                1))
-
-	    (add-to-list 'imenu-generic-expression
-                         '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
-
-	    (add-to-list 'imenu-generic-expression
-                         '("Subsections" "^;;;;\\s-+\\(.*\\)$" 1))
-
 	    (setq-local imenu-depth 2)
-
             (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
 
 
@@ -1247,6 +1234,9 @@ anything as useful as the `report' messages in between."
         imenu-list-auto-resize nil
 	;; rescan buffers as they change
 	imenu-auto-rescan t))
+
+;; Bind the fixed pitch icon font for the imenu modeline
+(setq my-imenu-fixed-font my-default-fixed-pitch-font)
 
 ;; Load all of my custom imenu extensions.
 (load-file (locate-user-emacs-file "imenu.el"))

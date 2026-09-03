@@ -12,6 +12,7 @@
 ;; o888o o888o o888o o888o `Y8bod8P' o888o o888o  `V88V"V8P'
 ;; ```
 
+;; Author: Benjamin Leis
 
 ;; Imenu and imenu-list extensions
 
@@ -24,27 +25,59 @@
 ;; * custom indexing for elisp
 ;; * custom indexing for treesitter java mode
 
+;; Requirements
+;; 1. imenu-list package installed and loaded before imenu.el ((use-package imenu-list :ensure t))
+;; 2. Recommended: modus-themes loaded with a theme active — modus-themes-get-color-value is called
+;;    at defface time for my-hl-imenu-face and my-imenu-list-modified-face and my-hl-imenu-face.
+;; 3. Recommended: a fg-hl-imenu entry in modus-themes-common-palette-overrides — without it the
+;;      highlight face has no foreground color.
+;; 4. Hookup the elisp and/or java indexers in a hook with a default autofold depth.
+;;
+;; example: (add-hook 'emacs-lisp-mode-hook
+;;                 (lambda ()
+;;             	      (setq-local imenu-depth 2)
+;;                    (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
+;;
+;;   the java-ts-mode indexer is  my/imenu-java-ts-index
+;; 5. diff-hl package + global-diff-hl-mode enabled, for the VC-modified highlighting to work
+
 ;;; Code:
 
 ;;; General UI changes
+(defvar my-imenu-fixed-font (face-attribute 'default :family))
 
 ;; Be care to set the font family to one with nerd fonts so the icon renders.
 (defface my-imenu-list-icon-face
-  `((t (:inherit mode-line-buffer-id :family ,my-default-fixed-pitch-font)))
+  `((t (:inherit mode-line-buffer-id :family ,my-imenu-fixed-font)))
   "Face for the icon glyphs in `imenu-list-mode-line-format'.")
 
-;; Simplified buffer name with icon for the menu bar. The whole thing is
-(setq imenu-list-mode-line-format
-      `("%e"
-	(:propertize
-	 ("" mode-line-frame-identification
-	  (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
-	  (:eval (buffer-name imenu-list--displayed-buffer)) "  "
-	  (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
-	  mode-line-end-spaces)
-	 help-echo "mouse-1: close the window"
-	 mouse-face mode-line-highlight
-	 local-map ,my-modeline-dedicated-window-map)))
+(defvar my-imenu-list-default-window-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mode-line mouse-1] #'quit-window)
+    map)
+  "Fallback keymap for `mouse-1' on the *Ilist* mode-line: just closes the
+window. Used by `my-imenu-list--build-mode-line-format' when no richer
+map (e.g. `my-modeline-dedicated-window-map', wired in from init.el once
+modeline.el is loaded) is supplied.")
+
+(defun my-imenu-list--build-mode-line-format (&optional window-map)
+  "Build a value for `imenu-list-mode-line-format', using WINDOW-MAP
+\(default `my-imenu-list-default-window-map') as the mode-line's local-map."
+  `("%e"
+    (:propertize
+     ("" mode-line-frame-identification
+      (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
+      (:eval (buffer-name imenu-list--displayed-buffer)) "  "
+      (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
+      mode-line-end-spaces)
+     help-echo "mouse-1: close the window"
+     mouse-face mode-line-highlight
+     local-map ,(or window-map my-imenu-list-default-window-map))))
+
+;; Simplified buffer name with icon for the menu bar. Self-contained
+;; default; init.el overrides this with the richer
+;; `my-modeline-dedicated-window-map' once modeline.el has loaded.
+(setq imenu-list-mode-line-format (my-imenu-list--build-mode-line-format))
 
 (defconst my-imenu-list-collapsed-marker "▶"
   "Marker shown before a folded (hidden) imenu-list entry.")
@@ -147,8 +180,8 @@ entry, of N total)."
 ;; hideshow's own activation is no longer wanted we fold via our own overlays above instead.
 (remove-hook 'imenu-list-major-mode-hook #'hs-minor-mode)
 
-;;; Autofolding
-(defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
+ ;;; Autofolding
+(defvar-local imenu-depth 2 "Initial depth to expand imenu-ilist window")
 
 ;; Track whether we've shown this buffer's imenu-list at least once, and
 ;; if so, which containers were folded the last time we looked -- both
@@ -487,7 +520,7 @@ Idempotent -- cheap enough to call on every marker refresh."
 (defun imenu-list-switch-sort (strategy)
   (interactive
    (with-current-buffer imenu-list--displayed-buffer
-     (unless (memq imenu-create-index-function '(my/generate-ts-imenu my/imenu-elisp-index))
+     (unless (memq imenu-create-index-function '(my/imenu-java-ts-index my/imenu-elisp-index))
        (user-error "Sort switching is only available for treesitter or elisp imenus"))
      (let ((choices (append '(("alphabetical" . alphabetical)
                               ("by position" . position))
@@ -561,8 +594,8 @@ Idempotent -- cheap enough to call on every marker refresh."
                                   ("Records" "record_declaration")))
 
 ;; Main routine that walks top level of the grammar tree and constructs imenu nodes
-;; to turn on - (setq imenu-create-index-function 'my/generate-ts-imenu)
-(defun my/generate-ts-imenu (&optional buffer)
+;; to turn on - (setq imenu-create-index-function 'my/imenu-java-ts-index)
+(defun my/imenu-java-ts-index (&optional buffer)
   (interactive)
   (unless buffer (setq buffer (current-buffer)))
   (with-current-buffer (if buffer (get-buffer buffer) (current-buffer))
@@ -602,8 +635,21 @@ Idempotent -- cheap enough to call on every marker refresh."
 
 ;;; Elisp custom header handling
 
+;; Add additional expressions to baseline parsing.
+(add-to-list 'imenu-generic-expression
+             (list "Use-package"
+                   (concat "^\\s-*(use-package\\s-+\\("
+                           lisp-mode-symbol-regexp "\\)")
+                   1))
+
+(add-to-list 'imenu-generic-expression
+             '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
+
+(add-to-list 'imenu-generic-expression
+             '("Subsections" "^;;;;\\s-+\\(.*\\)$" 1))
+
 ;; fold `defun'/`use-package' entries under the ";;; Section" comment
-;; header they're physically located under (see the "Sections"/"Use-package";;
+;; header they're physically located under.
 
 ;; Every leaf (NAME . MARKER) cons across all of RAW's category groups
 ;; (cdr is a list, e.g. "Sections"/"Types"/"Variables"/"Use-package") and
@@ -652,7 +698,7 @@ Idempotent -- cheap enough to call on every marker refresh."
 ;; indexed, not the *Ilist* buffer) mapping every leaf's raw, normalized
 ;; buffer position to its true (BEG . END) span, as computed once by
 ;; `my/imenu-elisp-parse-and-tag-ranges'. `my-imenu-list--entry-range'
-;; reads this to answer "is a `diff-hl' hunk inside this entry's span
+;; reads this to answer is a diff-hl hunk inside this entry's span
 (defvar-local my-imenu-list--range-table nil)
 
 ;; Call `imenu--generic-function' in the current buffer and populate
@@ -921,7 +967,7 @@ that carry an `org-imenu-marker' text property on their name."
                  index-alist)))
 
 (defun my-imenu-list--section-modified-p (start end buffer)
-  "Return non-nil if BUFFER has a `diff-hl' hunk overlapping [START, END)."
+  "Return non-nil if BUFFER has a `diff-hl' hunk overlapping (START, END)."
   (when (and start end)
     (with-current-buffer buffer
       (let ((ovs (overlays-in start end))
@@ -954,14 +1000,11 @@ index in the flattened, display-order list) for every leaf in ENTRIES --
 any nesting depth -- whose own `my-imenu-list--entry-range' overlaps a
 `diff-hl' hunk in BUFFER, per `my-imenu-list--section-modified-p'. A
 container is marked whenever any of its descendants is (plain recursive
-OR, no separate span check of its own) -- unlike the old sibling-order
-inference this replaced, ranges are computed once, up front, from true
-physical adjacency across every entry regardless of category (see
-`my/imenu-elisp-parse-and-tag-ranges'), so they already gaplessly and
-correctly partition the buffer; there's no leftover \"gap between
-children\" a container could need to separately claim.
-
-Returns non-nil if anything in ENTRIES or their descendants got marked."
+OR, no separate span check of its own). Ranges are computed once, up
+front, from true physical adjacency across every entry regardless of
+category (see `my/imenu-elisp-parse-and-tag-ranges'), so they already
+partition the buffer without any gaps. Returns non-nil if anything in
+ENTRIES or their descendants got marked."
   (let (any-modified)
     (dolist (entry entries)
       (let ((modified
