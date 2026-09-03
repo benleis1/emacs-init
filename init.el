@@ -7,9 +7,7 @@
 ;;   888    "     888   888   888   .oP"888  888       `"Y88b.
 ;;   888       o  888   888   888  d8(  888  888   .o8 o.  )88b
 ;;  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
-;; ```
-
-;; Emacs configuration file
+;; ``` configuration file
 ;;
 ;; Author: Benjamin Leis
 
@@ -437,7 +435,8 @@
 ;; the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 
-;;; backup and autosave - put everything in .saves under .emacs.d
+;;; backup and autosave.
+;;put everything in .saves under .emacs.d
 
 ;; Define a directory for auto-save files
 (defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
@@ -1260,6 +1259,11 @@ anything as useful as the `report' messages in between."
   (defvar-local imenu-list--folded-once nil
     "`my-imenu-list-fold-below-depth' has folded this buffer's imenu-list.")
 
+  ;; Track whether the user has manually toggled a fold since the last
+  ;; auto-fold, so a reindex-triggered rebuild doesn't stomp on their choice.
+  (defvar-local imenu-list--user-toggled nil
+    "Non-nil once the user has manually toggled a fold in this buffer's imenu-list.")
+
   (defconst my-imenu-list-collapsed-marker "▶"
     "Marker shown before a folded (hidden) imenu-list entry.")
 
@@ -1272,12 +1276,54 @@ anything as useful as the `report' messages in between."
   "A new custom face for highlighting."
   :group 'my-custom-group)
 
-  (defun my-imenu-list--hide-ellipsis (ov)
-    "Suppress hideshow's default \"...\" indicator on OV.
-The leading arrow marker already conveys fold state, so the ellipsis
-would just be redundant clutter."
-    (when (eq (overlay-get ov 'invisible) 'hs)
-      (overlay-put ov 'display "")))
+  ;; Direct, hideshow-free folding.
+  ;;
+  ;; Emacs 31 rewrote hideshow.el, and its new engine has a reproducible
+  ;; bug where hiding several blocks within one command silently fails
+  ;; partway through, with no error -- confirmed across every hideshow
+  (defvar my-imenu-list--invisible-spec 'my-imenu-fold
+    "Symbol used as the `invisible' overlay property for folded *Ilist* blocks.")
+
+  (defun my-imenu-list--hide-region (beg end)
+    "Fold BEG..END in the *Ilist* buffer via our own overlay."
+    (let ((ov (make-overlay beg end)))
+      (overlay-put ov 'invisible my-imenu-list--invisible-spec)
+      (overlay-put ov 'my-imenu-fold t)
+      (overlay-put ov 'evaporate t)
+      ov))
+
+  (defun my-imenu-list--show-region (beg end)
+    "Unfold BEG..END in the *Ilist* buffer."
+    (remove-overlays beg end 'my-imenu-fold t))
+
+  (defun my-imenu-list--folded-p (pos)
+    "Non-nil if our fold overlay covers POS."
+    (eq (get-char-property pos 'invisible) my-imenu-list--invisible-spec))
+
+  (defun my-imenu-list--subtree-end (flat n start base-depth)
+    "Index in FLAT (length N) of the first entry after START whose
+depth is not greater than BASE-DEPTH -- i.e. the end of the subtree
+rooted at START."
+    (let ((i (1+ start)))
+      (while (and (< i n) (> (1+ (cdr (nth i flat))) base-depth))
+        (setq i (1+ i)))
+      i))
+
+  (defun my-imenu-list--line-span (n i end-i)
+    "Character range to hide for the subtree at line I: from the start of
+line I+1 (i.e. *after* I's own header line and its newline, so the
+header keeps its own line break and stays on its own visual line) to
+the start of line END-I (or `point-max' if END-I runs past the last
+entry, of N total)."
+    (save-excursion
+      (goto-char (point-min))
+      (forward-line (1+ i))
+      (let ((beg (point)))
+        (cons beg (if (>= end-i n)
+                      (point-max)
+                    (goto-char (point-min))
+                    (forward-line end-i)
+                    (point))))))
 
   ;; Hook for setup of the mode,
   (add-hook 'imenu-list-major-mode-hook
@@ -1287,26 +1333,156 @@ would just be redundant clutter."
               ;; High enough priority for this face so it takes precedence
               ;; unlike normal I don't want to preserve the underlying foreground color
               (setq-local hl-line-overlay-priority 10)
-              ;; Wire in the ellipsis twiddling.
-              (setq-local hs-set-up-overlay #'my-imenu-list--hide-ellipsis)))
+              ;; Setup the custom invisibility spec we use for folding.
+              (add-to-invisibility-spec my-imenu-list--invisible-spec)
+              (setq-local line-move-ignore-invisible t)))
+
+  ;; hideshow's own activation is no longer wanted for this buffer --
+  ;; we fold via our own overlays above instead.
+  (remove-hook 'imenu-list-major-mode-hook #'hs-minor-mode)
 
   (defun my-imenu-list-fold-below-depth (&optional depth)
     "Collapse imenu-list entries nested deeper than DEPTH (default `imenu-depth'). Top-level entries are depth 1."
     (interactive)
     (let ((depth (or depth imenu-depth)))
       (with-current-buffer imenu-list-buffer-name
-        (save-excursion
-          (goto-char (+ 1 (point-min)))
-          (hs-hide-level depth)))))
+        (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+               (n (length flat)))
+          (dotimes (i n)
+            (let* ((pair (nth i flat))
+                   (entry (car pair))
+                   (entry-depth (1+ (cdr pair))))
+              (when (and (imenu--subalist-p entry) (= entry-depth depth))
+                (let* ((end-i (my-imenu-list--subtree-end flat n i entry-depth))
+                       (span (my-imenu-list--line-span n i end-i)))
+                  (my-imenu-list--hide-region (car span) (cdr span))))))))))
 
-    (defun my-imenu-list-fold-below-depth-once (&optional depth)
-    "Run default folding once per buffer, then refresh fold markers."
-    (unless imenu-list--folded-once
-      (setq imenu-list--folded-once t)
-      (my-imenu-list-fold-below-depth depth))
-    (my-imenu-list-update-fold-markers))
+  (defun my-imenu-list-fold-below-depth-once (&optional depth)
+    "Run default folding once per buffer, then refresh fold markers.
+`imenu-list-update-hook' (which calls this) always runs with the
+*source* buffer as current, not the *Ilist* buffer -- so operate on
+`imenu-list--folded-once' explicitly via `imenu-list-buffer-name'
+rather than relying on whatever happens to be current."
+    (let ((ilist (get-buffer imenu-list-buffer-name)))
+      (when ilist
+        (with-current-buffer ilist
+          (unless imenu-list--folded-once
+            (setq imenu-list--folded-once t)
+            (my-imenu-list-fold-below-depth depth))
+          (my-imenu-list-update-fold-markers)))))
 
-  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once)
+  (defun my-imenu-list-fold-children (&optional depth)
+    "Fold the entries DEPTH levels (default 1, i.e. the entry's direct
+children) below the entry at point in the *Ilist* buffer -- folding a
+child hides ITS content, which is what makes the grandchildren (DEPTH+1)
+disappear from view while the children themselves stay visible, just
+collapsed. Discards any manual toggles within that subtree; the rest of
+the tree is left untouched. Bound to \"c\"; always resets the subtree
+under point from a clean, fully-shown state before refolding it."
+    (interactive)
+    (let ((depth (or depth 1)))
+      (with-current-buffer imenu-list-buffer-name
+        (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+               (n (length flat))
+               (start (1- (line-number-at-pos (point))))
+               (base-depth (1+ (cdr (nth start flat))))
+               (target-depth (+ base-depth depth))
+               (end (my-imenu-list--subtree-end flat n start base-depth)))
+          (let ((span (my-imenu-list--line-span n start end)))
+            (my-imenu-list--show-region (car span) (cdr span)))
+          (let ((i (1+ start)))
+            (while (< i end)
+              (let* ((pair (nth i flat))
+                     (entry (car pair))
+                     (entry-depth (1+ (cdr pair))))
+                (when (and (imenu--subalist-p entry) (= entry-depth target-depth))
+                  (let* ((sub-end (my-imenu-list--subtree-end flat n i entry-depth))
+                         (span (my-imenu-list--line-span n i sub-end)))
+                    (my-imenu-list--hide-region (car span) (cdr span)))))
+              (setq i (1+ i)))))))
+    (my-imenu-list-update-fold-markers)
+    (when (buffer-live-p imenu-list--displayed-buffer)
+      (with-current-buffer imenu-list--displayed-buffer
+        (setq imenu-list--user-toggled t))))
+
+  (defun my-imenu-list-toggle-at-point ()
+    "Toggle folding of the container entry at point in the *Ilist* buffer.
+Replaces hideshow's `hs-toggle-hiding' (formerly bound to TAB/\"f\")."
+    (interactive)
+    (with-current-buffer imenu-list-buffer-name
+      (let* ((flat (my-imenu-list--flatten-entries imenu-list--imenu-entries 0))
+             (n (length flat))
+             (start (1- (line-number-at-pos (point))))
+             (pair (nth start flat))
+             (entry (car pair)))
+        (when (imenu--subalist-p entry)
+          (let* ((base-depth (1+ (cdr pair)))
+                 (end (my-imenu-list--subtree-end flat n start base-depth))
+                 (span (my-imenu-list--line-span n start end)))
+            (if (my-imenu-list--folded-p (car span))
+                (my-imenu-list--show-region (car span) (cdr span))
+              (my-imenu-list--hide-region (car span) (cdr span)))))))
+    (my-imenu-list--set-marker-at-point)
+    (when (buffer-live-p imenu-list--displayed-buffer)
+      (with-current-buffer imenu-list--displayed-buffer
+        (setq imenu-list--user-toggled t))))
+
+  ;; Run before any other `imenu-list-update-hook' member (e.g. imenu.el's
+  ;; VC highlighter) so folding always settles first each update cycle.
+  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once -10)
+
+  ;; `imenu-list-insert-entries' erases and rebuilds the whole *Ilist* buffer
+  ;; whenever the source buffer's imenu entries actually change (e.g. a real
+  ;; edit triggers a reindex) -- that wipes our fold overlays right
+  ;; out from under `imenu-list--folded-once', which otherwise never fires
+  ;; again for this buffer.  Clear the flag whenever a reinsert just
+  ;; happened so the very next hook run re-folds instead of leaving the
+  ;; list permanently expanded -- but only while the user hasn't manually
+  ;; toggled anything yet, so a reindex after they've hand-adjusted folds
+  ;; doesn't stomp on their choice.
+  (defun my-imenu-list--reset-fold-flag-on-reinsert (&rest _)
+    (when (buffer-live-p imenu-list--displayed-buffer)
+      (with-current-buffer imenu-list--displayed-buffer
+        (unless imenu-list--user-toggled
+          (setq imenu-list--folded-once nil)))))
+
+  (advice-add 'imenu-list-insert-entries :after #'my-imenu-list--reset-fold-flag-on-reinsert)
+
+  ;; The simplified hide/show toggle at a mouse click event
+  (defun imenu-list--action-toggle-hs (event)
+    (let ((window (posn-window (event-end event)))
+          (pos (posn-point (event-end event)))
+          (ilist-buffer (get-buffer imenu-list-buffer-name)))
+      (when (and (windowp window) (eql (window-buffer window) ilist-buffer))
+        (with-current-buffer ilist-buffer
+          (goto-char pos)
+          (my-imenu-list-toggle-at-point)))))
+
+  ;; TAB is a separate, keyboard-only concern: `button-map' (which
+  ;; every button's `keymap' overlay property is `eq' to -- not a
+  ;; per-button copy) binds TAB to `forward-button', and overlay
+  ;; keymaps take priority over the buffer's local map, so
+  ;; give *Ilist*'s buttons their own child
+  ;; keymap (parented to `button-map', so RET/mouse-2 still work) with
+  ;; just TAB overridden, and swap each button's `keymap' to point at
+  ;; it. (No mouse bindings here -- clicking goes through the button's
+  ;; own `follow-link'+`action' above, not through this keymap.)
+  (defvar my-imenu-list-button-keymap
+    (let ((map (make-sparse-keymap)))
+      (set-keymap-parent map button-map)
+      (define-key map (kbd "TAB") #'my-imenu-list-toggle-at-point)
+      map)
+    "Like `button-map', but TAB toggles the *Ilist* fold instead of
+navigating between buttons.")
+
+  (defun my-imenu-list--rebind-buttons ()
+    "Point every button overlay in the *Ilist* buffer at
+`my-imenu-list-button-keymap' instead of the shared global `button-map'.
+Idempotent -- cheap enough to call on every marker refresh."
+    (dolist (ov (overlays-in (point-min) (point-max)))
+      (when (and (overlay-get ov 'button)
+                 (eq (overlay-get ov 'keymap) button-map))
+        (overlay-put ov 'keymap my-imenu-list-button-keymap))))
 
   (defun my-imenu-list--set-marker-at-point ()
     "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
@@ -1316,7 +1492,9 @@ would just be redundant clutter."
         (let ((inhibit-read-only t))
           (put-text-property (match-beginning 1) (match-end 1)
                               'display
-                              (if (hs-already-hidden-p)
+                              ;; Our fold overlays start at the beginning of
+                              ;; the *next* line (see `my-imenu-list--line-span'),
+                              (if (my-imenu-list--folded-p (min (point-max) (1+ (line-end-position))))
                                   my-imenu-list-collapsed-marker
                                 my-imenu-list-expanded-marker))))))
 
@@ -1324,18 +1502,12 @@ would just be redundant clutter."
     "Update every foldable entry's marker in the *Ilist* buffer to match its current hidden/shown state."
     (when (get-buffer imenu-list-buffer-name)
       (with-current-buffer imenu-list-buffer-name
+        (my-imenu-list--rebind-buttons)
         (save-excursion
           (goto-char (point-min))
           (while (not (eobp))
             (my-imenu-list--set-marker-at-point)
             (forward-line 1))))))
-
-  ;; Apply the arrow overlays when manually adjusting folded sections
-  (defun my-imenu-list--refresh-marker-after-toggle (&rest _)
-      (when (eq major-mode 'imenu-list-major-mode)
-       (my-imenu-list--set-marker-at-point)))
-
-  (advice-add 'hs-toggle-hiding :after #'my-imenu-list--refresh-marker-after-toggle)
 
   ;; Refold
   (defun my-after-imenu-list-toggle (&rest args)
@@ -1343,7 +1515,9 @@ would just be redundant clutter."
     (dolist (buf (buffer-list))
       (with-current-buffer buf
 	(when (local-variable-p 'imenu-list--folded-once)
-	  (setq imenu-list--folded-once nil)))))
+	  (setq imenu-list--folded-once nil))
+	(when (local-variable-p 'imenu-list--user-toggled)
+	  (setq imenu-list--user-toggled nil)))))
 
   (advice-add 'imenu-list-smart-toggle :before #'my-after-imenu-list-toggle)
 
@@ -1633,7 +1807,7 @@ would just be redundant clutter."
 (use-package corfu
   :ensure t
   :init
-  (global-corfu-mode)
+;;  (global-corfu-mode)
   )
 
 ;;; Font name completion for customize buffers

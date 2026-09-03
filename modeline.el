@@ -334,12 +334,24 @@ a number with a trailing `%' in between. Computed directly from
        :weight semi-bold
        :background ,(modus-themes-get-color-value 'bg-mode-line-emphasis t) ))
 
-  "Face for `my-modeline-segment-position', giving it a subtly recessed
-look via a flat `:background' tint a bit darker than the mode-line's own
-background (\"gray75\" under the default `folio' theme)")
+  "Face for `my-modeline-segment-position' in the selected window defined by the modus bg-mode-line-emphasis color. Only applied when the modeline is active.")
 
 
 ;;(set-face-attribute 'my-modeline-position-face nil :background "gray50")
+
+(defface my-modeline-position-face-inactive
+  '((t :inherit mode-line-inactive :weight semi-bold))
+  "Face for `my-modeline-segment-position' in a non-selected window.
+Unlike `my-modeline-position-face', `:background' is left unspecified so
+the segment blends into the rest of the toned down modeline.")
+
+(defun my-modeline--position-face ()
+  "Face to use for `my-modeline-segment-position': `my-modeline-position-face'
+when the window whose mode-line is being redisplayed is selected, or
+`my-modeline-position-face-inactive' otherwise."
+  (if (mode-line-window-selected-p)
+      'my-modeline-position-face
+    'my-modeline-position-face-inactive))
 
 (defun my-modeline-segment-position ()
   "Line/column position, per `my-modeline-position-format', followed by
@@ -347,33 +359,34 @@ the window scroll percentage and, when `size-indication-mode' is on, a
 buffer size indication -- all with the same right-click menu (toggle
 line/column/size display) stock `mode-line-position' has, see
 `mode-line-column-line-number-mode-map'. The whole segment is boxed via
-`my-modeline-position-face' to look slightly depressed. Nested
+`my-modeline--position-face' to look slightly depressed. Nested
 `:propertize' forms don't inherit an enclosing one's `face' -- each covers
-only the text it directly wraps -- so `face my-modeline-position-face' is
-listed explicitly in every one of them below, including the plain
-leading/trailing spaces, rather than relying on a single outer wrapper."
-  (my-modeline--render-dual
-   `((:propertize " " face my-modeline-position-face)
-     (:propertize ,my-modeline-position-format
-                  face my-modeline-position-face
-                  local-map ,mode-line-column-line-number-mode-map
-                  mouse-face mode-line-highlight
-                  help-echo "Line number and Column number\nmouse-1: Display Line and Column Mode Menu")
+only the text it directly wraps -- so `face ,face' is listed explicitly in
+every one of them below, including the plain leading/trailing spaces,
+rather than relying on a single outer wrapper."
+  (let ((face (my-modeline--position-face)))
+    (my-modeline--render-dual
+     `((:propertize " " face ,face)
+       (:propertize ,my-modeline-position-format
+                    face ,face
+                    local-map ,mode-line-column-line-number-mode-map
+                    mouse-face mode-line-highlight
+                    help-echo "Line number and Column number\nmouse-1: Display Line and Column Mode Menu")
 
-     (my-modeline-show-percent
-      ((:propertize " " face my-modeline-position-face)
-       (:propertize (:eval (my-modeline--scroll-percent))
-		    face my-modeline-position-face
-		    local-map ,mode-line-column-line-number-mode-map
-		    mouse-face mode-line-highlight
-		    help-echo "Window Scroll Percentage\nmouse-1: Display Line and Column Mode Menu")))
-     (size-indication-mode
-      (:propertize " of %I"
-                   face my-modeline-position-face
-                   local-map ,mode-line-column-line-number-mode-map
-                   mouse-face mode-line-highlight
-                   help-echo "Size indication mode\nmouse-1: Display Line and Column Mode Menu"))
-     (:propertize " " face my-modeline-position-face))))
+       (my-modeline-show-percent
+        ((:propertize " " face ,face)
+         (:propertize (:eval (my-modeline--scroll-percent))
+                      face ,face
+                      local-map ,mode-line-column-line-number-mode-map
+                      mouse-face mode-line-highlight
+                      help-echo "Window Scroll Percentage\nmouse-1: Display Line and Column Mode Menu")))
+       (size-indication-mode
+        (:propertize " of %I"
+                     face ,face
+                     local-map ,mode-line-column-line-number-mode-map
+                     mouse-face mode-line-highlight
+                     help-echo "Size indication mode\nmouse-1: Display Line and Column Mode Menu"))
+       (:propertize " " face ,face)))))
 
 (defun my-modeline-segment-selection-info ()
   "Size of the active region, when there is one."
