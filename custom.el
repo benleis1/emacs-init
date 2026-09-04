@@ -49,17 +49,22 @@
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
  '(package-selected-packages
    '(all-the-icons-dired consult corfu diff-hl doom-modeline doom-themes ef-themes
-			 ef-theses eglot-booster excorporate folio folio-theme
-			 groovy-mode grove imenu-list lsp-java lsp-ui magit
-			 marginalia markdown-mermaid markdown-toc
+			 ef-theses eglot-booster excorporate
+			 exec-path-from-shell exec-path-from-shell-initialize
+			 folio folio-theme groovy-mode grove imenu-list lsp-java
+			 lsp-ui magit marginalia markdown-mermaid markdown-toc
 			 markdown-ts-mode math-preview mixed-pitch modus-themes
-			 nerd-icons-dired ns-auto-titlebar orderless
-			 org-autolist org-modern org-pretty-table org-roam
-			 popper single-window sqlformat stripe-buffer treemacs
-			 treesit-fold undo-tree vc-use-package vertico wikimode
-			 yasnippet))
+			 nano-like-modus-theme nerd-icons-dired ns-auto-titlebar
+			 on-demand-scroll-bar orderless org-autolist org-modern
+			 org-pretty-table org-roam popper single-window
+			 sqlformat stripe-buffer treemacs treesit-fold undo-tree
+			 vc-use-package vertico wikimode yasnippet))
  '(package-vc-selected-packages
-   '((single-window :url "https://github.com/jamescherti/single-window.el")
+   '((nano-like-modus-theme :url
+			    "https://github.com/benleis1/nano-like-modus-theme")
+     (on-demand-scroll-bar :url
+			   "https://github.com/florommel/on-demand-scroll-bar.git")
+     (single-window :url "https://github.com/jamescherti/single-window.el")
      (modus-themes :url "https://github.com/protesilaos/modus-themes.git")
      (treesit-fold :url "https://github.com/emacs-tree-sitter/treesit-fold")
      (wikimode :url "https://github.com/benleis1/wikimode")

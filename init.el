@@ -64,6 +64,12 @@
 ;;  }
 ;; ```
 ;;
+;; ## Portability
+;;   I have the config on github both for my own backup and as a way to share snippets and ideas.
+;;   I've worked to make this mostly reusable where reasonable but there is still some coupling
+;;   to my own environment and workflow. The config is currently for MacOS and has some
+;;   OS specific parts like the pbcopy integration.
+;;
 ;; ## Major areas configured
 ;; - Markdown
 ;; - Org
@@ -183,7 +189,7 @@
 	;; tone down code blocks
 	(bg-prose-block-contents unspecified)
 	(bg-prose-code unspecified)
-        (bg-prose-block-delimiter unspeficied)
+        (bg-prose-block-delimiter unspecified)
         (fg-prose-block-delimiter fg-dim)
 
 	;;diffs - duplicate modus deuteranopia colors (I don't like red/green)
@@ -198,7 +204,7 @@
         (bg-removed-refine    bg-blue-refine)
         (bg-removed-intense   bg-blue-intense)
         (fg-removed           blue)
-        (fog-removed-intense   blue-intense)
+        (fg-removed-intense   blue-intense)
 	))
 
 ;; enable fixed fonts for code and variable for text
@@ -442,7 +448,7 @@
 ;; put everything in .saves under .emacs.d
 
 ;; Define a directory for auto-save files
-(defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
+(defconst my-auto-save-folder (locate-user-emacs-file ".saves"))
 
 ;; Ensure the directory exists
 (unless (file-exists-p my-auto-save-folder)
@@ -452,7 +458,7 @@
  auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
- '(("." . "~/.saves/"))    ; don't litter my fs tree
+ `(("." . ,my-auto-save-folder))    ; don't litter my fs tree
  delete-old-versions t
  kept-new-versions 6
  kept-old-versions 2
@@ -516,10 +522,6 @@
 ;; TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
-;; Add standard minimal CUA  key bindings ctrl-c, ctrl-v insert paste etc.
-;; TODO - I need ctrl-z to still be suspend
-;;(cua-mode)
-
 ;; Copy to clipboard functions for terminal mode
 ;; copy the current region directly
 (defun pbcopy-region ()
@@ -550,9 +552,10 @@
 ;;; flyspell config
 ;; currently not bound to a key
 
-;; Set the ispell program name to aspell
-;; (switching to aspell will generally offer better performance than ispell.)
-(setq ispell-program-name "/opt/homebrew/bin/aspell")
+;; Set the ispell program name to aspell if available which generally offers better
+;; performance than ispell.
+(setq ispell-program-name (or (executable-find "aspell")
+			      (executable-find "ispell")))
 
 ;; Set the global default dictionary for the Ispell process.
 (setq ispell-dictionary "en_US")
@@ -731,7 +734,7 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
 ;; Automatically add the index menu entry for org and markdown modes. This will
 ;; also be available via the context menus
 (add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
-(add-hook 'orgmode-mode-hook 'imenu-add-menubar-index)
+(add-hook 'org-mode-hook 'imenu-add-menubar-index)
 
 ;; Complete a frontmatter "tags:" value against every tag already used
 ;; elsewhere in the project, via wikimode's project-wide tag scan
@@ -1694,6 +1697,6 @@ tag, followed by the normal editable field."
       ("<tab>" . completion-preview-complete))
     :config
     (setq completion-preview-minimum-symbol-length 3)
-    (with-eval-after-load 'ogr
+    (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))

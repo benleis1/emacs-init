@@ -125,7 +125,7 @@
 
 ;; Return if the current view is the default view
 (defun tab2-default-view-p ()
-  (equal (frame-parameter nul 'tab-line-sel-view)  0))
+  (equal (frame-parameter nil 'tab-line-sel-view)  0))
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
@@ -559,15 +559,15 @@ at the mouse-down event to the position at mouse-up event."
 			(propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
 		      (propertize (format "%s " tab2-git-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))))
 
-            (let ((close (or (and (or buffer (assq 'close tab))
+            (let* ((close (or (and (or buffer (assq 'close tab))
                                   tab-line-close-button-show
                                   (not (eq tab-line-close-button-show
                                            (if selected-p 'non-selected
                                              'selected)))
                                   tab-line-close-button)
-                             "")))
+                             ""))
+                   (close2 (copy-sequence close)))
 
-	      (setq close2 (copy-sequence close))
               ;; Don't overwrite the icon face
               (add-face-text-property 0 (length close2) face t close2)
               close2))

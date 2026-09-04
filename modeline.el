@@ -130,8 +130,8 @@ otherwise."
 	 (shortmode (upcase (substring mode 0 (min 9 (length mode))))))
 
     (if buffer-file-name
-	(let ((ext (upcase (file-name-extension buffer-file-name))))
-          (or ext shortmode))
+	(let ((ext (file-name-extension buffer-file-name)))
+          (or (and ext (upcase ext)) shortmode))
       shortmode)))
 
 (defun my-modeline--file-type-icon ()
