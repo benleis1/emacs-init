@@ -45,16 +45,22 @@
 (setq tab-line-separator " ")
 
 ;; Unused: Some simple but readable close icons - use all-the-icons-insert to add a new one
-(setq tab-line-unused-close-icons '( "✖️" " "))
+(defconst tab-line-unused-close-icons '( "✖️" " "))
 
 ;; Override the height on the all the button so they are properly sized on 4k display
 ;; fixed in version 30
 
+(defconst tab2-directory
+  (file-name-directory (or load-file-name buffer-file-name)))
+
+(defconst tab2-close-image
+  (expand-file-name "close.png" tab2-directory))
+
 ;; Current modern style button I'm using
 (setq tab-line-close-button
   (propertize " x "
-              'display '(image :type png
-                               :file "/Users/benjamin.leis/.emacs.d/close.png"
+              'display `(image :type png
+                               :file ,tab2-close-image
 			       :height (0.9 . em)
 			       :face shadow
                                :margin (2 . 0)
@@ -66,7 +72,7 @@
 (setq tab-line-left-button
   (propertize " <"
               'display '(image :type xpm
-                               :file "tabs/left-arrow.xpm"
+                               :file "tabs/left-arrow.xpm" ;; builtin image
 			       :height (0.8 . em)
                                :margin (2 . 0)
                                :ascent center)
@@ -77,7 +83,7 @@
 (setq tab-line-right-button
   (propertize "> "
               'display '(image :type xpm
-                               :file "tabs/right-arrow.xpm"
+                               :file "tabs/right-arrow.xpm" ;; builtin image
 			       :height (0.8 . em)
                                :margin (2 . 0)
                                :ascent center)
