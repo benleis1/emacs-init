@@ -78,7 +78,7 @@
 
 ;; Define an ignore macro that doesn't even evaluate the argument. This is useful for
 ;; display purposes when using elispdoc rather than commenting whole regions out.
-(defmacro my-ignore (form))
+(defmacro my-ignore (_form))
 
 ;; Setup melpa as a repository.
 (require 'package)
@@ -87,10 +87,11 @@
 ;; and `package-pinned-packages`. Most users will not need or want to do this.
 (my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
 
-;; use-package has been part of core emacs since version 29 so I now assume its ok to just require it.
+;; use-package has been part of core emacs since version 29 so I assume its ok to just require it.
 (require 'use-package)
 
 ;; Legacy Emacs 29 setup for :vc so we can load directly from github for selected packages not in melpa.
+;; Note: long term move to :fetcher :repo syntax
 (when (< emacs-major-version 30)
   (unless (package-installed-p 'vc-use-package)
     (package-vc-install "https://github.com/slotThe/vc-use-package"))
@@ -145,7 +146,7 @@
 
 ;; Disable all previously loaded themes before loading another one.
 (advice-add 'load-theme :before
-            (lambda (&rest varargs_)
+            (lambda (&rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)))
 
 ;; These mostly global level changes make switching around easier between themes
@@ -326,7 +327,8 @@
   (load-theme 'folio t))
 
 (use-package nano-like-modus-theme
-  :load-path "~/dev/nano-like-modus-theme")
+  :vc (:url "https://github.com/benleis1/nano-like-modus-theme")
+  :ensure t)
 
 ;; Deal with dark/light mode macos ui elements like the scrollbar
 (use-package ns-auto-titlebar
@@ -367,9 +369,11 @@
 ;; Add a faint window divider
 (when window-system
   (use-package on-demand-scroll-bar
-    :load-path "/Users/benjamin.leis/.emacs.d/on-demand-scroll-bar"
+    :vc (:url "https://github.com/florommel/on-demand-scroll-bar.git")
+
     :config
     (on-demand-scroll-bar-mode 1))
+
   (context-menu-mode)
 
   ;; Add dividers on the right and bottom
@@ -423,8 +427,7 @@
 (unless window-system
   (require 'mouse)
   (xterm-mouse-mode t)
-  (defun track-mouse (e))
-  (setq mouse-sel-mode t))
+  (defun track-mouse (_e)))
 
 ;; Setup recent files mode - this is much more in use now that I have consult
 (recentf-mode 1)
@@ -436,7 +439,7 @@
 (run-at-time nil 600 'recentf-save-list)
 
 ;;; backup and autosave.
-;;put everything in .saves under .emacs.d
+;; put everything in .saves under .emacs.d
 
 ;; Define a directory for auto-save files
 (defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
@@ -446,7 +449,6 @@
   (make-directory my-auto-save-folder t))
 
 (setq
- auto-save-default nil ;; disable auto save files
  auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
@@ -455,6 +457,9 @@
  kept-new-versions 6
  kept-old-versions 2
  version-control t)
+
+;; alternative strategy - just turn off auto-save.
+(my-ignore (setq auto-save-default nil))
 
 ;;; Dired
 
@@ -523,7 +528,7 @@
   (setq deactivate-mark t))
 
 ;; copy the latest kill ring
-(defun pbcopy-kill-ring (&optional push)
+(defun pbcopy-kill-ring (&optional _xpush)
   (interactive)
   (let ((process-connection-type nil)
 	(text (current-kill 0)))
@@ -533,7 +538,7 @@
 
 ;; Final version hook into interprogram-cut-function instead
 ;; for terminal mode cut to system clipboard
-(defun paste-for-osx (text &optional push)
+(defun paste-for-osx (text &optional _push)
   (let ((process-connection-type nil))
     (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
       (process-send-string proc text)
@@ -585,7 +590,10 @@
   (flyspell-prog-mode))
 
 (defun flyspell-on-for-buffer-type ()
-      "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
+      "Enable Flyspell appropriately for the major mode of the current buffer.
+Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only
+strings and comments get checked.  All other buffers get `flyspell-mode'
+to check all text.  If flyspell is already enabled, does nothing."
       (interactive)
       (if (not (symbol-value flyspell-mode)) ; if not already on
         (progn
@@ -596,13 +604,14 @@
           )))
 
 (defun flyspell-toggle ()
-  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
+  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it
+uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
   (interactive)
   (if (symbol-value flyspell-mode)
       (progn ; flyspell is on, turn it off
         (message "Flyspell off")
         (flyspell-mode -1))
-    ; else - flyspell is off, turn it on
+    ;; else - flyspell is off, turn it on
     (flyspell-on-for-buffer-type)))
 
 ;; preset modes to have flyspell on
@@ -797,7 +806,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; word wrap for normal text and stripe mode for tables
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-  (add-hook 'org-mode-hoom #'stripe-buffer-mode)
+  (add-hook 'org-mode-hook #'stripe-buffer-mode)
   (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
   (setq-local imenu-depth 4)
   )
@@ -993,7 +1002,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
                          (interactive)
                          ;; `treesit-fold-summary-java' recovers the folded
                          ;; node from `point', so move there rather than
-                         ;; passing the node to `treesit-fold-close' directly.
+                         ;; passing the node to `esit-fold-close' directly.
                          (save-excursion
                            (goto-char pos)
                            (treesit-fold-close)))
@@ -1016,8 +1025,17 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;;;; Java
 
 ;; set java home
-(setq java-home "/Users/benjamin.leis/.jenv/versions/21.0")
-(setenv "JAVA_HOME" java-home)
+(defgroup my-environment nil
+  "Personal environment config."
+  :group 'environment)
+
+(defcustom my-java-home
+  (expand-file-name "~/.jenv/versions/21.0")
+  "Java path used by eglon/jdtls"
+  :type 'directory
+  :group 'my-environment)
+
+(setenv "JAVA_HOME" my-java-home)
 
 (defun setup-common-java ()
   (setq c-basic-offset 4
@@ -1035,7 +1053,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (setq major-mode-remap-alist
       '((java-mode . java-ts-mode)))
 
-(setq dap-java-java-command (concat java-home "/bin/java"))
+(setq dap-java-java-command (concat my-java-home "/bin/java"))
 
 ;;;; eglot
 
@@ -1056,7 +1074,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; Pin the java version for JDT. Set it here and after the load.
 (setq my-jdtls-settings
       `(:java (
-	       :home ,java-home
+	       :home ,my-java-home
 
 		     )))
 
@@ -1284,8 +1302,6 @@ anything as useful as the `report' messages in between."
   '("Next Buffer" . next-buffer)
   'zoom-out)
 
-
-
 ;;; Excorporate setup.
 ;; I've modified this quite a bit to directly generate org files.
 
@@ -1296,8 +1312,8 @@ anything as useful as the `report' messages in between."
   :init
   (setq excorporate-update-diary nil)
   (setq excorporate-update-org t)
-	;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
-	;;setq excorporate-org-buffer-name "~/org/daily-meetings.org"
+  ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
+  ;; setq excorporate-org-buffer-name "~/org/daily-meetings.org"
   (setq	excorporate-org-persist-buffer t)
   )
 
@@ -1325,7 +1341,7 @@ anything as useful as the `report' messages in between."
 ;; excorporate uses the fsm (finite-state-machine) to do most operations aysnc
 ;; Issues: the initial excorporate setup triggers a diary download without a callback to do cleanup
 ;; The agenda itself loads the diary buffer - we should probably just leave it off the tab-line?
-(defun my-agenda-update-diary (&optional args)
+(defun my-agenda-update-diary (&optional _args)
   "call excorporate to update the diary for today"
 
   ;; onetime setup
@@ -1354,136 +1370,140 @@ anything as useful as the `report' messages in between."
 
 ;;; ediff
 
-;; Capture window state and turn off my-modeline
-(defun my-ediff-bsh ()
-  "Function to be called before any buffers or window setup for
-    ediff."
-  (setq my-ediff-buffers '())
-  (setq my-ediff-bwin-config (current-window-configuration))
-;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
-  (my-modeline-mode -1))
-
-;; Create a mode-line-buffer that prints the filename and contains a
-;; static hint about the full filename
-(defun simple-mode-line-buffer ()
-  (list (propertize
-         "%12b"
-         'face 'mode-line-buffer-id
-         'help-echo
-	 (if (buffer-file-name) (buffer-file-name) (buffer-name))
-         'mouse-face 'mode-line-highlight
-         'local-map mode-line-buffer-identification-keymap)))
-
-;; Return buffer state we want to save/restore as a list
-(defun my-get-buffer-state ()
-  (list (current-buffer)
-	(bound-and-true-p display-line-numbers-mode)
-	(bound-and-true-p tab-line-mode)))
-
-;; Restore back the saved buffer state
-(defun my-restore-buffer-state ( state )
-  (let* ((buffer (nth 0 state))
-	 (linenums (nth 1 state))
-	 (tab-line (nth 2 state)))
-    (with-current-buffer buffer
-      (progn
-	(message "restoring %s" buffer)
-	(unless linenums (display-line-numbers-mode -1))
-	(if tab-line (tab-line-mode 1))))))
-
-;; hook before prep buffers to fixup the mode line hints
-;; Turn off tab-line, turn on line numbers and record the list of buffers
-(defun my-ediff-prep-buffers ()
-  "Function that is called after each buffer to be diff'ed is setup"
-  (message "setting mode line %s f: %s" (current-buffer) (buffer-file-name))
-  (setq my-ediff-buffers (cons (my-get-buffer-state) my-ediff-buffers))
-  (tab-line-mode -1)
-  (display-line-numbers-mode 1)
-  (setq mode-line-format (simple-mode-line-buffer)))
-
-;; Restore back the old states
-(defun my-ediff-qh ()
-  "Function to be called when ediff quits."
-  (my-modeline-mode 1)
-  (dolist (element my-ediff-buffers)
-    (my-restore-buffer-state element))
-  (when my-ediff-bwin-config
-    (set-window-configuration my-ediff-bwin-config)))
-
-(add-hook 'ediff-before-setup-hook 'my-ediff-bsh)
-(add-hook 'ediff-quit-hook 'my-ediff-qh)
-(add-hook 'ediff-prepare-buffer-hook 'my-ediff-prep-buffers 'append)
-
-;; side by side comparison layout
-(setq ediff-split-window-function 'split-window-horizontally)
-
-;; todo this doesn't work with emacsclient only gemacs
 ;; Setup a command line switch gemacs -diff file1 file2
-(defun command-line-diff (switch)
+;; TODO: this doesn't work with emacsclient only gemacs
+(defun command-line-diff (_switch)
   (let ((file1 (pop command-line-args-left))
         (file2 (pop command-line-args-left)))
     (ediff file1 file2)))
 
 (add-to-list 'command-switch-alist '("diff" . command-line-diff))
 
-;; Keep the control window in the default frame
-(setq ediff-window-setup-function #'ediff-setup-windows-plain)
+(with-eval-after-load 'ediff
+  (defvar my-ediff-buffers '() "Track the buffers being used")
+  (defvar my-ediff-bwin-config nil  "Track the initial window configuration")
 
-;; Diff counter + up/down nav buttons prepended before the control
-;; buffer's help line ("Type ? for help"). ediff centers that line by
-;; padding it with leading whitespace to (roughly) the window width, so
-;; inserting our text via before-string just lengthens the line past the
-;; window width and wraps it, growing the control window by a line. Instead
-;; we put a 'display overlay over that leading whitespace (the same span
-;; `ediff-setup-control-buffer' itself skips past via `ediff-whitespace')
-;; so our text replaces the padding instead of adding to it. Buttons use a
-;; plain 'keymap' text property (like button.el), not 'local-map' on the
-;; mode/header line, which needs a [header-line mouse-1]-prefixed binding
-;; to receive clicks at all.
-;; Advising ediff-setup-control-buffer and ediff-refresh-mode-lines (rather
-;; than a fixed list of hooks) keeps the overlay in sync across startup,
-;; ?-toggled help text, and every diff-position change, without needing to
-;; enumerate every command that can move ediff-current-difference.
-(defvar-local my-ediff-nav-overlay nil)
+  ;; Capture window state and turn off my-modeline
+  (defun my-ediff-bsh ()
+    "Function to be called before any buffers or window setup for
+    ediff."
+    (setq my-ediff-buffers '())
+    (setq my-ediff-bwin-config (current-window-configuration))
+    ;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
+    (my-modeline-mode -1))
 
-(defun my-ediff-nav-button (label command help)
-  (propertize label
-              'help-echo help
-              'mouse-face 'highlight
-              'keymap (let ((map (make-sparse-keymap)))
-                        (define-key map [mouse-1] command)
-                        map)))
+  ;; Create a mode-line-buffer that prints the filename and contains a
+  ;; static hint about the full filename
+  (defun simple-mode-line-buffer ()
+    (list (propertize
+           "%12b"
+           'face 'mode-line-buffer-id
+           'help-echo
+	   (if (buffer-file-name) (buffer-file-name) (buffer-name))
+           'mouse-face 'mode-line-highlight
+           'local-map mode-line-buffer-identification-keymap)))
 
-(defun my-ediff-nav-string ()
-  (let ((cur ediff-current-difference)
-        (total ediff-number-of-differences))
-    (concat
-     (cond ((< cur 0) (format "_/%d" total))
-           ((>= cur total) (format "$/%d" total))
-           (t (format "%d/%d" (1+ cur) total)))
-     " "
-     (my-ediff-nav-button "▲" #'ediff-previous-difference "Previous diff")
-     " "
-     (my-ediff-nav-button "▼" #'ediff-next-difference "Next diff")
-     "  ")))
+  ;; Return buffer state we want to save/restore as a list
+  (defun my-get-buffer-state ()
+    (list (current-buffer)
+	  (bound-and-true-p display-line-numbers-mode)
+	  (bound-and-true-p tab-line-mode)))
 
-(defun my-ediff-install-nav-overlay (&rest _)
-  (unless (overlayp my-ediff-nav-overlay)
-    (setq my-ediff-nav-overlay (make-overlay (point-min) (point-min))))
-  (let ((pad-end (save-excursion
-                   (goto-char (point-min))
-                   (skip-chars-forward ediff-whitespace)
-                   (point))))
-    (move-overlay my-ediff-nav-overlay (point-min) pad-end)
-    (overlay-put my-ediff-nav-overlay 'display nil)
-    (overlay-put my-ediff-nav-overlay 'before-string nil)
-    (overlay-put my-ediff-nav-overlay
-                 (if (> pad-end (point-min)) 'display 'before-string)
-                 (my-ediff-nav-string))))
+  ;; Restore back the saved buffer state
+  (defun my-restore-buffer-state ( state )
+    (let* ((buffer (nth 0 state))
+	   (linenums (nth 1 state))
+	   (tab-line (nth 2 state)))
+      (with-current-buffer buffer
+	(progn
+	  (message "restoring %s" buffer)
+	  (unless linenums (display-line-numbers-mode -1))
+	  (if tab-line (tab-line-mode 1))))))
 
-(advice-add 'ediff-setup-control-buffer :after #'my-ediff-install-nav-overlay)
-(advice-add 'ediff-refresh-mode-lines :after #'my-ediff-install-nav-overlay)
+  ;; hook before prep buffers to fixup the mode line hints
+  ;; Turn off tab-line, turn on line numbers and record the list of buffers
+  (defun my-ediff-prep-buffers ()
+    "Function that is called after each buffer to be diff'ed is setup"
+    (message "setting mode line %s f: %s" (current-buffer) (buffer-file-name))
+    (setq my-ediff-buffers (cons (my-get-buffer-state) my-ediff-buffers))
+    (tab-line-mode -1)
+    (display-line-numbers-mode 1)
+    (setq mode-line-format (simple-mode-line-buffer)))
 
+  ;; Restore back the old states
+  (defun my-ediff-qh ()
+    "Function to be called when ediff quits."
+    (my-modeline-mode 1)
+    (dolist (element my-ediff-buffers)
+      (my-restore-buffer-state element))
+    (when my-ediff-bwin-config
+      (set-window-configuration my-ediff-bwin-config)))
+
+  (add-hook 'ediff-before-setup-hook 'my-ediff-bsh)
+  (add-hook 'ediff-quit-hook 'my-ediff-qh)
+  (add-hook 'ediff-prepare-buffer-hook 'my-ediff-prep-buffers 'append)
+
+  ;; side by side comparison layout
+  (setq ediff-split-window-function 'split-window-horizontally)
+
+  ;; Keep the control window in the default frame
+  (setq ediff-window-setup-function #'ediff-setup-windows-plain)
+
+  ;; Diff counter + up/down nav buttons prepended before the control
+  ;; buffer's help line ("Type ? for help"). ediff centers that line by
+  ;; padding it with leading whitespace to (roughly) the window width, so
+  ;; inserting our text via before-string just lengthens the line past the
+  ;; window width and wraps it, growing the control window by a line. Instead
+  ;; we put a 'display overlay over that leading whitespace (the same span
+  ;; `ediff-setup-control-buffer' itself skips past via `ediff-whitespace')
+  ;; so our text replaces the padding instead of adding to it. Buttons use a
+  ;; plain 'keymap' text property (like button.el), not 'local-map' on the
+  ;; mode/header line, which needs a [header-line mouse-1]-prefixed binding
+  ;; to receive clicks at all.
+  ;; Advising ediff-setup-control-buffer and ediff-refresh-mode-lines (rather
+  ;; than a fixed list of hooks) keeps the overlay in sync across startup,
+  ;; ?-toggled help text, and every diff-position change, without needing to
+  ;; enumerate every command that can move ediff-current-difference.
+  (defvar-local my-ediff-nav-overlay nil)
+
+  (defun my-ediff-nav-button (label command help)
+    (propertize label
+		'help-echo help
+		'mouse-face 'highlight
+		'keymap (let ((map (make-sparse-keymap)))
+                          (define-key map [mouse-1] command)
+                          map)))
+
+  (defun my-ediff-nav-string ()
+    (let ((cur ediff-current-difference)
+          (total ediff-number-of-differences))
+      (concat
+       (cond ((< cur 0) (format "_/%d" total))
+             ((>= cur total) (format "$/%d" total))
+             (t (format "%d/%d" (1+ cur) total)))
+       " "
+       (my-ediff-nav-button "▲" #'ediff-previous-difference "Previous diff")
+       " "
+       (my-ediff-nav-button "▼" #'ediff-next-difference "Next diff")
+       "  ")))
+
+  (defun my-ediff-install-nav-overlay (&rest _)
+    (unless (overlayp my-ediff-nav-overlay)
+      (setq my-ediff-nav-overlay (make-overlay (point-min) (point-min))))
+    (let ((pad-end (save-excursion
+                     (goto-char (point-min))
+                     (skip-chars-forward ediff-whitespace)
+                     (point))))
+      (move-overlay my-ediff-nav-overlay (point-min) pad-end)
+      (overlay-put my-ediff-nav-overlay 'display nil)
+      (overlay-put my-ediff-nav-overlay 'before-string nil)
+      (overlay-put my-ediff-nav-overlay
+                   (if (> pad-end (point-min)) 'display 'before-string)
+                   (my-ediff-nav-string))))
+
+  (advice-add 'ediff-setup-control-buffer :after #'my-ediff-install-nav-overlay)
+  (advice-add 'ediff-refresh-mode-lines :after #'my-ediff-install-nav-overlay)
+  )
 ;; Some GC analytics to see if tuning GC is interesting
 ;; this is a bit intrusive so I'll turnoff most of the time
 (defun gc-notification ()
@@ -1534,7 +1554,7 @@ anything as useful as the `report' messages in between."
 ;; need to return a list (start end collection) if this matches or nil if not
 (defun complete-font-name ()
   (when (font-family-widget-p)
-    `(,(point-at-bol) ,(point-at-eol) ,(font-family-list))))
+    `(,(pos-bol) ,(pos-eol) ,(font-family-list))))
 
 ;; Hook completion in and setup M-TAB binding for it. custom-field-keymap
 ;; normally binds M-TAB to `widget-complete', which bypasses
@@ -1616,13 +1636,12 @@ tag, followed by the normal editable field."
     (nconc spec (list :value-create #'my-face-family-value-create))))
 
 ;;; Snippets
-;; This is currently used in org and markdown mode
+;; This is currently used in org and markdown mode but I only have it on by
+;; default for markdown.
 (use-package yasnippet
   :ensure t
-  :init (yas-global-mode 1)
   :config
-;; unblock emacs 31
-;;  (add-hook 'markdown-mode-hook #'yas-minor-mode)
+  (add-hook 'markdown-mode-hook #'yas-minor-mode)
   )
 
 ;; No key binding for now.
