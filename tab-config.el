@@ -37,7 +37,8 @@
 ;;; Code:
 
 ;; Set tab-line always on except for the exclude modes list
-(setq tab-line-exclude-modes '(completion-list-mode help-mode ediff-mode special-mode debugger-mode clutch-result-mode clutch-describe-mode ))
+(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode ))
+
 (global-tab-line-mode t)
 
 ;; Always suppress the tab line separator in both windows and term mode
@@ -99,9 +100,6 @@
 
 ;; only put a close button on selected tabs - set to nil if totally unwanted
 (setq tab-line-close-button-show `selected)
-
-;; But don't include in treemacs windows, doc-view, imenu-list or wikimode
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode end ))
 
 ;;; Structure for tracking the views
 ;; tab2 concept of virtual views is a window configuration + buffer list

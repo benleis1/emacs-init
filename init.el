@@ -547,7 +547,7 @@
 
 ;; Set the ispell program name to aspell
 ;; (switching to aspell will generally offer better performance than ispell.)
-(setq ispell-program-name "aspell")
+(setq ispell-program-name "/opt/homebrew/bin/aspell")
 
 ;; Set the global default dictionary for the Ispell process.
 (setq ispell-dictionary "en_US")
@@ -1656,3 +1656,25 @@ tag, followed by the normal editable field."
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
+
+
+;;; temptemp - try out new builtin completion.
+
+(when (> emacs-major-version 30)
+  (use-package completion-preview
+    :ensure nil
+    :demand t
+    :bind
+    ( :map completion-preview-active-mode-map
+      ("M-i" . completion-preview-insert-word)
+      ("M-n" . completion-preview-next-candidate)
+      ("M-p" . completion-preview-prev-candidate)
+      ("M-<RET>" . completion-preview-insert)
+      ;; With TAB we effectively defer to the *Completions* buffer to
+      ;; show more completion candidates at once.
+      ("<tab>" . completion-preview-complete))
+    :config
+    (setq completion-preview-minimum-symbol-length 3)
+    (with-eval-after-load 'ogr
+      (add-to-list 'completion-preview-commands #'org-self-insert-command))
+    (global-completion-preview-mode 1)))

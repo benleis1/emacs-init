@@ -55,10 +55,12 @@
 			 markdown-ts-mode math-preview mixed-pitch modus-themes
 			 nerd-icons-dired ns-auto-titlebar orderless
 			 org-autolist org-modern org-pretty-table org-roam
-			 sqlformat stripe-buffer treemacs treesit-fold undo-tree
-			 vc-use-package vertico wikimode yasnippet))
+			 popper single-window sqlformat stripe-buffer treemacs
+			 treesit-fold undo-tree vc-use-package vertico wikimode
+			 yasnippet))
  '(package-vc-selected-packages
-   '((modus-themes :url "https://github.com/protesilaos/modus-themes.git")
+   '((single-window :url "https://github.com/jamescherti/single-window.el")
+     (modus-themes :url "https://github.com/protesilaos/modus-themes.git")
      (treesit-fold :url "https://github.com/emacs-tree-sitter/treesit-fold")
      (wikimode :url "https://github.com/benleis1/wikimode")
      (org-pretty-table :url "https://github.com/Fuco1/org-pretty-table")
@@ -92,6 +94,8 @@
  '(shadow ((t (:foreground "gray56"))))
  '(stripe-hl-line ((t (:background "DarkOrange2" :foreground "ivory"))))
  '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3)))
+ '(tab-line-active ((t :family "San Francisco (SF Pro)" :height 1.3)))
+ '(tab-line-inactive ((t :family "San Francisco (SF Pro)" :height 1.3)))
  '(tab-line-tab-modified ((t (:inherit font-lock-doc-face :foreground "DarkOrange1" :weight bold :family "DejaVu "))))
  '(tooltip ((t (:background "#EEE8D5" :foreground "#556b72" :height 1.3))))
  '(treesit-fold-replacement-face ((t (:background "goldenrod4" :foreground "white" :box (:line-width (1 . -1) :color "black" :style pressed-button)))))

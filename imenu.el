@@ -350,9 +350,6 @@ Replaces hideshow's `hs-toggle-hiding' (formerly bound to TAB/\"f\")."
   (my-imenu-list-update-fold-markers)
   (my-imenu-list--record-folded-paths))
 
-;; Run before any other `imenu-list-update-hook' member (e.g. imenu.el's
-;; VC highlighter) so folding always settles first each update cycle.
-(add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once -10)
 
 ;; `imenu-list-insert-entries' erases and rebuilds the whole *Ilist* buffer
 ;; whenever the source buffer's imenu entries actually change (e.g. a real
@@ -646,18 +643,21 @@ Idempotent -- cheap enough to call on every marker refresh."
 
 ;;; Elisp custom header handling
 
-;; Add additional expressions to baseline parsing.
-(add-to-list 'imenu-generic-expression
-             (list "Use-package"
-                   (concat "^\\s-*(use-package\\s-+\\("
-                           lisp-mode-symbol-regexp "\\)")
-                   1))
+;; Add additional expressions to baseline parsing in an elisp hook.
+;; This has to be done after elisp loads each time.
+(add-hook 'emacs-lisp-mode-hook
+                 (lambda ()
+		   (add-to-list 'imenu-generic-expression
+				(list "Use-package"
+				      (concat "^\\s-*(use-package\\s-+\\("
+					      lisp-mode-symbol-regexp "\\)")
+				      1))
 
-(add-to-list 'imenu-generic-expression
-             '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
+		   (add-to-list 'imenu-generic-expression
+				'("Sections" "^;;;\\s-+\\(.*\\)$" 1))
 
-(add-to-list 'imenu-generic-expression
-             '("Subsections" "^;;;;\\s-+\\(.*\\)$" 1))
+		   (add-to-list 'imenu-generic-expression
+				'("Subsections" "^;;;;\\s-+\\(.*\\)$" 1))))
 
 ;; fold `defun'/`use-package' entries under the ";;; Section" comment
 ;; header they're physically located under.
@@ -1054,11 +1054,11 @@ section with a pending `diff-hl' change, via `my-imenu-list--mark-modified'."
                     (overlay-put ov 'my-imenu-list-modified t)
                     (overlay-put ov 'face 'my-imenu-list-modified-face)))))))))))
 
-;; Explicit positive depth so this always runs after the fold hook
-;; (negative depth, in init.el) has settled the buffer's hs overlays for
-;; this update cycle, regardless of load order between the two files.
-(add-hook 'imenu-list-update-hook #'my-imenu-list-highlight-modified-entries 10)
 
+;; We have to fold before highlighting
+(add-hook 'imenu-list-update-hook (lambda ()
+				    (my-imenu-list-fold-below-depth-once)
+				    (my-imenu-list-highlight-modified-entries)))
 
 ;;; Org mode optimization. Its not completely clear if its needed.
 
