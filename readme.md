@@ -9,15 +9,14 @@
  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
 ```
 
-Emacs configuration file
 Author: Benjamin Leis
 
 # Commentary:
 
 ## Philosophy
 
-These are all the high level priorities that inform the decisions I've made throughout this file.
-Unlike many other users who have shared their config files, I like using the mouse and even
+These are the high level priorities that inform the decisions I've made throughout this file.
+First, Unlike many other users who have shared their config files, I like using the mouse and even
 the occasional menu rather than remembering key bindings for everything. So I've spent some time
 trying to get emacs to work more consistently for these modes. For example with flyspell on you
 can right click and get a context menu with the possible spellings like in most other applications.
@@ -65,12 +64,33 @@ My typical alias setup
  }
 ```
 
-## Major modes configured
+## Portability
+  I have the config on github both for my own backup and as a
+  way to share snippets and ideas.  I've worked to make this mostly reusable
+  where reasonable but there is still some coupling to my own environment and
+  workflow discussed below.
+
+## Prerequisites
+  Things you'll want in place before this config will load and work cleanly:
+  - MacOS. There's direct use of pbcopy and other OS specific integration.
+  - Emacs 29 or later (30+ preferred; some of the :vc package handling is
+    conditioned on the major version).
+  - git on PATH, since several packages are pulled straight from source via
+    use-package's :vc keyword rather than from MELPA.
+  - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
+    mode-line and dired icons to render correctly.
+  - aspell installed (falls back to ispell if not found) for flyspell.
+  - A Java installation reachable via `my-java-home' (defaults to a jenv
+    path) plus jdtls on PATH if you want eglot's Java support.
+  - pgformatter on PATH if you want the SQL formatting commands to work.
+
+## Major areas configured
 - Markdown
 - Org
 - Java
 - Ediff
 - Python (partly)
+- SQL
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
@@ -78,7 +98,9 @@ My typical alias setup
 
 - [Commentary:](#commentary)
   - [Philosophy](#philosophy)
-  - [Major modes configured](#major-modes-configured)
+  - [Portability](#portability)
+  - [Prerequisites](#prerequisites)
+  - [Major areas configured](#major-areas-configured)
 - [Code:](#code)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
@@ -87,7 +109,7 @@ My typical alias setup
   - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [my-before-save-hook](#my-before-save-hook)
-- [backup and autosave - put everything in .saves under .emacs.d](#backup-and-autosave---put-everything-in-saves-under-emacsd)
+- [backup and autosave.](#backup-and-autosave)
 - [Dired](#dired)
 - [modeline](#modeline)
 - [Global key bindings](#global-key-bindings)
@@ -98,6 +120,8 @@ My typical alias setup
   - [my-flyspell-prog-mode](#my-flyspell-prog-mode)
   - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
   - [flyspell-toggle](#flyspell-toggle)
+  - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
+- [diff-hl](#diff-hl)
 - [markdown mode](#markdown-mode)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
   - [insert-date](#insert-date)
@@ -113,33 +137,20 @@ My typical alias setup
   - [treesit-fold-close-java-imports](#treesit-fold-close-java-imports)
   - [treesit-fold-summary-java](#treesit-fold-summary-java)
   - [context-menu-fold-line](#context-menu-fold-line)
-- [Java](#java)
+  - [my-java-home-set](#my-java-home-set)
   - [setup-common-java](#setup-common-java)
-- [eglot](#eglot)
   - [jsonrpc-elide-text-document](#jsonrpc-elide-text-document)
   - [jsonrpc-elide-token](#jsonrpc-elide-token)
   - [jsonrpc-log-text](#jsonrpc-log-text)
   - [jsonrpc-skip-message-p](#jsonrpc-skip-message-p)
-- [flymake](#flymake)
   - [flymake-buffer-quit](#flymake-buffer-quit)
-- [python - TODO turn on eglot integration later.](#python---todo-turn-on-eglot-integration-later)
 - [SQL](#sql)
 - [imenu-list](#imenu-list)
-- [elisp](#elisp)
 - [Excorporate setup.](#excorporate-setup)
   - [my-diary-cleanup](#my-diary-cleanup)
   - [my-agenda-update-diary](#my-agenda-update-diary)
 - [ediff](#ediff)
-  - [my-ediff-bsh](#my-ediff-bsh)
-  - [simple-mode-line-buffer](#simple-mode-line-buffer)
-  - [my-get-buffer-state](#my-get-buffer-state)
-  - [my-restore-buffer-state](#my-restore-buffer-state)
-  - [my-ediff-prep-buffers](#my-ediff-prep-buffers)
-  - [my-ediff-qh](#my-ediff-qh)
   - [command-line-diff](#command-line-diff)
-  - [my-ediff-nav-button](#my-ediff-nav-button)
-  - [my-ediff-nav-string](#my-ediff-nav-string)
-  - [my-ediff-install-nav-overlay](#my-ediff-install-nav-overlay)
   - [gc-notification](#gc-notification)
 - [Completion frameworks.](#completion-frameworks)
 - [Font name completion for customize buffers](#font-name-completion-for-customize-buffers)
@@ -153,6 +164,8 @@ My typical alias setup
 - [Snippets](#snippets)
 - [Wikimode](#wikimode)
 - [Consult navigation package](#consult-navigation-package)
+- [Local.el loading](#localel-loading)
+- [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
 
 <!-- markdown-toc end -->
 
@@ -161,7 +174,7 @@ My typical alias setup
 Define an ignore macro that doesn't even evaluate the argument. This is useful for
 display purposes when using elispdoc rather than commenting whole regions out.
 ```
-(defmacro my-ignore (form))
+(defmacro my-ignore (_form))
 ```
 
 Setup melpa as a repository.
@@ -175,12 +188,13 @@ and `package-pinned-packages`. Most users will not need or want to do this.
 (my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
 ```
 
-use-package has been part of core emacs since version 29 so I now assume its ok to just require it.
+use-package has been part of core emacs since version 29 so I assume its ok to just require it.
 ```
 (require 'use-package)
 ```
 
 Legacy Emacs 29 setup for :vc so we can load directly from github for selected packages not in melpa.
+Note: long term move to :fetcher :repo syntax
 ```
 (when (< emacs-major-version 30)
   (unless (package-installed-p 'vc-use-package)
@@ -198,6 +212,18 @@ early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
 ```
 
+GUI Emacs on macOS is launched by launchd, not a login shell, so it only
+gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
+jdtls and pgformatter aren't visible to `executable-find' without this.
+Pull in the login shell's PATH once at startup to fix that.
+```
+(use-package exec-path-from-shell
+  :ensure t
+  :if (memq window-system '(mac ns))
+  :config
+  (exec-path-from-shell-initialize))
+```
+
 # Customizations
 
 
@@ -207,8 +233,6 @@ to  use i.e with the  ` back tick operator.
 
 
 ```
-(defvar my-code-bright "goldenrod3")
-(defvar my-code-dark "goldenrod4")
 (defvar margin-tan-bg "#EEE8D5")
 (defvar margin-gray-bg "gray20")
 ```
@@ -246,7 +270,7 @@ Mixed-pitch mode. I use this in markdown and org modes currently.
 Disable all previously loaded themes before loading another one.
 ```
 (advice-add 'load-theme :before
-            (lambda (&rest varargs_)
+            (lambda (&rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)))
 ```
 
@@ -285,7 +309,7 @@ Make headers all the same color as foreground
 	;; tone down code blocks
 	(bg-prose-block-contents unspecified)
 	(bg-prose-code unspecified)
-        (bg-prose-block-delimiter unspeficied)
+        (bg-prose-block-delimiter unspecified)
         (fg-prose-block-delimiter fg-dim)
 
 	;;diffs - duplicate modus deuteranopia colors (I don't like red/green)
@@ -300,7 +324,7 @@ Make headers all the same color as foreground
         (bg-removed-refine    bg-blue-refine)
         (bg-removed-intense   bg-blue-intense)
         (fg-removed           blue)
-        (fog-removed-intense   blue-intense)
+        (fg-removed-intense   blue-intense)
 	))
 ```
 
@@ -448,7 +472,8 @@ Currently trying out the folio theme as my main theme.
   (load-theme 'folio t))
 
 (use-package nano-like-modus-theme
-  :load-path "~/dev/nano-like-modus-theme")
+  :vc (:url "https://github.com/benleis1/nano-like-modus-theme")
+  :ensure t)
 ```
 
 Deal with dark/light mode macos ui elements like the scrollbar
@@ -505,9 +530,11 @@ Add a faint window divider
 ```
 (when window-system
   (use-package on-demand-scroll-bar
-    :load-path "/Users/benjamin.leis/.emacs.d/on-demand-scroll-bar"
+    :vc (:url "https://github.com/florommel/on-demand-scroll-bar.git")
+
     :config
     (on-demand-scroll-bar-mode 1))
+
   (context-menu-mode)
 
   ;; Add dividers on the right and bottom
@@ -580,8 +607,7 @@ after copying to the kill ring
 (unless window-system
   (require 'mouse)
   (xterm-mouse-mode t)
-  (defun track-mouse (e))
-  (setq mouse-sel-mode t))
+  (defun track-mouse (_e)))
 ```
 
 Setup recent files mode - this is much more in use now that I have consult
@@ -597,11 +623,17 @@ the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 ```
 
-# backup and autosave - put everything in .saves under .emacs.d
+Switch focus to help windows when they come up
+```
+(setq help-window-select t)
+```
+
+# backup and autosave.
+put everything in .saves under .emacs.d
 
 Define a directory for auto-save files
 ```
-(defvar my-auto-save-folder (concat user-emacs-directory ".saves"))
+(defconst my-auto-save-folder (locate-user-emacs-file ".saves"))
 ```
 
 Ensure the directory exists
@@ -610,15 +642,19 @@ Ensure the directory exists
   (make-directory my-auto-save-folder t))
 
 (setq
- auto-save-default nil ;; disable auto save files
  auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
- '(("." . "~/.saves/"))    ; don't litter my fs tree
+ `(("." . ,my-auto-save-folder))    ; don't litter my fs tree
  delete-old-versions t
  kept-new-versions 6
  kept-old-versions 2
  version-control t)
+```
+
+alternative strategy - just turn off auto-save.
+```
+(my-ignore (setq auto-save-default nil))
 ```
 
 # Dired
@@ -676,7 +712,12 @@ my preference is for short key strokes and to usually bind global things to
 function keys.
 
 ```
-(global-set-key (kbd "C-u") 'undo)
+(global-set-key (kbd "C-u") 'undo) ;; I use undo all the time
+```
+```
+(global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
+```
+```
 (global-set-key (kbd "C-f") 'goto-line)
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
@@ -692,10 +733,6 @@ TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 (global-set-key (kbd "s-x") 'execute-extended-command)
 ```
 
-Add standard minimal CUA  key bindings ctrl-c, ctrl-v insert paste etc.
-TODO - I need ctrl-z to still be suspend
-(cua-mode)
-
 ## pbcopy-region
 Copy to clipboard functions for terminal mode
 copy the current region directly
@@ -709,7 +746,7 @@ copy the current region directly
 ## pbcopy-kill-ring
 copy the latest kill ring
 ```
-(defun pbcopy-kill-ring (&optional push)
+(defun pbcopy-kill-ring (&optional _xpush)
   (interactive)
   (let ((process-connection-type nil)
 	(text (current-kill 0)))
@@ -722,7 +759,7 @@ copy the latest kill ring
 Final version hook into interprogram-cut-function instead
 for terminal mode cut to system clipboard
 ```
-(defun paste-for-osx (text &optional push)
+(defun paste-for-osx (text &optional _push)
   (let ((process-connection-type nil))
     (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
       (process-send-string proc text)
@@ -735,10 +772,11 @@ for terminal mode cut to system clipboard
 # flyspell config
 currently not bound to a key
 
-Set the ispell program name to aspell
-(switching to aspell will generally offer better performance than ispell.)
+Set the ispell program name to aspell if available which generally offers better
+performance than ispell.
 ```
-(setq ispell-program-name "aspell")
+(setq ispell-program-name (or (executable-find "aspell")
+			      (executable-find "ispell")))
 ```
 
 Set the global default dictionary for the Ispell process.
@@ -790,11 +828,17 @@ typically via right-click context menus.
 ```
 
 ## flyspell-on-for-buffer-type
->Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing.
+>Enable Flyspell appropriately for the major mode of the current buffer.
+Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only
+strings and comments get checked.  All other buffers get `flyspell-mode'
+to check all text.  If flyspell is already enabled, does nothing.
 
 ```
 (defun flyspell-on-for-buffer-type ()
-      "Enable Flyspell appropriately for the major mode of the current buffer.  Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only strings and comments get checked.  All other buffers get `flyspell-mode' to check all text.  If flyspell is already enabled, does nothing."
+      "Enable Flyspell appropriately for the major mode of the current buffer.
+Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only
+strings and comments get checked.  All other buffers get `flyspell-mode'
+to check all text.  If flyspell is already enabled, does nothing."
       (interactive)
       (if (not (symbol-value flyspell-mode)) ; if not already on
         (progn
@@ -806,17 +850,19 @@ typically via right-click context menus.
 ```
 
 ## flyspell-toggle
->Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately.
+>Turn Flyspell on if it is off, or off if it is on.  When turning on, it
+uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately.
 
 ```
 (defun flyspell-toggle ()
-  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
+  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it
+uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
   (interactive)
   (if (symbol-value flyspell-mode)
       (progn ; flyspell is on, turn it off
         (message "Flyspell off")
         (flyspell-mode -1))
-    ; else - flyspell is off, turn it on
+    ;; else - flyspell is off, turn it on
     (flyspell-on-for-buffer-type)))
 ```
 
@@ -832,11 +878,39 @@ Enable which key
 (which-key-mode)
 ```
 
+## my-diff-hl-enable-if-vc
+>Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited.
+
+# diff-hl
+Defer turning diff-hl on until the first version-controlled file is
+opened, rather than always paying its load cost at startup even on
+sessions that never touch a VC-tracked buffer.
+```
+(defun my-diff-hl-enable-if-vc ()
+  "Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited."
+  (when (and buffer-file-name (vc-backend buffer-file-name))
+    (remove-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
+    (global-diff-hl-mode 1)
+    (diff-hl-flydiff-mode 1)))
+
+(add-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
+
+(use-package diff-hl
+  :ensure t
+  :defer t
+  :config
+  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
+    (set-face-attribute 'diff-hl-insert nil :background changed-color)
+    (set-face-attribute 'diff-hl-change nil :background changed-color)
+    (set-face-attribute 'diff-hl-delete nil :background changed-color)))
+```
+
 # markdown mode
 
 ```
 (use-package markdown-mode
-   :ensure t)
+   :ensure t
+   :defer t)
 
 (use-package stripe-buffer
    :ensure t)
@@ -935,8 +1009,13 @@ the raw buffer text instead and otherwise defer to the original function.
     (if name
         (markdown--browse-url name)
       (apply orig-fn args))))
+```
 
-(advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url)
+markdown-mode is now deferred (see its use-package declaration above),
+so this can't run until markdown-follow-link-at-point actually exists.
+```
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url))
 
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
@@ -959,7 +1038,7 @@ Automatically add the index menu entry for org and markdown modes. This will
 also be available via the context menus
 ```
 (add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
-(add-hook 'orgmode-mode-hook 'imenu-add-menubar-index)
+(add-hook 'org-mode-hook 'imenu-add-menubar-index)
 ```
 
 ## my-markdown-frontmatter-bounds
@@ -1037,8 +1116,18 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 
 # org-mode
-My typical usage of Org includes a main work tracking file, org-agenda, integration with my exchange calendar
-and simple daily journal for which I have a capture template to add standup entries
+My typical usage of Org includes a main work tracking file, org-agenda,
+integration with my exchange calendar and simple daily journal for which I
+have a capture template to add standup entries
+
+
+Define an org root directory
+
+```
+(defcustom my-org-root "~/org" "Root location for org files"
+  :type 'string
+  :group 'local)
+```
 
 mouse support
 This is fairly expensive so we defer it until org is actually loaded
@@ -1057,7 +1146,7 @@ word wrap for normal text and stripe mode for tables
 ```
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-  (add-hook 'org-mode-hoom #'stripe-buffer-mode)
+  (add-hook 'org-mode-hook #'stripe-buffer-mode)
   (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
   (setq-local imenu-depth 4)
   )
@@ -1081,12 +1170,6 @@ ignored currently
 (my-ignore (font-lock-add-keywords 'org-mode
                         '(("^ *\\([-]\\) "
                           (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "▪")))))))
-```
-
-increase line spacing
-ignored currently because it looks bad with tables.
-```
-(my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
 ```
 
 set the org-agenda prefix to skip printing the source files
@@ -1138,11 +1221,12 @@ Indent by heading depth
 Setup capture templates
 currently only have one for standup summaries
 ```
+(defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename")
 (setq org-capture-templates
   '(    ;; ... other templates
 
     ("s" "Standup Entry"
-         entry (file+datetree "~/org/standup.org")
+         entry (file+datetree my-capturefile )
          "* %?"
          :empty-lines 1)
 
@@ -1187,7 +1271,8 @@ what current magit requires. Explicitly managing it via package.el gets a
 fresh install that satisfies magit's minimum.
 ```
 (use-package transient
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (use-package magit
   :ensure t
@@ -1206,7 +1291,7 @@ Set display line number mode on
 (add-hook 'prog-mode-hook #'my-common-prog-mode-setup)
 ```
 
-Project.el settings.
+#; Project.el settings.
 
 I prefer to have project-switch-project to just change the project for the next project
 command. bear in mind, project mostly uses the current directory of the buffer to
@@ -1222,7 +1307,7 @@ Set project boundary at the first build.gradle found as well
 ## treesit-fold-range-java-imports
 >Fold the contiguous run of Java import declarations starting at NODE.
 
-treesit-fold - useful for folding things like imports in java
+#; treesit-fold - useful for folding things like imports in java
 
 Java's grammar has no single node wrapping all the imports -- each
 import_declaration is just a sibling of the next, so folding on
@@ -1308,7 +1393,7 @@ the gutter when its X is less than the line-number display's pixel width.
                          (interactive)
                          ;; `treesit-fold-summary-java' recovers the folded
                          ;; node from `point', so move there rather than
-                         ;; passing the node to `treesit-fold-close' directly.
+                         ;; passing the node to `esit-fold-close' directly.
                          (save-excursion
                            (goto-char pos)
                            (treesit-fold-close)))
@@ -1318,6 +1403,11 @@ the gutter when its X is less than the line-number display's pixel width.
 (use-package treesit-fold
   :ensure t
   :vc (:url "https://github.com/emacs-tree-sitter/treesit-fold")
+  ;; Only java-mode/java-ts-mode buffers actually call into this (see
+  ;; `setup-common-java'), so there's no need to load it eagerly at
+  ;; startup -- its own autoloads cover `treesit-fold-mode' et al, and
+  ;; that first call is what triggers this :config block to run.
+  :defer t
   :config
   ;; Add a rule for java-mode and java-ts-mode to fold the whole run of imports at once
   (dolist (mode '(java-mode java-ts-mode))
@@ -1329,12 +1419,46 @@ the gutter when its X is less than the line-number display's pixel width.
   (add-hook 'context-menu-functions #'context-menu-fold-line))
 ```
 
-# Java
+#; Java
 
 set java home
 ```
-(setq java-home "/Users/benjamin.leis/.jenv/versions/21.0")
-(setenv "JAVA_HOME" java-home)
+(defgroup my-environment nil
+  "Personal environment config."
+  :group 'environment)
+```
+
+## my-java-home-set
+>Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
+Re-applies JAVA_HOME and the jdtls/dap-mode settings derived from it --
+so customizing `my-java-home' (e.g. via M-x customize-variable) takes
+effect without a restart.
+
+```
+(defun my-java-home-set (symbol value)
+  "Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
+Re-applies JAVA_HOME and the jdtls/dap-mode settings derived from it --
+so customizing `my-java-home' (e.g. via M-x customize-variable) takes
+effect without a restart."
+  (set-default symbol value)
+  (setenv "JAVA_HOME" value)
+  (setq dap-java-java-command (concat value "/bin/java"))
+  (setq my-jdtls-settings `(:java (:home ,value)))
+  (setq-default eglot-workspace-configuration my-jdtls-settings))
+
+(defcustom my-java-home
+  (expand-file-name "~/.jenv/versions/21.0")
+  "Java path used by eglot/jdtls"
+  :type 'directory
+  :set #'my-java-home-set
+  :group 'my-environment)
+```
+
+Establish the initial dap-mode/jdtls settings derived from my-java-home.
+This is the single source of truth for that derivation -- see
+`my-java-home-set', which also reruns it on later customization.
+```
+(my-java-home-set 'my-java-home my-java-home)
 ```
 
 ## setup-common-java
@@ -1344,7 +1468,7 @@ set java home
         tab-width 4
         indent-tabs-mode t)
   (setq-local imenu-depth 3)
-  (setq-local imenu-create-index-function 'my/generate-ts-imenu)
+  (setq-local imenu-create-index-function 'ilist-plus-java-ts-index)
   (treesit-fold-mode)
   (treesit-fold-close-java-imports))
 
@@ -1356,11 +1480,9 @@ Setup automatic mode remapping so we always use treesitter for java
 ```
 (setq major-mode-remap-alist
       '((java-mode . java-ts-mode)))
-
-(setq dap-java-java-command (concat java-home "/bin/java"))
 ```
 
-# eglot
+#; eglot
 
 eglot configuration.
 ```
@@ -1382,17 +1504,6 @@ prettier format for the json rpc - needed a bit less with the eglot-report-progr
 messages buffer but still easier to parse
 ```
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
-```
-
-Pin the java version for JDT. Set it here and after the load.
-```
-(setq my-jdtls-settings
-      `(:java (
-	       :home ,java-home
-
-		     )))
-
-(setq-default eglot-workspace-configuration my-jdtls-settings)
 ```
 
 ## jsonrpc-elide-text-document
@@ -1507,7 +1618,7 @@ anything as useful as the `report' messages in between."
                               (list :settings my-jdtls-settings)))))))
 ```
 
-# flymake
+#; flymake
 
 Dock the diagnostics list as a bottom "problems panel" instead of
 letting it split whatever window happens to be current.
@@ -1548,23 +1659,39 @@ Save space by not showing zero warn/error counter in the mode line
 (setq flymake-suppress-zero-counters t)
 ```
 
-# python - TODO turn on eglot integration later.
+Configure lightbulbs with corresponding diagnostic colors/faces'
+And place them in the margin rather than the fringe
+```
+(setq flymake-indicator-type 'margins)
+(setq flymake-margin-indicators-string
+ `((error   ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-error)
+   (warning ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-warning)
+   (note    ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-info)))
+```
+
+#; python
+
+TODO turn on eglot integration later.
+
+
+#; elisp
+
+Group `use-package` declarations under their own imenu heading.
+Also extract all the ;;; sections.
+```
+(add-hook 'emacs-lisp-mode-hook
+          (lambda ()
+	    (setq-local imenu-depth 2)
+            (setq-local imenu-create-index-function 'ilist-plus-elisp-index)))
+```
+
 
 # SQL
 clutch - database access
 ```
 (use-package clutch
   :ensure t
-  :defer t
-  :init
-  (setq clutch-connection-alist
-	'(("glide dataaccess" . (:backend pg
-				 :host "127.0.0.1"
-				 :port 3400
-				 :user "dbi_3400"
-				 :database "glide"
-                             ;; Set default schema using options search_path
-                             :options "-c search_path=glide_dataaccess,public")))))
+  :defer t)
 ```
 
 sql formatting setup for sqlformat-* functions.
@@ -1585,137 +1712,31 @@ Note: C-\ is bound to smart toggle.
   :config
   ;; Some built in default around resizing and window focus I prefer.
   (setq imenu-list-focus-after-activation t
-        imenu-list-auto-resize nil)
-
-  ;; Be care to set the font family to one with nerd fonts so the icon renders.
-  (defface my-imenu-list-icon-face
-    `((t (:inherit mode-line-buffer-id :family ,my-default-fixed-pitch-font)))
-    "Face for the icon glyphs in `imenu-list-mode-line-format'.")
-
-  ;; Simplified buffer name with icon for the menu bar. The whole thing is
-  (setq imenu-list-mode-line-format
-	`("%e"
-	  (:propertize
-	   ("" mode-line-frame-identification
-	    (:propertize "󰐃 󰉹" face my-imenu-list-icon-face) " "
-	    (:eval (buffer-name imenu-list--displayed-buffer)) "  "
-	    (:eval (format "[%s]" (my/imenu-current-sort imenu-list--displayed-buffer))) "  "
-	    mode-line-end-spaces)
-	   help-echo "mouse-1: close the window"
-	   mouse-face mode-line-highlight
-	   local-map ,my-modeline-dedicated-window-map)))
-
-  (defvar imenu-depth 2 "Initial depth to expand imenu-ilist window")
-
-  ;; Track whether we autofolded per buffer.
-  (defvar-local imenu-list--folded-once nil
-    "`my-imenu-list-fold-below-depth' has folded this buffer's imenu-list.")
-
-  (defconst my-imenu-list-collapsed-marker "▶"
-    "Marker shown before a folded (hidden) imenu-list entry.")
-
-  (defconst my-imenu-list-expanded-marker "▼"
-    "Marker shown before an unfolded (visible) imenu-list entry.")
-
-  ;; I need a more visible highlight for the current block
-  (defface my-hl-imenu-face
-    `((t (:foreground ,(modus-themes-get-color-value 'fg-hl-imenu t)  :weight bold)))
-  "A new custom face for highlighting."
-  :group 'my-custom-group)
-
-  (defun my-imenu-list--hide-ellipsis (ov)
-    "Suppress hideshow's default \"...\" indicator on OV.
-The leading arrow marker already conveys fold state, so the ellipsis
-would just be redundant clutter."
-    (when (eq (overlay-get ov 'invisible) 'hs)
-      (overlay-put ov 'display "")))
-
-  ;; Hook for setup of the mode,
-  (add-hook 'imenu-list-major-mode-hook
-            (lambda ()
-              ;; Wire in my custom highlight face.
-              (setq-local face-remapping-alist '((hl-line my-hl-imenu-face)))
-              ;; High enough priority for this face so it takes precedence
-              ;; unlike normal I don't want to preserve the underlying foreground color
-              (setq-local hl-line-overlay-priority 10)
-              ;; Wire in the ellipsis twiddling.
-              (setq-local hs-set-up-overlay #'my-imenu-list--hide-ellipsis)))
-
-  (defun my-imenu-list-fold-below-depth (&optional depth)
-    "Collapse imenu-list entries nested deeper than DEPTH (default `imenu-depth'). Top-level entries are depth 1."
-    (interactive)
-    (let ((depth (or depth imenu-depth)))
-      (with-current-buffer imenu-list-buffer-name
-        (save-excursion
-          (goto-char (+ 1 (point-min)))
-          (hs-hide-level depth)))))
-
-    (defun my-imenu-list-fold-below-depth-once (&optional depth)
-    "Run default folding once per buffer, then refresh fold markers."
-    (unless imenu-list--folded-once
-      (setq imenu-list--folded-once t)
-      (my-imenu-list-fold-below-depth depth))
-    (my-imenu-list-update-fold-markers))
-
-  (add-hook 'imenu-list-update-hook #'my-imenu-list-fold-below-depth-once)
-
-  (defun my-imenu-list--set-marker-at-point ()
-    "Make the fold marker on the current line display as an arrow reflecting whether the block starting here is currently hidden."
-    (save-excursion
-      (beginning-of-line)
-      (when (looking-at "^ *\\(\\+\\) ")
-        (let ((inhibit-read-only t))
-          (put-text-property (match-beginning 1) (match-end 1)
-                              'display
-                              (if (hs-already-hidden-p)
-                                  my-imenu-list-collapsed-marker
-                                my-imenu-list-expanded-marker))))))
-
-  (defun my-imenu-list-update-fold-markers ()
-    "Update every foldable entry's marker in the *Ilist* buffer to match its current hidden/shown state."
-    (when (get-buffer imenu-list-buffer-name)
-      (with-current-buffer imenu-list-buffer-name
-        (save-excursion
-          (goto-char (point-min))
-          (while (not (eobp))
-            (my-imenu-list--set-marker-at-point)
-            (forward-line 1))))))
-
-  ;; Apply the arrow overlays when manually adjusting folded sections
-  (defun my-imenu-list--refresh-marker-after-toggle (&rest _)
-      (when (eq major-mode 'imenu-list-major-mode)
-       (my-imenu-list--set-marker-at-point)))
-
-  (advice-add 'hs-toggle-hiding :after #'my-imenu-list--refresh-marker-after-toggle)
-
-  ;; Refold
-  (defun my-after-imenu-list-toggle (&rest args)
-    "Run custom code after `imenu-list-smart-toggle` occurs."
-    (dolist (buf (buffer-list))
-      (with-current-buffer buf
-	(when (local-variable-p 'imenu-list--folded-once)
-	  (setq imenu-list--folded-once nil)))))
-
-  (advice-add 'imenu-list-smart-toggle :before #'my-after-imenu-list-toggle)
-
-  ;; When the tracked entry is inside a currently-folded block, `hl-line-mode'
-  ;; highlights the (invisible) entry line, which visually collapses to just
-  ;; the fold ellipsis at the end of the header line.  Move point up to the
-  ;; visible header line instead so the highlight bar actually shows.
-  (defun my-imenu-list-reveal-current-entry (&rest _)
-    (when (get-buffer-window imenu-list-buffer-name)
-      (with-selected-window (get-buffer-window imenu-list-buffer-name)
-        (when (invisible-p (point))
-          (goto-char (previous-single-char-property-change (point) 'invisible))
-          (beginning-of-line)
-          (hl-line-highlight)))))
-
-  (advice-add 'imenu-list--show-current-entry :after #'my-imenu-list-reveal-current-entry))
+        imenu-list-auto-resize nil
+	;; rescan buffers as they change
+	imenu-auto-rescan t))
 ```
 
 Load all of my custom imenu extensions.
 ```
-(load-file (locate-user-emacs-file "imenu.el"))
+(use-package ilist-plus
+  :ensure nil
+  ;; For local test/dev when turned on.
+   :load-path "~/dev/ilist-plus/"
+;;  :vc (:url "https://github.com/benleis1/ilist-plus")
+  :init
+  ;; Bind the fixed pitch icon font for the imenu modeline
+  (setq ilist-plus-fixed-font my-default-fixed-pitch-font))
+```
+
+Now that modeline.el (loaded above) has defined the richer dedicated-window
+keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
+self-contained fallback after imenu loads.
+
+```
+(with-eval-after-load 'imenu-list
+  (setq imenu-list-mode-line-format
+	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
 ```
 
 Setup file menu to include load/save desktop
@@ -1761,29 +1782,6 @@ I haven't found a way to directly place after a separator
   'zoom-out)
 ```
 
-
-# elisp
-
-Group `use-package` declarations under their own imenu heading.
-Also extract all the ;;; sections.
-```
-(add-hook 'emacs-lisp-mode-hook
-          (lambda ()
-            (add-to-list 'imenu-generic-expression
-                          (list "Use-package"
-                                (concat "^\\s-*(use-package\\s-+\\("
-                                        lisp-mode-symbol-regexp "\\)")
-                                1))
-
-	    (add-to-list 'imenu-generic-expression
-                         '("Sections" "^;;;\\s-+\\(.*\\)$" 1))
-
-	    (setq-local imenu-depth 2)
-
-            (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
-```
-
-
 # Excorporate setup.
 I've modified this quite a bit to directly generate org files.
 
@@ -1795,8 +1793,8 @@ I've modified this quite a bit to directly generate org files.
   :init
   (setq excorporate-update-diary nil)
   (setq excorporate-update-org t)
-	;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
-	;;setq excorporate-org-buffer-name "~/org/daily-meetings.org"
+  ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
+  ;; setq excorporate-org-buffer-name "~/org/daily-meetings.org"
   (setq	excorporate-org-persist-buffer t)
   )
 ```
@@ -1834,7 +1832,7 @@ excorporate uses the fsm (finite-state-machine) to do most operations aysnc
 Issues: the initial excorporate setup triggers a diary download without a callback to do cleanup
 The agenda itself loads the diary buffer - we should probably just leave it off the tab-line?
 ```
-(defun my-agenda-update-diary (&optional args)
+(defun my-agenda-update-diary (&optional _args)
   "call excorporate to update the diary for today"
 
   ;; onetime setup
@@ -1866,177 +1864,142 @@ the customizations done above
 
 # ediff
 
-## my-ediff-bsh
->Function to be called before any buffers or window setup for
-   ediff.
-
-Capture window state and turn off my-modeline
-```
-(defun my-ediff-bsh ()
-  "Function to be called before any buffers or window setup for
-    ediff."
-  (setq my-ediff-buffers '())
-  (setq my-ediff-bwin-config (current-window-configuration))
-;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
-  (my-modeline-mode -1))
-```
-
-## simple-mode-line-buffer
-Create a mode-line-buffer that prints the filename and contains a
-static hint about the full filename
-```
-(defun simple-mode-line-buffer ()
-  (list (propertize
-         "%12b"
-         'face 'mode-line-buffer-id
-         'help-echo
-	 (if (buffer-file-name) (buffer-file-name) (buffer-name))
-         'mouse-face 'mode-line-highlight
-         'local-map mode-line-buffer-identification-keymap)))
-```
-
-## my-get-buffer-state
-Return buffer state we want to save/restore as a list
-```
-(defun my-get-buffer-state ()
-  (list (current-buffer)
-	(bound-and-true-p display-line-numbers-mode)
-	(bound-and-true-p tab-line-mode)))
-```
-
-## my-restore-buffer-state
-Restore back the saved buffer state
-```
-(defun my-restore-buffer-state ( state )
-  (let* ((buffer (nth 0 state))
-	 (linenums (nth 1 state))
-	 (tab-line (nth 2 state)))
-    (with-current-buffer buffer
-      (progn
-	(message "restoring %s" buffer)
-	(unless linenums (display-line-numbers-mode -1))
-	(if tab-line (tab-line-mode 1))))))
-```
-
-## my-ediff-prep-buffers
->Function that is called after each buffer to be diff'ed is setup
-
-hook before prep buffers to fixup the mode line hints
-Turn off tab-line, turn on line numbers and record the list of buffers
-```
-(defun my-ediff-prep-buffers ()
-  "Function that is called after each buffer to be diff'ed is setup"
-  (message "setting mode line %s f: %s" (current-buffer) (buffer-file-name))
-  (setq my-ediff-buffers (cons (my-get-buffer-state) my-ediff-buffers))
-  (tab-line-mode -1)
-  (display-line-numbers-mode 1)
-  (setq mode-line-format (simple-mode-line-buffer)))
-```
-
-## my-ediff-qh
->Function to be called when ediff quits.
-
-Restore back the old states
-```
-(defun my-ediff-qh ()
-  "Function to be called when ediff quits."
-  (my-modeline-mode 1)
-  (dolist (element my-ediff-buffers)
-    (my-restore-buffer-state element))
-  (when my-ediff-bwin-config
-    (set-window-configuration my-ediff-bwin-config)))
-
-(add-hook 'ediff-before-setup-hook 'my-ediff-bsh)
-(add-hook 'ediff-quit-hook 'my-ediff-qh)
-(add-hook 'ediff-prepare-buffer-hook 'my-ediff-prep-buffers 'append)
-```
-
-side by side comparison layout
-```
-(setq ediff-split-window-function 'split-window-horizontally)
-```
-
 ## command-line-diff
-todo this doesn't work with emacsclient only gemacs
 Setup a command line switch gemacs -diff file1 file2
+TODO: this doesn't work with emacsclient only gemacs
 ```
-(defun command-line-diff (switch)
+(defun command-line-diff (_switch)
   (let ((file1 (pop command-line-args-left))
         (file2 (pop command-line-args-left)))
     (ediff file1 file2)))
 
 (add-to-list 'command-switch-alist '("diff" . command-line-diff))
-```
 
-Keep the control window in the default frame
-```
-(setq ediff-window-setup-function #'ediff-setup-windows-plain)
-```
+(with-eval-after-load 'ediff
+  (defvar my-ediff-buffers '() "Track the buffers being used")
+  (defvar my-ediff-bwin-config nil  "Track the initial window configuration")
 
-Diff counter + up/down nav buttons prepended before the control
-buffer's help line ("Type ? for help"). ediff centers that line by
-padding it with leading whitespace to (roughly) the window width, so
-inserting our text via before-string just lengthens the line past the
-window width and wraps it, growing the control window by a line. Instead
-we put a 'display overlay over that leading whitespace (the same span
-`ediff-setup-control-buffer' itself skips past via `ediff-whitespace')
-so our text replaces the padding instead of adding to it. Buttons use a
-plain 'keymap' text property (like button.el), not 'local-map' on the
-mode/header line, which needs a [header-line mouse-1]-prefixed binding
-to receive clicks at all.
-Advising ediff-setup-control-buffer and ediff-refresh-mode-lines (rather
-than a fixed list of hooks) keeps the overlay in sync across startup,
-?-toggled help text, and every diff-position change, without needing to
-enumerate every command that can move ediff-current-difference.
-```
-(defvar-local my-ediff-nav-overlay nil)
-```
+  ;; Capture window state and turn off my-modeline
+  (defun my-ediff-bsh ()
+    "Function to be called before any buffers or window setup for
+    ediff."
+    (setq my-ediff-buffers '())
+    (setq my-ediff-bwin-config (current-window-configuration))
+    ;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
+    (my-modeline-mode -1))
 
-## my-ediff-nav-button
-```
-(defun my-ediff-nav-button (label command help)
-  (propertize label
-              'help-echo help
-              'mouse-face 'highlight
-              'keymap (let ((map (make-sparse-keymap)))
-                        (define-key map [mouse-1] command)
-                        map)))
-```
+  ;; Create a mode-line-buffer that prints the filename and contains a
+  ;; static hint about the full filename
+  (defun simple-mode-line-buffer ()
+    (list (propertize
+           "%12b"
+           'face 'mode-line-buffer-id
+           'help-echo
+	   (if (buffer-file-name) (buffer-file-name) (buffer-name))
+           'mouse-face 'mode-line-highlight
+           'local-map mode-line-buffer-identification-keymap)))
 
-## my-ediff-nav-string
-```
-(defun my-ediff-nav-string ()
-  (let ((cur ediff-current-difference)
-        (total ediff-number-of-differences))
-    (concat
-     (cond ((< cur 0) (format "_/%d" total))
-           ((>= cur total) (format "$/%d" total))
-           (t (format "%d/%d" (1+ cur) total)))
-     " "
-     (my-ediff-nav-button "▲" #'ediff-previous-difference "Previous diff")
-     " "
-     (my-ediff-nav-button "▼" #'ediff-next-difference "Next diff")
-     "  ")))
-```
+  ;; Return buffer state we want to save/restore as a list
+  (defun my-get-buffer-state ()
+    (list (current-buffer)
+	  (bound-and-true-p display-line-numbers-mode)
+	  (bound-and-true-p tab-line-mode)))
 
-## my-ediff-install-nav-overlay
-```
-(defun my-ediff-install-nav-overlay (&rest _)
-  (unless (overlayp my-ediff-nav-overlay)
-    (setq my-ediff-nav-overlay (make-overlay (point-min) (point-min))))
-  (let ((pad-end (save-excursion
-                   (goto-char (point-min))
-                   (skip-chars-forward ediff-whitespace)
-                   (point))))
-    (move-overlay my-ediff-nav-overlay (point-min) pad-end)
-    (overlay-put my-ediff-nav-overlay 'display nil)
-    (overlay-put my-ediff-nav-overlay 'before-string nil)
-    (overlay-put my-ediff-nav-overlay
-                 (if (> pad-end (point-min)) 'display 'before-string)
-                 (my-ediff-nav-string))))
+  ;; Restore back the saved buffer state
+  (defun my-restore-buffer-state ( state )
+    (let* ((buffer (nth 0 state))
+	   (linenums (nth 1 state))
+	   (tab-line (nth 2 state)))
+      (with-current-buffer buffer
+	(progn
+	  (message "restoring %s" buffer)
+	  (unless linenums (display-line-numbers-mode -1))
+	  (if tab-line (tab-line-mode 1))))))
 
-(advice-add 'ediff-setup-control-buffer :after #'my-ediff-install-nav-overlay)
-(advice-add 'ediff-refresh-mode-lines :after #'my-ediff-install-nav-overlay)
+  ;; hook before prep buffers to fixup the mode line hints
+  ;; Turn off tab-line, turn on line numbers and record the list of buffers
+  (defun my-ediff-prep-buffers ()
+    "Function that is called after each buffer to be diff'ed is setup"
+    (message "setting mode line %s f: %s" (current-buffer) (buffer-file-name))
+    (setq my-ediff-buffers (cons (my-get-buffer-state) my-ediff-buffers))
+    (tab-line-mode -1)
+    (display-line-numbers-mode 1)
+    (setq mode-line-format (simple-mode-line-buffer)))
+
+  ;; Restore back the old states
+  (defun my-ediff-qh ()
+    "Function to be called when ediff quits."
+    (my-modeline-mode 1)
+    (dolist (element my-ediff-buffers)
+      (my-restore-buffer-state element))
+    (when my-ediff-bwin-config
+      (set-window-configuration my-ediff-bwin-config)))
+
+  (add-hook 'ediff-before-setup-hook 'my-ediff-bsh)
+  (add-hook 'ediff-quit-hook 'my-ediff-qh)
+  (add-hook 'ediff-prepare-buffer-hook 'my-ediff-prep-buffers 'append)
+
+  ;; side by side comparison layout
+  (setq ediff-split-window-function 'split-window-horizontally)
+
+  ;; Keep the control window in the default frame
+  (setq ediff-window-setup-function #'ediff-setup-windows-plain)
+
+  ;; Diff counter + up/down nav buttons prepended before the control
+  ;; buffer's help line ("Type ? for help"). ediff centers that line by
+  ;; padding it with leading whitespace to (roughly) the window width, so
+  ;; inserting our text via before-string just lengthens the line past the
+  ;; window width and wraps it, growing the control window by a line. Instead
+  ;; we put a 'display overlay over that leading whitespace (the same span
+  ;; `ediff-setup-control-buffer' itself skips past via `ediff-whitespace')
+  ;; so our text replaces the padding instead of adding to it. Buttons use a
+  ;; plain 'keymap' text property (like button.el), not 'local-map' on the
+  ;; mode/header line, which needs a [header-line mouse-1]-prefixed binding
+  ;; to receive clicks at all.
+  ;; Advising ediff-setup-control-buffer and ediff-refresh-mode-lines (rather
+  ;; than a fixed list of hooks) keeps the overlay in sync across startup,
+  ;; ?-toggled help text, and every diff-position change, without needing to
+  ;; enumerate every command that can move ediff-current-difference.
+  (defvar-local my-ediff-nav-overlay nil)
+
+  (defun my-ediff-nav-button (label command help)
+    (propertize label
+		'help-echo help
+		'mouse-face 'highlight
+		'keymap (let ((map (make-sparse-keymap)))
+                          (define-key map [mouse-1] command)
+                          map)))
+
+  (defun my-ediff-nav-string ()
+    (let ((cur ediff-current-difference)
+          (total ediff-number-of-differences))
+      (concat
+       (cond ((< cur 0) (format "_/%d" total))
+             ((>= cur total) (format "$/%d" total))
+             (t (format "%d/%d" (1+ cur) total)))
+       " "
+       (my-ediff-nav-button "▲" #'ediff-previous-difference "Previous diff")
+       " "
+       (my-ediff-nav-button "▼" #'ediff-next-difference "Next diff")
+       "  ")))
+
+  (defun my-ediff-install-nav-overlay (&rest _)
+    (unless (overlayp my-ediff-nav-overlay)
+      (setq my-ediff-nav-overlay (make-overlay (point-min) (point-min))))
+    (let ((pad-end (save-excursion
+                     (goto-char (point-min))
+                     (skip-chars-forward ediff-whitespace)
+                     (point))))
+      (move-overlay my-ediff-nav-overlay (point-min) pad-end)
+      (overlay-put my-ediff-nav-overlay 'display nil)
+      (overlay-put my-ediff-nav-overlay 'before-string nil)
+      (overlay-put my-ediff-nav-overlay
+                   (if (> pad-end (point-min)) 'display 'before-string)
+                   (my-ediff-nav-string))))
+
+  (advice-add 'ediff-setup-control-buffer :after #'my-ediff-install-nav-overlay)
+  (advice-add 'ediff-refresh-mode-lines :after #'my-ediff-install-nav-overlay)
+  )
 ```
 
 ## gc-notification
@@ -2077,7 +2040,7 @@ Trying out orderless completion
 (use-package corfu
   :ensure t
   :init
-  (global-corfu-mode)
+;;  (global-corfu-mode)
   )
 ```
 
@@ -2101,7 +2064,7 @@ need to return a list (start end collection) if this matches or nil if not
 ```
 (defun complete-font-name ()
   (when (font-family-widget-p)
-    `(,(point-at-bol) ,(point-at-eol) ,(font-family-list))))
+    `(,(pos-bol) ,(pos-eol) ,(font-family-list))))
 ```
 
 ## add-complete-font-name
@@ -2213,14 +2176,13 @@ list object in place with nconc reaches both.
 ```
 
 # Snippets
-This is currently used in org and markdown mode
+This is currently used in org and markdown mode but I only have it on by
+default for markdown.
 ```
 (use-package yasnippet
   :ensure t
-  :init (yas-global-mode 1)
   :config
-;; unblock emacs 31
-;;  (add-hook 'markdown-mode-hook #'yas-minor-mode)
+  (add-hook 'markdown-mode-hook #'yas-minor-mode)
   )
 ```
 
@@ -2260,6 +2222,35 @@ No key binding for now.
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
+```
+
+# Local.el loading
+```
+(when (file-exists-p (locate-user-emacs-file "local.el"))
+  (load-file (locate-user-emacs-file "local.el")))
+```
+
+# temptemp - try out new builtin completion.
+
+```
+(when (> emacs-major-version 30)
+  (use-package completion-preview
+    :ensure nil
+    :demand t
+    :bind
+    ( :map completion-preview-active-mode-map
+      ("M-i" . completion-preview-insert-word)
+      ("M-n" . completion-preview-next-candidate)
+      ("M-p" . completion-preview-prev-candidate)
+      ("M-<RET>" . completion-preview-insert)
+      ;; With TAB we effectively defer to the *Completions* buffer to
+      ;; show more completion candidates at once.
+      ("<tab>" . completion-preview-complete))
+    :config
+    (setq completion-preview-minimum-symbol-length 3)
+    (with-eval-after-load 'org
+      (add-to-list 'completion-preview-commands #'org-self-insert-command))
+    (global-completion-preview-mode 1)))
 ```
 
 > This file was auto-generated by elispdoc.el

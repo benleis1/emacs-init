@@ -15,8 +15,8 @@
 ;;
 ;; ## Philosophy
 ;;
-;; These are all the high level priorities that inform the decisions I've made throughout this file.
-;; Unlike many other users who have shared their config files, I like using the mouse and even
+;; These are the high level priorities that inform the decisions I've made throughout this file.
+;; First, Unlike many other users who have shared their config files, I like using the mouse and even
 ;; the occasional menu rather than remembering key bindings for everything. So I've spent some time
 ;; trying to get emacs to work more consistently for these modes. For example with flyspell on you
 ;; can right click and get a context menu with the possible spellings like in most other applications.
@@ -65,10 +65,24 @@
 ;; ```
 ;;
 ;; ## Portability
-;;   I have the config on github both for my own backup and as a way to share snippets and ideas.
-;;   I've worked to make this mostly reusable where reasonable but there is still some coupling
-;;   to my own environment and workflow. The config is currently for MacOS and has some
-;;   OS specific parts like the pbcopy integration.
+;;   I have the config on github both for my own backup and as a
+;;   way to share snippets and ideas.  I've worked to make this mostly reusable
+;;   where reasonable but there is still some coupling to my own environment and
+;;   workflow discussed below.
+;;
+;; ## Prerequisites
+;;   Things you'll want in place before this config will load and work cleanly:
+;;   - MacOS. There's direct use of pbcopy and other OS specific integration.
+;;   - Emacs 29 or later (30+ preferred; some of the :vc package handling is
+;;     conditioned on the major version).
+;;   - git on PATH, since several packages are pulled straight from source via
+;;     use-package's :vc keyword rather than from MELPA.
+;;   - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
+;;     mode-line and dired icons to render correctly.
+;;   - aspell installed (falls back to ispell if not found) for flyspell.
+;;   - A Java installation reachable via `my-java-home' (defaults to a jenv
+;;     path) plus jdtls on PATH if you want eglot's Java support.
+;;   - pgformatter on PATH if you want the SQL formatting commands to work.
 ;;
 ;; ## Major areas configured
 ;; - Markdown
@@ -109,6 +123,16 @@
 ;; early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
 
+;; GUI Emacs on macOS is launched by launchd, not a login shell, so it only
+;; gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
+;; jdtls and pgformatter aren't visible to `executable-find' without this.
+;; Pull in the login shell's PATH once at startup to fix that.
+(use-package exec-path-from-shell
+  :ensure t
+  :if (memq window-system '(mac ns))
+  :config
+  (exec-path-from-shell-initialize))
+
 ;;; Customizations
 
 ;;
@@ -117,8 +141,6 @@
 ;; to  use i.e with the  ` back tick operator.
 ;;
 
-(defvar my-code-bright "goldenrod3")
-(defvar my-code-dark "goldenrod4")
 (defvar margin-tan-bg "#EEE8D5")
 (defvar margin-gray-bg "gray20")
 
@@ -444,6 +466,9 @@
 ;; the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 
+;; Switch focus to help windows when they come up
+(setq help-window-select t)
+
 ;;; backup and autosave.
 ;; put everything in .saves under .emacs.d
 
@@ -509,7 +534,8 @@
 ;; my preference is for short key strokes and to usually bind global things to
 ;; function keys.
 
-(global-set-key (kbd "C-u") 'undo)
+(global-set-key (kbd "C-u") 'undo) ;; I use undo all the time
+(global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
 (global-set-key (kbd "C-f") 'goto-line)
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
@@ -626,11 +652,22 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
 (which-key-mode)
 
 ;;; diff-hl
+;; Defer turning diff-hl on until the first version-controlled file is
+;; opened, rather than always paying its load cost at startup even on
+;; sessions that never touch a VC-tracked buffer.
+(defun my-diff-hl-enable-if-vc ()
+  "Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited."
+  (when (and buffer-file-name (vc-backend buffer-file-name))
+    (remove-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
+    (global-diff-hl-mode 1)
+    (diff-hl-flydiff-mode 1)))
+
+(add-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
+
 (use-package diff-hl
   :ensure t
-  :init
-  (global-diff-hl-mode +1)
-  (diff-hl-flydiff-mode +1)
+  :defer t
+  :config
   (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
     (set-face-attribute 'diff-hl-insert nil :background changed-color)
     (set-face-attribute 'diff-hl-change nil :background changed-color)
@@ -639,7 +676,8 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
 ;;; markdown mode
 
 (use-package markdown-mode
-   :ensure t)
+   :ensure t
+   :defer t)
 
 (use-package stripe-buffer
    :ensure t)
@@ -715,7 +753,10 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
         (markdown--browse-url name)
       (apply orig-fn args))))
 
-(advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url)
+;; markdown-mode is now deferred (see its use-package declaration above),
+;; so this can't run until markdown-follow-link-at-point actually exists.
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url))
 
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
@@ -794,8 +835,16 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 
 ;;; org-mode
-;; My typical usage of Org includes a main work tracking file, org-agenda, integration with my exchange calendar
-;; and simple daily journal for which I have a capture template to add standup entries
+;; My typical usage of Org includes a main work tracking file, org-agenda,
+;; integration with my exchange calendar and simple daily journal for which I
+;; have a capture template to add standup entries
+
+
+;; Define an org root directory
+
+(defcustom my-org-root "~/org" "Root location for org files"
+  :type 'string
+  :group 'local)
 
 ;; mouse support
 ;; This is fairly expensive so we defer it until org is actually loaded
@@ -829,10 +878,6 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (my-ignore (font-lock-add-keywords 'org-mode
                         '(("^ *\\([-]\\) "
                           (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "▪")))))))
-
-;; increase line spacing
-;; ignored currently because it looks bad with tables.
-(my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
 
 ;; set the org-agenda prefix to skip printing the source files
 (setq org-agenda-prefix-format '(
@@ -872,11 +917,12 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 ;; Setup capture templates
 ;; currently only have one for standup summaries
+(defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename")
 (setq org-capture-templates
   '(    ;; ... other templates
 
     ("s" "Standup Entry"
-         entry (file+datetree "~/org/standup.org")
+         entry (file+datetree my-capturefile )
          "* %?"
          :empty-lines 1)
 
@@ -913,7 +959,8 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; what current magit requires. Explicitly managing it via package.el gets a
 ;; fresh install that satisfies magit's minimum.
 (use-package transient
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (use-package magit
   :ensure t
@@ -1015,6 +1062,11 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (use-package treesit-fold
   :ensure t
   :vc (:url "https://github.com/emacs-tree-sitter/treesit-fold")
+  ;; Only java-mode/java-ts-mode buffers actually call into this (see
+  ;; `setup-common-java'), so there's no need to load it eagerly at
+  ;; startup -- its own autoloads cover `treesit-fold-mode' et al, and
+  ;; that first call is what triggers this :config block to run.
+  :defer t
   :config
   ;; Add a rule for java-mode and java-ts-mode to fold the whole run of imports at once
   (dolist (mode '(java-mode java-ts-mode))
@@ -1032,20 +1084,35 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
   "Personal environment config."
   :group 'environment)
 
+(defun my-java-home-set (symbol value)
+  "Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
+Re-applies JAVA_HOME and the jdtls/dap-mode settings derived from it --
+so customizing `my-java-home' (e.g. via M-x customize-variable) takes
+effect without a restart."
+  (set-default symbol value)
+  (setenv "JAVA_HOME" value)
+  (setq dap-java-java-command (concat value "/bin/java"))
+  (setq my-jdtls-settings `(:java (:home ,value)))
+  (setq-default eglot-workspace-configuration my-jdtls-settings))
+
 (defcustom my-java-home
   (expand-file-name "~/.jenv/versions/21.0")
-  "Java path used by eglon/jdtls"
+  "Java path used by eglot/jdtls"
   :type 'directory
+  :set #'my-java-home-set
   :group 'my-environment)
 
-(setenv "JAVA_HOME" my-java-home)
+;; Establish the initial dap-mode/jdtls settings derived from my-java-home.
+;; This is the single source of truth for that derivation -- see
+;; `my-java-home-set', which also reruns it on later customization.
+(my-java-home-set 'my-java-home my-java-home)
 
 (defun setup-common-java ()
   (setq c-basic-offset 4
         tab-width 4
         indent-tabs-mode t)
   (setq-local imenu-depth 3)
-  (setq-local imenu-create-index-function 'my/imenu-java-ts-index)
+  (setq-local imenu-create-index-function 'ilist-plus-java-ts-index)
   (treesit-fold-mode)
   (treesit-fold-close-java-imports))
 
@@ -1055,8 +1122,6 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ; Setup automatic mode remapping so we always use treesitter for java
 (setq major-mode-remap-alist
       '((java-mode . java-ts-mode)))
-
-(setq dap-java-java-command (concat my-java-home "/bin/java"))
 
 ;;;; eglot
 
@@ -1073,15 +1138,6 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; prettier format for the json rpc - needed a bit less with the eglot-report-progress to
 ;; messages buffer but still easier to parse
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
-
-;; Pin the java version for JDT. Set it here and after the load.
-(setq my-jdtls-settings
-      `(:java (
-	       :home ,my-java-home
-
-		     )))
-
-(setq-default eglot-workspace-configuration my-jdtls-settings)
 
 ;; jsonrpc--log-event's `short' branch is just the preamble
 ;; (direction/method/id) -- :log-text is only ever populated for
@@ -1219,23 +1275,14 @@ anything as useful as the `report' messages in between."
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
 	    (setq-local imenu-depth 2)
-            (setq-local imenu-create-index-function 'my/imenu-elisp-index)))
+            (setq-local imenu-create-index-function 'ilist-plus-elisp-index)))
 
 
 ;;; SQL
 ;; clutch - database access
 (use-package clutch
   :ensure t
-  :defer t
-  :init
-  (setq clutch-connection-alist
-	'(("glide dataaccess" . (:backend pg
-				 :host "127.0.0.1"
-				 :port 3400
-				 :user "dbi_3400"
-				 :database "glide"
-                             ;; Set default schema using options search_path
-                             :options "-c search_path=glide_dataaccess,public")))))
+  :defer t)
 
 ;; sql formatting setup for sqlformat-* functions.
 (use-package sqlformat
@@ -1256,17 +1303,23 @@ anything as useful as the `report' messages in between."
 	;; rescan buffers as they change
 	imenu-auto-rescan t))
 
-;; Bind the fixed pitch icon font for the imenu modeline
-(setq my-imenu-fixed-font my-default-fixed-pitch-font)
-
 ;; Load all of my custom imenu extensions.
-(load-file (locate-user-emacs-file "imenu.el"))
+(use-package ilist-plus
+  :ensure nil
+  ;; For local test/dev when turned on.
+   :load-path "~/dev/ilist-plus/"
+;;  :vc (:url "https://github.com/benleis1/ilist-plus")
+  :init
+  ;; Bind the fixed pitch icon font for the imenu modeline
+  (setq ilist-plus-fixed-font my-default-fixed-pitch-font))
 
 ;; Now that modeline.el (loaded above) has defined the richer dedicated-window
 ;; keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-;; self-contained fallback.
-(setq imenu-list-mode-line-format
-      (my-imenu-list--build-mode-line-format my-modeline-dedicated-window-map))
+;; self-contained fallback after imenu loads.
+
+(with-eval-after-load 'imenu-list
+  (setq imenu-list-mode-line-format
+	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
 
 ;; Setup file menu to include load/save desktop
 ;; Note: lookup-key is the way to find existing entry names
@@ -1679,6 +1732,9 @@ tag, followed by the normal editable field."
                    #'completion--in-region)
 		 args))))
 
+;;; Local.el loading
+(when (file-exists-p (locate-user-emacs-file "local.el"))
+  (load-file (locate-user-emacs-file "local.el")))
 
 ;;; temptemp - try out new builtin completion.
 
