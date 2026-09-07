@@ -802,6 +802,8 @@ list for the buffer, even when it's currently empty."
                   'mouse-face 'mode-line-highlight
                   'help-echo "mouse-1: show flymake diagnostics"))))
 
+;;; Zoom slider
+
 (defun my-modeline-zoom-in ()
   "Increase the buffer's text scale (see `text-scale-adjust')."
   (interactive)
@@ -833,17 +835,11 @@ display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
   (setq my-modeline-zoom-slider-active nil)
   (force-mode-line-update))
 
-;;; Zoom slider
 ;;
-;; A draggable slider standing in for the old click-for-a-menu zoom
-;; control, in the same spirit as `mlscroll''s mode-line scrollbar: the
-;; track and thumb are drawn with plain propertized space characters
-;; carrying a `(space :width (N))' `display' spec (see
-;; `my-modeline--zoom-bar'), not an image, so no SVG/image support is
-;; needed to draw or resize it -- and `my-modeline-zoom-mouse' mirrors
-;; `mlscroll-mouse''s own click-then-`track-mouse' drag loop almost
-;; verbatim, just retargeted from window-scrolling to `text-scale-set'.
-;; It replaces the magnifying-glass icon on `mouse-1' (see
+;; A draggable slider in the same spirit as `mlscroll''s mode-line scrollbar:
+;; the track and thumb are drawn with plain propertized space characters
+;; carrying a `(space :width (N))' `display' spec (see `my-modeline--zoom-bar'),
+;; not an image It replaces the magnifying-glass icon on `mouse-1' (see
 ;; `my-modeline-zoom-show-slider') and hands display back to that icon on
 ;; `mouse-3' (see `my-modeline-zoom-show-icon').
 
