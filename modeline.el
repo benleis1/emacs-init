@@ -761,8 +761,6 @@ flush against the true edge."
 `mode-line-format' (see `my-modeline-mode') or `header-line-format' -- both
 work the same way.")
 
-;;; Global mode
-
 (defvar my-modeline--default-format (default-value 'mode-line-format)
   "The stock `mode-line-format' saved before `my-modeline-mode' overrides it.")
 
@@ -814,33 +812,259 @@ list for the buffer, even when it's currently empty."
   (interactive)
   (text-scale-adjust -1))
 
-(defvar my-modeline-zoom-menu
-  (let ((map (make-sparse-keymap "Zoom")))
-    (define-key map [zoom-out] '(menu-item "Zoom Out" my-modeline-zoom-out))
-    (define-key map [zoom-in] '(menu-item "Zoom In" my-modeline-zoom-in))
-    map)
-  "Context menu popped up by `my-modeline-segment-zoom' on click.")
+(defvar-local my-modeline-zoom-slider-active nil
+  "Non-nil when `my-modeline-segment-zoom' should show the draggable
+slider (`my-modeline--zoom-bar') instead of its default magnifying-glass
+icon, in this buffer. Toggled by `my-modeline-zoom-show-slider' (mouse-1
+on the icon) and `my-modeline-zoom-show-icon' (mouse-3 on the slider).")
+
+(defun my-modeline-zoom-show-slider ()
+  "Switch `my-modeline-segment-zoom' to its draggable-slider display.
+Bound to `mouse-1' on the magnifying-glass icon via
+`my-modeline-zoom-icon-map'."
+  (interactive)
+  (setq my-modeline-zoom-slider-active t)
+  (force-mode-line-update))
+
+(defun my-modeline-zoom-show-icon ()
+  "Switch `my-modeline-segment-zoom' back to its magnifying-glass-icon
+display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
+  (interactive)
+  (setq my-modeline-zoom-slider-active nil)
+  (force-mode-line-update))
+
+;;; Zoom slider
+;;
+;; A draggable slider standing in for the old click-for-a-menu zoom
+;; control, in the same spirit as `mlscroll''s mode-line scrollbar: the
+;; track and thumb are drawn with plain propertized space characters
+;; carrying a `(space :width (N))' `display' spec (see
+;; `my-modeline--zoom-bar'), not an image, so no SVG/image support is
+;; needed to draw or resize it -- and `my-modeline-zoom-mouse' mirrors
+;; `mlscroll-mouse''s own click-then-`track-mouse' drag loop almost
+;; verbatim, just retargeted from window-scrolling to `text-scale-set'.
+;; It replaces the magnifying-glass icon on `mouse-1' (see
+;; `my-modeline-zoom-show-slider') and hands display back to that icon on
+;; `mouse-3' (see `my-modeline-zoom-show-icon').
+
+(defconst my-modeline-zoom-min -6
+  "Lower bound of the zoom slider in `my-modeline-segment-zoom', in
+`text-scale-mode-amount' units. Purely a UI limit on the slider's own
+range -- `text-scale-mode-amount' itself has no hard bound in stock
+Emacs, so a value set by other means (e.g. `text-scale-increase' well
+past this) still displays, just clamped to the near end of the track
+\(see `my-modeline--zoom-frac'), and dragging back onto the track from
+there re-takes control normally.")
+
+(defconst my-modeline-zoom-max 5
+  "Upper bound of the zoom slider in `my-modeline-segment-zoom'. See
+`my-modeline-zoom-min'.")
+
+(defconst my-modeline-zoom-track-width 50
+  "Pixel width of the zoom slider's track in `my-modeline-segment-zoom',
+excluding the thumb.")
+
+(defconst my-modeline-zoom-thumb-width 6
+  "Pixel width of the zoom slider's thumb in `my-modeline-segment-zoom'.")
+
+(defface my-modeline-zoom-track-face
+  '((t :inherit my-modeline-position-face))
+  "Background face for the left/right track portions of the zoom slider
+in `my-modeline-segment-zoom'. Inheriting `my-modeline-position-face'
+gives the track the same \"emphasis\" background `my-modeline-segment-position'
+already uses elsewhere in this mode-line, so it stands out against the
+thumb (see `my-modeline-zoom-thumb-face'). Its `:box' color is
+overridden explicitly by `my-modeline--sync-zoom-faces' to the plain,
+regular mode-line background, so the padding above/below reads as
+ordinary box padding rather than a border in this face's own, different,
+background.")
+
+(defface my-modeline-zoom-thumb-face
+  '((t :inherit mode-line))
+  "Background face for the zoom slider's thumb/handle in
+`my-modeline-segment-zoom'. Its `:background' is overridden explicitly
+by `my-modeline--sync-zoom-faces' to the mode-line's own current
+*foreground* (text) color, so the thumb reads as a solid block in the
+same ink the rest of the mode-line's text is drawn in, against the
+emphasized track either side of it (see `my-modeline-zoom-track-face').
+Its `:box' color is likewise forced to the plain, regular mode-line
+background, consistent with the track's box; the inherited `mode-line'
+here is only the fallback before that first sync runs.")
+
+(defun my-modeline--sync-zoom-faces ()
+  "Set `my-modeline-zoom-thumb-face''s `:background' to the mode-line's
+own current foreground (text) color, and give both
+`my-modeline-zoom-track-face'/`-thumb-face' a `:box' whose color is the
+plain, regular mode-line background -- not their own, different, fill
+colors -- so the padding above/below the slider reads as the same
+seamless box `my-modeline--sync-frame-box' gives every other segment,
+rather than a colored border matching whichever segment's own
+background happens to be showing. Called fresh on every render, like
+`my-modeline--sync-frame-box' itself, so a theme switch can't leave it
+stale."
+  (let ((bg (face-attribute 'mode-line :background nil t))
+        (fg (face-attribute 'mode-line :foreground nil t)))
+    ;; Clear any stale explicit `:background' left over on the track face by
+    ;; an earlier version of this function (`set-face-attribute' sticks to
+    ;; the live face across `eval-buffer', redefining the `defface' above
+    ;; does not reset it) -- so it reliably falls through to its inherited
+    ;; `my-modeline-position-face' background instead.
+    (set-face-attribute 'my-modeline-zoom-track-face nil :background 'unspecified)
+    (when (stringp fg)
+      (set-face-attribute 'my-modeline-zoom-thumb-face nil :background fg))
+    (when (stringp bg)
+      (dolist (face '(my-modeline-zoom-track-face my-modeline-zoom-thumb-face))
+        (set-face-attribute face nil :box
+                             (list :line-width my-modeline-box-line-width :color bg))))))
+
+(defun my-modeline--zoom-frac (amount)
+  "Fraction (0.0-1.0) along the zoom slider's track for AMOUNT, a
+`text-scale-mode-amount' value, clamped to `my-modeline-zoom-min'/`-max'."
+  (/ (float (- (max my-modeline-zoom-min (min my-modeline-zoom-max amount))
+               my-modeline-zoom-min))
+     (float (- my-modeline-zoom-max my-modeline-zoom-min))))
+
+(defun my-modeline--zoom-amount-at-x (x)
+  "Map X, a pixel offset into the slider's track span (0 at its left
+edge, `my-modeline-zoom-track-width' at its right), to the
+`text-scale-mode-amount' integer it represents, clamped to
+`my-modeline-zoom-min'/`-max'."
+  (let ((frac (max 0.0 (min 1.0 (/ (float x) my-modeline-zoom-track-width)))))
+    (round (+ my-modeline-zoom-min (* frac (- my-modeline-zoom-max my-modeline-zoom-min))))))
+
+(defun my-modeline--zoom-absolute-x (posn)
+  "Absolute pixel x, relative to the whole zoom bar's left edge, for
+mouse position POSN landing on one of `my-modeline--zoom-bar''s three
+segments, or nil if POSN isn't over one of them. Each segment carries
+its own left-edge offset as the `my-modeline-zoom-origin' text property
+\(set when the bar was drawn), since `posn-object-x-y' reports pixel
+coordinates relative to whichever one of the three separately-propertized
+segments was actually clicked, not the bar as a whole -- mirroring how
+`mlscroll-mouse' adds back its own clicked segment's preceding width via
+`mlscroll-find-index' before calling `mlscroll-scroll-to'."
+  (let* ((str-pos (posn-string posn))
+         (origin (and str-pos
+                      (get-text-property (cdr str-pos) 'my-modeline-zoom-origin (car str-pos))))
+         (local-x (car (posn-object-x-y posn))))
+    (and origin local-x (+ origin local-x))))
+
+(defun my-modeline-zoom-mouse (start-event)
+  "Click-to-set, then live-drag the zoom slider in `my-modeline-segment-zoom'
+to the buffer's `text-scale-mode-amount'. Bound to `down-mouse-1' on the
+slider's track/thumb via `my-modeline-zoom-map'. Mirrors `mlscroll-mouse'
+almost exactly: jump to the clicked position immediately, then track
+further mouse movement with `track-mouse' -- updating live as the pointer
+moves, not only on release -- until a non-movement event (the button
+release) ends the drag."
+  (interactive "e")
+  (let* ((start-posn (event-start start-event))
+         (win (posn-window start-posn))
+         (x (my-modeline--zoom-absolute-x start-posn))
+         (xstart-abs (car (posn-x-y start-posn)))
+         xnew event)
+    (when (and (window-live-p win) x xstart-abs)
+      (with-selected-window win (text-scale-set (my-modeline--zoom-amount-at-x x)))
+      (force-mode-line-update)
+      (let ((mouse-fine-grained-tracking t))
+        (track-mouse
+          (setq track-mouse 'dragging)
+          (while (and (setq event (read-event)) (mouse-movement-p event))
+            (let ((end (event-end event)))
+              (when (memq (posn-area end) '(mode-line header-line))
+                (setq xnew (+ x (- (car (posn-x-y end)) xstart-abs)))
+                (with-selected-window win (text-scale-set (my-modeline--zoom-amount-at-x xnew)))
+                (force-mode-line-update)))))))))
 
 (defvar my-modeline-zoom-map
-  (my-modeline-mouse-map (list (cons 'mouse-1 my-modeline-zoom-menu))))
+  (my-modeline-mouse-map
+   (list (cons 'down-mouse-1 #'my-modeline-zoom-mouse)
+         (cons 'mouse-3 #'my-modeline-zoom-show-icon)
+         (cons 'wheel-up #'my-modeline-zoom-in)
+         (cons 'wheel-down #'my-modeline-zoom-out)))
+  "Keymap for the draggable track/thumb portion of
+`my-modeline-segment-zoom'. `down-mouse-1' is `my-modeline-zoom-mouse'
+\(click-to-set, then drag); `mouse-3' hands display back to the
+magnifying-glass icon (`my-modeline-zoom-show-icon'); wheel up/down step
+zoom in/out one `text-scale-mode-step' at a time, mirroring
+`mlscroll-mouse''s own wheel bindings.")
+
+(defvar my-modeline-zoom-icon-map
+  (my-modeline-mouse-map
+   (list (cons 'mouse-1 #'my-modeline-zoom-show-slider)
+         (cons 'wheel-up #'my-modeline-zoom-in)
+         (cons 'wheel-down #'my-modeline-zoom-out)))
+  "Keymap for the magnifying-glass icon in `my-modeline-segment-zoom'.
+`mouse-1' switches display to the draggable slider
+\(`my-modeline-zoom-show-slider'); wheel up/down step zoom in/out, same
+as `my-modeline-zoom-map'.")
+
+(defun my-modeline--zoom-bar ()
+  "The draggable track+thumb portion of `my-modeline-segment-zoom': three
+adjacent stretchable space characters (before-thumb, thumb, after-thumb),
+sized by the buffer's current zoom via `my-modeline--zoom-frac' and
+colored via `my-modeline-zoom-track-face'/`-thumb-face' -- the same
+`display' `(space :width (N))' trick `mlscroll-mode-line' uses for its
+own scrollbar, so the bar needs no image/SVG support to draw or resize.
+Each segment's own left-edge pixel offset is recorded as its
+`my-modeline-zoom-origin' text property, for `my-modeline--zoom-absolute-x'
+to recover on click."
+  (my-modeline--sync-zoom-faces)
+  (let* ((frac (my-modeline--zoom-frac (if (bound-and-true-p text-scale-mode)
+                                            text-scale-mode-amount
+                                          0)))
+         (before (round (* my-modeline-zoom-track-width frac)))
+         (after (- my-modeline-zoom-track-width before))
+         (bar (concat
+               (propertize " " 'face 'my-modeline-zoom-track-face
+                           'display `(space :width (,before))
+                           'my-modeline-zoom-origin 0)
+               (propertize " " 'face 'my-modeline-zoom-thumb-face
+                           'display `(space :width (,my-modeline-zoom-thumb-width))
+                           'my-modeline-zoom-origin before)
+               (propertize " " 'face 'my-modeline-zoom-track-face
+                           'display `(space :width (,after))
+                           'my-modeline-zoom-origin (+ before my-modeline-zoom-thumb-width)))))
+    (propertize bar 'local-map my-modeline-zoom-map)))
+
+(defconst my-modeline-zoom-amount-width 2
+  "Fixed character width reserved for the digits/sign of the zoom amount
+text in `my-modeline-segment-zoom' (blank-padded on the left when the
+number is narrower, e.g. \" 3\" vs \"-12\"), so the slider itself doesn't
+shift left/right as the amount's digit count changes going from
+positive to negative or between one and two digits.")
+
+(defun my-modeline--zoom-icon ()
+  "The magnifying-glass icon portion of `my-modeline-segment-zoom',
+shown instead of the draggable slider (`my-modeline--zoom-bar') until
+`mouse-1' switches to it (see `my-modeline-zoom-show-slider')."
+  (or (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-magnifying_glass"
+                               :face 'mode-line-emphasis)
+      "?"))
 
 (defun my-modeline-segment-zoom ()
-  "Magnifying-glass-plus icon that pops up a Zoom In/Zoom Out menu on click,
-followed by the buffer's current zoom amount (see `text-scale-mode-amount',
-e.g. \"-1\" or \"3\") whenever it isn't at its default of zero."
-  (let* ((icon (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-magnifying_glass"
-                                        :face 'mode-line-emphasis))
-         (amount (and (bound-and-true-p text-scale-mode)
-                      (format " %d" text-scale-mode-amount))))
-    (propertize (concat icon amount)
-                'help-echo "mouse-1: Zoom in/out menu"
-                'mouse-face 'mode-line-highlight
-                'local-map my-modeline-zoom-map)))
+  "The magnifying-glass icon (`my-modeline--zoom-icon') by default, or --
+after a `mouse-1' click on it -- the draggable slider
+\(`my-modeline--zoom-bar') for jumping straight to a zoom level (see
+`my-modeline-zoom-slider-active'), followed either way by the buffer's
+current zoom amount (see `text-scale-mode-amount') in a fixed-width
+field (see `my-modeline-zoom-amount-width'), blank when at its default
+of zero."
+  (let ((amount (string-pad (if (bound-and-true-p text-scale-mode)
+                                 (number-to-string text-scale-mode-amount)
+                               "")
+                             my-modeline-zoom-amount-width ?\s t))
+        (control (if my-modeline-zoom-slider-active
+                      (my-modeline--zoom-bar)
+                    (propertize (my-modeline--zoom-icon)
+                                'help-echo "mouse-1: show zoom slider"
+                                'mouse-face 'mode-line-highlight
+                                'local-map my-modeline-zoom-icon-map))))
+    (concat control amount)))
 
 (provide 'modeline)
 
 ;; Experimental use of header for the modeline
-(defun switch-to-header ()
+(defun my-modeline-switch-to-header ()
   (set-face-attribute 'header-line nil :background "gray90")
   (setq-default header-line-format mode-line-format)
   (setq-default mode-line-format nil)
