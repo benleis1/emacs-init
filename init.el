@@ -15,39 +15,48 @@
 ;;
 ;; ## Philosophy
 ;;
-;; These are the high level priorities that inform the decisions I've made throughout this file.
-;; First, Unlike many other users who have shared their config files, I like using the mouse and even
-;; the occasional menu rather than remembering key bindings for everything. So I've spent some time
-;; trying to get emacs to work more consistently for these modes. For example with flyspell on you
-;; can right click and get a context menu with the possible spellings like in most other applications.
+;; My emacs configuration is an opinionated (some might say highly opinionated)
+;; setup that I have made public to share pieces with others.  These are the
+;; high level priorities that inform the decisions I've made throughout this
+;; file.  First, unlike many other users who have shared their config files, I
+;; like using the mouse and even the occasional menu rather than remembering key
+;; bindings for everything. So I've spent some time trying to get emacs to work
+;; more consistently for these modes. For example with flyspell on you can right
+;; click and get a context menu with the possible spellings like in most other
+;; applications.
 ;;
-;; If possible I'll use built in functionality or packages that require minimal adaptation and
-;; just a use-package declaration. If not I try to keep everything in one section by general
-;; functionality area. Along these lines currently I prefer one larger file to a series of smaller
-;; ones for both reading and modifying. This may shift in the future but currently I only move
-;; code out to  a new file if it reaches a "sufficiently" large size.
+;; If possible I'll use built in functionality or packages that require minimal
+;; adaptation and just a use-package declaration. If not I try to keep
+;; everything in one section by general functionality area. Along these lines
+;; currently I prefer one larger file to a series of smaller ones for both
+;; reading and modifying. This may shift in the future but currently I only move
+;; code out to a new file if it reaches a "sufficiently" large size.
 ;;
-;; Two areas in particular are key to many of my workflows. First, is imenu and imenu-list which I
-;; use in multiple modes to see document structure and leave open on the right side at almost all
-;; times. I've invested a fair amount of configuration tailoring this via custom indexing, styling
-;; key mode maps, sorting and modeline changes. Second, is the completion framework which I
-;; have increasingly found to be fundamental. I use the modern completion stack of vertico, orderless
-;; marginalia and consult. And where needed I have added additional completion at point routines
-;; like the ones I added for markdown tags.
+;; Two areas in particular are key to many of my workflows. First, is imenu and
+;; imenu-list which I use in multiple modes to see document structure and leave
+;; open on the right side at almost all times. I've invested a fair amount of
+;; configuration tailoring this via custom indexing, styling key mode maps,
+;; sorting and modeline changes. Second, is the completion framework which I
+;; have increasingly found to be fundamental. I use the modern completion stack
+;; of vertico, orderless marginalia and consult. And where needed I have added
+;; additional completion at point routines like the ones I added for markdown
+;; tags.
 ;;
-;; I have a work style where I want to have a manageable small set of files open in a tabbed format.
-;; I'll save these to a desktop and reload them when I start things up again. I've plumbed
-;; save/load desktop into the system menus and also extensively modified tab-line to fit my work flow.
-;; Longterm if the need arises I plan to either integrate in bookmark+ or activities to
-;; save related sets of these files. For now I have customized tab-line with "views" to
-;; facilitate this. See tab-config.el for more details.
+;; I have a work style where I want to have a manageable small set of files open
+;; in a tabbed format.  I'll save these to a desktop and reload them when I
+;; start things up again. I've plumbed save/load desktop into the system menus
+;; and also extensively modified tab-line to fit my work flow.  Longterm if the
+;; need arises I plan to either integrate in bookmark+ or activities to save
+;; related sets of these files. For now I have customized tab-line with "views"
+;; to facilitate this. See tab-config.el for more details.
 ;;
-;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
-;; based on the builtin modus-themes and have changed most faces to just use the same default
-;; foreground color or a bolder one for emphasis. I really only want color in critical locations.
-;; Likewise, I currently  have a very minimal custom mode line that only features segments I
-;; actually use and leverages the hover help text to convey extra information like a full buffer file
-;; path.
+;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the
+;; folio theme which is based on the builtin modus-themes and have changed most
+;; faces to just use the same default foreground color or a bolder one for
+;; emphasis. I really only want color in critical locations.  Likewise, I
+;; currently have a very minimal custom mode line that only features segments I
+;; actually use and leverages the hover help text to convey extra information
+;; like a full buffer file path.
 ;;
 ;; Sample screen:
 ;; ![sample screen](./sample-screen.png)
@@ -73,7 +82,7 @@
 ;; ## Prerequisites
 ;;   Things you'll want in place before this config will load and work cleanly:
 ;;   - MacOS. There's direct use of pbcopy and other OS specific integration.
-;;   - Emacs 29 or later (30+ preferred; some of the :vc package handling is
+;;   - Emacs 30 or later (31 preferred; some of the :vc package handling is
 ;;     conditioned on the major version).
 ;;   - git on PATH, since several packages are pulled straight from source via
 ;;     use-package's :vc keyword rather than from MELPA.
@@ -487,7 +496,9 @@
  delete-old-versions t
  kept-new-versions 6
  kept-old-versions 2
- version-control t)
+ version-control t
+ lockfile-name-transforms `((".*" ,my-auto-save-folder t))
+ )
 
 ;; alternative strategy - just turn off auto-save.
 (my-ignore (setq auto-save-default nil))
@@ -530,9 +541,9 @@
 (load  (locate-user-emacs-file "tab-config.el"))
 
 ;;; Global key bindings
-;; I try to keep this minimally different from stock emacs.
-;; my preference is for short key strokes and to usually bind global things to
-;; function keys.
+;; After some analysis I have altered a couple of top level chords below.
+;; my preference is for short key strokes and to usually bind other global things to
+;; Control + a number key which are closer than the function keys.
 
 (global-set-key (kbd "C-u") 'undo) ;; I use undo all the time
 (global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
@@ -1307,8 +1318,8 @@ anything as useful as the `report' messages in between."
 (use-package ilist-plus
   :ensure nil
   ;; For local test/dev when turned on.
-   :load-path "~/dev/ilist-plus/"
-;;  :vc (:url "https://github.com/benleis1/ilist-plus")
+;;   :load-path "~/dev/ilist-plus/"
+  :vc (:url "https://github.com/benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font))
@@ -1756,3 +1767,14 @@ tag, followed by the normal editable field."
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
+
+;;; GC tuning
+;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
+;; collect when Emacs goes idle, instead of paying GC pauses during normal
+;; typing. Picks up where early-init.el's startup-only threshold bump leaves
+;; off.
+(use-package gcmh
+  :ensure t
+  :init
+  (setq gcmh-high-cons-threshold (* 32 1024 1024))
+  (gcmh-mode 1))

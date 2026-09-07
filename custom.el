@@ -6,7 +6,16 @@
  ;; If there is more than one, they won't work right.
  '(custom-enabled-themes '(folio))
  '(custom-safe-themes
-   '("967c23e9ba179b80560774419f081df22e7674aac23c5c550b817e4a1ce7d058"
+   '("725195e919c94667dfbe186161d63f11799b93d74e846ec1404900f34d320c79"
+     "d3ebccab28ecb41dfb9a97cdb90212b301f7568dc89407cd508fca2ac3d29de9"
+     "c9b5f0d5a9a7ae98bcd2f752d2ecfe84a93ba0c7036e121f227afe080751c17f"
+     "55a6089472957a32057452dd5b2f4b72040169d1ec0fa6870b946b0476a40f81"
+     "ae62fac1af292396a8e77e48435b41058fda45be24ac79fa40c89e1173b9b2d6"
+     "eeb089308ed84ce3159313ea309683b747afb762e48905d0dc3deb4e25dc6e6c"
+     "384e771aae814b73e18d69b057af9707247962a2c8307e0c6232d001f9962ff5"
+     "bca49516ec03dcfd7aef406f9c5b8295ff7bfa2b1e70785837a9a50942a84c72"
+     "81ce39f63b6a730b1f5f33019100fc087122e5660830121809968c5d2381684d"
+     "967c23e9ba179b80560774419f081df22e7674aac23c5c550b817e4a1ce7d058"
      "e759984e3274da0dd3b87648cf8220ae79f44e6cc7fc626c8d457c16fa3407f5"
      "aa05031fde757caa957b3993a9e36933b3f283b780f5dd9a61e97af465418d9a"
      "8b7486d4dfb06867fefb13deb20da1e7383135c29158533a3324708d31eae05e"
@@ -27,40 +36,25 @@
      "ffafb0e9f63935183713b204c11d22225008559fa62133a69848835f4f4a758c"
      "7964b513f8a2bb14803e717e0ac0123f100fb92160dcf4a467f530868ebaae3e"
      "6f96a9ece5fdd0d3e04daea6aa63e13be26b48717820aa7b5889c602764cf23a" default))
- '(excorporate-configuration
-   '(("resource-url" . "https://outlook.office365.com/EWS/Exchange.asmx")
-     ("resource-url-prefixes" "https://outlook.office365.com/EWS/")
-     ("authorization-endpoint"
-      . "https://login.microsoftonline.com/servicenow.com/oauth2/authorize")
-     ("access-token-endpoint"
-      . "https://login.microsoftonline.com/servicenow.com/oauth2/token")
-     ("client-identifier" . "751cf8be-ca07-484b-9308-fac4b9d85eff")
-     ("scope"
-      . "openid offline_access profile Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared Calendars.ReadWrite Calendars.ReadWrite.Shared Contacts.ReadWrite Contacts.ReadWrite.Shared Tasks.ReadWrite Tasks.ReadWrite.Shared MailboxSettings.ReadWrite People.Read User.ReadBasic.All")
-     ("authorization-extra-arguments"
-      ("resource" . "https://outlook.office.com") ("response_mode" . "query")
-      ("login_hint" . "benjamin.leis@servicenow.com") ("prompt" . "login")
-      ("redirect_uri"
-       . "https://login.microsoftonline.com/common/oauth2/nativeclient")
-      ("" . ""))
-     ("" . "")))
  '(markdown-header-scaling-values '(1.5 1.3 1.2 1.1 1.0 1.0))
  '(org-agenda-files
    '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
  '(package-selected-packages
-   '(all-the-icons-dired consult corfu diff-hl doom-modeline doom-themes ef-themes
-			 ef-theses eglot-booster excorporate
+   '(all-the-icons-dired consult corfu diff-hl doom-modeline doom-themes
+			 doric-themes ef-themes eglot-booster excorporate
 			 exec-path-from-shell exec-path-from-shell-initialize
-			 folio folio-theme groovy-mode grove imenu-list lsp-java
-			 lsp-ui magit marginalia markdown-mermaid markdown-toc
-			 markdown-ts-mode math-preview mixed-pitch modus-themes
+			 folio folio-theme gcmh groovy-mode ilist-plus
+			 imenu-list lsp-java lsp-ui magit marginalia
+			 markdown-mermaid markdown-toc markdown-ts-mode
+			 math-preview mixed-pitch modus-themes
 			 nano-like-modus-theme nerd-icons-dired ns-auto-titlebar
 			 on-demand-scroll-bar orderless org-autolist org-modern
 			 org-pretty-table org-roam popper single-window
 			 sqlformat stripe-buffer treemacs treesit-fold undo-tree
 			 vc-use-package vertico wikimode yasnippet))
  '(package-vc-selected-packages
-   '((nano-like-modus-theme :url
+   '((ilist-plus :url "https://github.com/benleis1/ilist-plus")
+     (nano-like-modus-theme :url
 			    "https://github.com/benleis1/nano-like-modus-theme")
      (on-demand-scroll-bar :url
 			   "https://github.com/florommel/on-demand-scroll-bar.git")
