@@ -16,7 +16,7 @@ jobs:
       - name: Set up Emacs
         uses: purcell/setup-emacs@master
         with:
-          version: '29.1' # Change to your target Emacs version
+          version: '30.1' # Change to your target Emacs version
 
       - name: Stage config files into ~/.emacs.d
         run: |
