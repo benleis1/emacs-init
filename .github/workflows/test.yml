@@ -18,6 +18,11 @@ jobs:
         with:
           version: '29.1' # Change to your target Emacs version
 
+      - name: Stage config files into ~/.emacs.d
+        run: |
+          mkdir -p ~/.emacs.d
+          cp *.el ~/.emacs.d/
+
       - name: Run ERT Tests
         run: |
           emacs -Q --batch \
