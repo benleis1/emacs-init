@@ -217,7 +217,7 @@
 	(old-view (tab2-get-current-view)))
 
     (when (not new-view)
-      (error (format "No view was found named %s" name)))
+      (error "No view was found named %s" name))
 
     (when (and new-view (not (equal new-view old-view)))
       (progn
@@ -233,10 +233,10 @@
   (let* ((closing-view (tab2-get-view-by-name name))
 	 (current-view (tab2-get-current-view)))
     (when (not closing-view)
-      (error (format "No view was found named %s" name)))
+      (error "No view was found named %s" name))
 
     (when (equal (tab2-view-name closing-view) "default")
-      (error (format "You cannot close the default view" name)))
+      (error "You cannot close the default view"))
 
     ;; temptemp
     (message "Closing view %s" name)
@@ -324,7 +324,7 @@
 	   (n (seq-position (tab2-get-buffer-list) buffer)))
       (with-selected-window (or window (selected-window))
 
-	(progn
+	(when (and n (< n (1- (length (tab2-get-buffer-list)))))
           (tab2-set-buffer-list
               (append
                (seq-take (tab2-get-buffer-list) n)
@@ -347,7 +347,7 @@
       (with-selected-window (or window (selected-window))
 
     (when
-        (> n 0)
+        (and n (> n 0))
       (progn
         (tab2-set-buffer-list
               (append
@@ -362,9 +362,12 @@
   (interactive "e" )
   (let* ((posnp (event-start e))
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
-	 (buffer (tab2-get-buffer-from-tab tab)))
+	 (buffer (tab2-get-buffer-from-tab tab))
+	 (filename (and buffer (buffer-file-name buffer))))
 
-    (kill-new (buffer-file-name buffer))))
+    (if filename
+	(kill-new filename)
+      (message "No file associated with this tab"))))
 
 ;; Override original definition of tab-line-tab-context-menu
 ;; Bind custom actions into the context menu if we are not in group mode
@@ -372,7 +375,8 @@
   "Pop up the context menu for a tab-line tab."
   (interactive "e")
 
-  (unless (window-parameter nil 'tab-line-groups)
+  (unless (or (window-parameter nil 'tab-line-groups)
+	      (window-parameter nil 'tab-line-views))
     (let ((menu (make-sparse-keymap (propertize "Context Menu" 'hide t))))
       (define-key-after menu [close]
 	'(menu-item "Close" tab-line-close-tab :help "Close the tab"))
@@ -501,13 +505,23 @@ at the mouse-down event to the position at mouse-up event."
       (append format (list tab2-new-view-button))
     format))
 
-(my-ignore (advice-remove 'tab-line-format nil))
-
 ;; Convenience wrapper for getting the git state which needs to be done in buffer
-;; but is  more accurate than vc-state
+;; but is  more accurate than vc-state. Cached with a short TTL since this is
+;; called from every tab-line render and `vc-git-state' shells out to git.
+(defvar-local tab2-git-state-cache nil
+  "Cons of (STATE . TIMESTAMP) from the last `tab2-git-state' check.")
+
+(defconst tab2-git-state-cache-ttl 2
+  "Seconds a cached result from `tab2-git-state' is considered fresh.")
+
 (defun tab2-git-state (buffer)
   (with-current-buffer buffer
-    (vc-git-state (buffer-file-name buffer))))
+    (let ((now (float-time)))
+      (unless (and tab2-git-state-cache
+		   (< (- now (cdr tab2-git-state-cache)) tab2-git-state-cache-ttl))
+	(setq tab2-git-state-cache
+	      (cons (vc-git-state (buffer-file-name buffer)) now)))
+      (car tab2-git-state-cache))))
 
 ;; Custom tab-line-name-format function to add on a face for the modified signifier
 ;; so it can be colored or not depending on being selected
@@ -742,7 +756,7 @@ at the mouse-down event to the position at mouse-up event."
 
 ;; Setup the window buffer changes functions to monitor when a window is selected
 ;; Hook that up to the auto-track function
-(setq window-buffer-change-functions (cons 'tab2-auto-track-selected-window window-buffer-change-functions))
+(add-hook 'window-buffer-change-functions 'tab2-auto-track-selected-window)
 
 ;; Set the override tab name format function to the one I've defined
 (setopt tab-line-tab-name-format-function 'tab2-format-tab)

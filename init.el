@@ -139,8 +139,22 @@
 (use-package exec-path-from-shell
   :ensure t
   :if (memq window-system '(mac ns))
+  :init
+  ;; Default args are "-l -i" (login + interactive). The interactive flag
+  ;; forces a full oh-my-bash bootstrap (framework/plugin/theme loading,
+  ;; nvm.sh, chruby.sh) just to read PATH/MANPATH -- measured at 1.5-5.5s
+  ;; on this machine. We only need the login shell's env, not an
+  ;; interactive one, so drop -i.
+  (setq exec-path-from-shell-arguments '("-l"))
   :config
-  (exec-path-from-shell-initialize))
+  ;; A LaunchAgent (~/Library/LaunchAgents/com.benleis.setenv-path.plist)
+  ;; already runs once at login and pushes the login shell's PATH/MANPATH
+  ;; into the launchd user session via `launchctl setenv', so GUI Emacs
+  ;; normally inherits the right PATH for free before this even runs --
+  ;; no shell fork needed. Only pay for the ~1s shell fork as a fallback,
+  ;; if that somehow didn't happen (e.g. the agent hasn't run yet).
+  (unless (member "/opt/homebrew/bin" exec-path)
+    (exec-path-from-shell-initialize)))
 
 ;;; Customizations
 

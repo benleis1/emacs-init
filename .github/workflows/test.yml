@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: '29.1' # Change to your target Emacs version
+
+      - name: Run ERT Tests
+        run: |
+          emacs -Q --batch \
+            --eval '(package-initialize)' \
+            -l ert \
+            -l init.el \
+            -l tests.el \
+            -f ert-run-tests-batch-and-exit
