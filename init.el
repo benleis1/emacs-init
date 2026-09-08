@@ -112,15 +112,18 @@
 ;; Setup melpa as a repository.
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
-;; and `package-pinned-packages`. Most users will not need or want to do this.
+;; Comment/uncomment this line to enable MELPA Stable if desired.  See
+;; `package-archive-priorities` and `package-pinned-packages`. Most users will
+;; not need or want to do this.
 (my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
 
-;; use-package has been part of core emacs since version 29 so I assume its ok to just require it.
+;; use-package has been part of core emacs since version 29 so I assume its OK
+;; to just require it.
 (require 'use-package)
 
-;; Legacy Emacs 29 setup for :vc so we can load directly from github for selected packages not in melpa.
-;; Note: long term move to :fetcher :repo syntax
+;; Legacy Emacs 29 setup for :vc so we can load directly from github for
+;; selected packages not in melpa.  Note: long term move to :fetcher :repo
+;; syntax
 (when (< emacs-major-version 30)
   (unless (package-installed-p 'vc-use-package)
     (package-vc-install "https://github.com/slotThe/vc-use-package"))
@@ -135,26 +138,11 @@
 ;; GUI Emacs on macOS is launched by launchd, not a login shell, so it only
 ;; gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
 ;; jdtls and pgformatter aren't visible to `executable-find' without this.
-;; Pull in the login shell's PATH once at startup to fix that.
-(use-package exec-path-from-shell
-  :ensure t
-  :if (memq window-system '(mac ns))
-  :init
-  ;; Default args are "-l -i" (login + interactive). The interactive flag
-  ;; forces a full oh-my-bash bootstrap (framework/plugin/theme loading,
-  ;; nvm.sh, chruby.sh) just to read PATH/MANPATH -- measured at 1.5-5.5s
-  ;; on this machine. We only need the login shell's env, not an
-  ;; interactive one, so drop -i.
-  (setq exec-path-from-shell-arguments '("-l"))
-  :config
-  ;; A LaunchAgent (~/Library/LaunchAgents/com.benleis.setenv-path.plist)
-  ;; already runs once at login and pushes the login shell's PATH/MANPATH
-  ;; into the launchd user session via `launchctl setenv', so GUI Emacs
-  ;; normally inherits the right PATH for free before this even runs --
-  ;; no shell fork needed. Only pay for the ~1s shell fork as a fallback,
-  ;; if that somehow didn't happen (e.g. the agent hasn't run yet).
-  (unless (member "/opt/homebrew/bin" exec-path)
-    (exec-path-from-shell-initialize)))
+;; But exec-path-from-shell is relatively expensive so as compromise
+;; just add homebrew onto the path as needed
+
+(unless (member "/opt/homebrew/bin" exec-path)
+  (add-to-list 'exec-path "/opt/homebrew/bin"))
 
 ;;; Customizations
 
@@ -194,6 +182,9 @@
 	 (markdown-mode . mixed-pitch-mode)))
 
 ;;; modus theme configuration.
+
+;; Disable the theme safety check.
+(setq custom-safe-themes t)
 
 ;; Disable all previously loaded themes before loading another one.
 (advice-add 'load-theme :before
@@ -358,17 +349,16 @@
 
 
 ;; Modus doesn't handle fonts so just set this directly here where all other styling is
-;; being done.
+;; being done. I like using a 1.3 scaled version of the system UI font for the tabs.
 (if (< emacs-major-version 31)
   (custom-set-faces
-   '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3))))
+   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
 
-  (progn
-    (custom-set-faces
-     '(tab-line-active ((t :family "San Francisco (SF Pro)" :height 1.3))))
+  (custom-set-faces
+   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
 
-    (custom-set-faces
-     '(tab-line-inactive ((t :family "San Francisco (SF Pro)" :height 1.3))))))
+  (custom-set-faces
+   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
 
 ;; Currently trying out the folio theme as my main theme.
 (use-package folio-theme
@@ -478,9 +468,16 @@
 (unless window-system
   (require 'mouse)
   (xterm-mouse-mode t)
-  (defun track-mouse (_e)))
+  (defun track-mouse (_e))) ;;check if stubbing this out is still needed in v31
 
 ;; Setup recent files mode - this is much more in use now that I have consult
+;; `recentf-auto-cleanup' defaults to `mode', which runs a synchronous
+;; `recentf-cleanup' pass (stat-checking every entry in the saved list)
+;; the moment `recentf-mode' turns on -- measured ~49ms total, of which
+;; ~23ms is the cleanup itself (the rest is just loading the saved list).
+;; Deferring cleanup to 30s idle keeps it fully automatic but takes it
+;; off the startup critical path.
+(setq recentf-auto-cleanup 30)
 (recentf-mode 1)
 (setq recentf-max-menu-items 25)
 (setq recentf-max-saved-items 50)
@@ -561,13 +558,14 @@
 
 (global-set-key (kbd "C-u") 'undo) ;; I use undo all the time
 (global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
-(global-set-key (kbd "C-f") 'goto-line)
+(global-set-key (kbd "C-f") 'goto-line) ;; Another swap. I use arrow keys for basic movement.
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
+(global-set-key (kbd "C-3") 'wikimode-toggle)
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
-(global-set-key (kbd "C-3") 'wikimode-toggle)
+(global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 ;; TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
@@ -668,12 +666,22 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
     ;; else - flyspell is off, turn it on
     (flyspell-on-for-buffer-type)))
 
-;; preset modes to have flyspell on
-(add-hook 'text-mode-hook 'flyspell-mode)
-(add-hook 'prog-mode-hook 'my-flyspell-prog-mode)
+;; preset modes to have flyspell on. Deferred to the next idle moment rather
+;; than enabled directly in the hook
+(defun my-flyspell-defer-enable ()
+  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
+is next idle, so opening a buffer doesn't block on starting Aspell."
+  (let ((buf (current-buffer)))
+    (run-with-idle-timer 0.1 nil
+                          (lambda ()
+                            (when (buffer-live-p buf)
+                              (with-current-buffer buf
+                                (flyspell-on-for-buffer-type)))))))
+
+(add-hook 'text-mode-hook #'my-flyspell-defer-enable)
+(add-hook 'prog-mode-hook #'my-flyspell-defer-enable)
 
 ;; Enable which key
-(setq-default which-key-mode t)
 (which-key-mode)
 
 ;;; diff-hl
@@ -705,7 +713,8 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
    :defer t)
 
 (use-package stripe-buffer
-   :ensure t)
+   :ensure t
+   :defer t)
 
 (setq markdown-header-scaling t)
 
@@ -884,9 +893,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
   (add-hook 'org-mode-hook #'stripe-buffer-mode)
-  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
-  (setq-local imenu-depth 4)
-  )
+  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5)))))
 
 ;; hide asterisks in headers
 ;; ignored because right now I'm using base org-bullets-mode instead
@@ -1332,7 +1339,7 @@ anything as useful as the `report' messages in between."
 (use-package ilist-plus
   :ensure nil
   ;; For local test/dev when turned on.
-;;   :load-path "~/dev/ilist-plus/"
+  ;;   :load-path "~/dev/ilist-plus/"
   :vc (:url "https://github.com/benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
@@ -1616,6 +1623,9 @@ anything as useful as the `report' messages in between."
 
 (use-package corfu
   :ensure t
+  ;; `global-corfu-mode' is commented out below, so nothing currently
+  ;; activates corfu and it can be deferred.
+  :defer t
   :init
 ;;  (global-corfu-mode)
   )
@@ -1721,19 +1731,23 @@ tag, followed by the normal editable field."
 ;; default for markdown.
 (use-package yasnippet
   :ensure t
-  :config
-  (add-hook 'markdown-mode-hook #'yas-minor-mode)
-  )
+  :defer t
+  :init
+  (add-hook 'markdown-mode-hook #'yas-minor-mode))
 
 ;; No key binding for now.
 (use-package consult-yasnippet
-  :ensure t)
+  :ensure t
+  :defer t)
 
 ;;; Wikimode
 (use-package wikimode
   :ensure t
   :vc (:url "https://github.com/benleis1/wikimode")
-  )
+  ;; Deferred but wikimode-project-tags is used independently so it's listed
+  ;; explicitly here to get an autoload stub too.
+  :commands (wikimode-toggle wikimode-project-tags)
+  :defer t)
 
 ;;;  Consult navigation package
 (use-package consult

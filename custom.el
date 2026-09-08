@@ -37,21 +37,15 @@
      "7964b513f8a2bb14803e717e0ac0123f100fb92160dcf4a467f530868ebaae3e"
      "6f96a9ece5fdd0d3e04daea6aa63e13be26b48717820aa7b5889c602764cf23a" default))
  '(markdown-header-scaling-values '(1.5 1.3 1.2 1.1 1.0 1.0))
- '(org-agenda-files
-   '("~/org/daily-meetings.org" "/Users/benjamin.leis/org/current.org"))
  '(package-selected-packages
-   '(all-the-icons-dired consult corfu diff-hl doom-modeline doom-themes
-			 doric-themes ef-themes eglot-booster excorporate
-			 exec-path-from-shell exec-path-from-shell-initialize
-			 folio folio-theme gcmh groovy-mode ilist-plus
-			 imenu-list lsp-java lsp-ui magit marginalia
-			 markdown-mermaid markdown-toc markdown-ts-mode
-			 math-preview mixed-pitch modus-themes
-			 nano-like-modus-theme nerd-icons-dired ns-auto-titlebar
-			 on-demand-scroll-bar orderless org-autolist org-modern
-			 org-pretty-table org-roam popper single-window
-			 sqlformat stripe-buffer treemacs treesit-fold undo-tree
-			 vc-use-package vertico wikimode yasnippet))
+   '(clutch consult consult-yasnippet corfu diff-hl doric-themes ef-themes
+	    excorporate folio
+	    folio-theme gcmh groovy-mode ilist-plus imenu-list magit marginalia
+	    markdown-mermaid markdown-toc markdown-ts-mode math-preview
+	    mixed-pitch modus-themes nano-like-modus-theme nerd-icons-dired
+	    ns-auto-titlebar on-demand-scroll-bar orderless org-autolist
+	    org-modern org-pretty-table sqlformat stripe-buffer treemacs
+	    treesit-fold vc-use-package vertico wikimode yasnippet))
  '(package-vc-selected-packages
    '((ilist-plus :url "https://github.com/benleis1/ilist-plus")
      (nano-like-modus-theme :url
@@ -92,9 +86,8 @@
  '(org-table ((t (:inherit fixed-pitch :foreground "#6c71c4" :height 1.0 :family "DejaVu Sans Mono for Powerline"))))
  '(shadow ((t (:foreground "gray56"))))
  '(stripe-hl-line ((t (:background "DarkOrange2" :foreground "ivory"))))
- '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3)))
- '(tab-line-active ((t :family "San Francisco (SF Pro)" :height 1.3)))
- '(tab-line-inactive ((t :family "San Francisco (SF Pro)" :height 1.3)))
+ '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3)))
+ '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))
  '(tab-line-tab-modified ((t (:inherit font-lock-doc-face :foreground "DarkOrange1" :weight bold :family "DejaVu "))))
  '(tooltip ((t (:background "#EEE8D5" :foreground "#556b72" :height 1.3))))
  '(treesit-fold-replacement-face ((t (:background "goldenrod4" :foreground "white" :box (:line-width (1 . -1) :color "black" :style pressed-button)))))

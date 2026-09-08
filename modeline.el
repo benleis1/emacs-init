@@ -329,13 +329,13 @@ a number with a trailing `%' in between. Computed directly from
 
 (defvar my-modeline-show-percent nil "Set to t to add the scroll percentage segment or nil to not")
 
-(defface my-modeline-position-face
-  `((t :inherit 'mode-line
-       :weight semi-bold
-       :background ,(modus-themes-get-color-value 'bg-mode-line-emphasis t) ))
+(when (fboundp 'modus-themes-get-color-value)
+  (defface my-modeline-position-face
+    `((t :inherit mode-line
+	 :weight semi-bold
+	 :background ,(modus-themes-get-color-value 'bg-mode-line-emphasis t) ))
 
-  "Face for `my-modeline-segment-position' in the selected window defined by the modus bg-mode-line-emphasis color. Only applied when the modeline is active.")
-
+  "Face for `my-modeline-segment-position' in the selected window defined by the modus bg-mode-line-emphasis color. Only applied when the modeline is active."))
 
 ;;(set-face-attribute 'my-modeline-position-face nil :background "gray50")
 
