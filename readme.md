@@ -29,8 +29,12 @@ If possible I'll use built in functionality or packages that require minimal
 adaptation and just a use-package declaration. If not I try to keep
 everything in one section by general functionality area. Along these lines
 currently I prefer one larger file to a series of smaller ones for both
-reading and modifying. This may shift in the future but currently I only move
-code out to a new file if it reaches a "sufficiently" large size.
+reading and modifying.  This may shift in the future but currently I only
+move code out to a new file if it reaches a "sufficiently" large size. I also
+do not use a literate style config file and prefer a code first strategy with
+embedded comments. However, I do want to generate readable documentation and
+I accomplish that through consistent structured comments and my own package,
+elispdoc, which takes an elisp file and builds markup out of it.
 
 Two areas in particular are key to many of my workflows. First, is imenu and
 imenu-list which I use in multiple modes to see document structure and leave
@@ -82,15 +86,27 @@ My typical alias setup
 ## Prerequisites
   Things you'll want in place before this config will load and work cleanly:
   - MacOS. There's direct use of pbcopy and other OS specific integration.
-  - Emacs 30 or later (31 preferred; some of the :vc package handling is
-    conditioned on the major version).
-  - git on PATH, since several packages are pulled straight from source via
-    use-package's :vc keyword rather than from MELPA.
+  - Emacs 30 or later (31 preferred).
+  - git on PATH -- elpaca (the package manager) clones both its own
+    repo and every package's repo, including a handful pulled straight
+    from GitHub rather than MELPA.
   - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
     mode-line and dired icons to render correctly.
   - aspell installed (falls back to ispell if not found) for flyspell.
   - A Java installation reachable via `my-java-home' (defaults to a jenv
     path) plus jdtls on PATH if you want eglot's Java support.
+  - For JUnit test debugging via dape/jdtls: vscode-java-test's bundle
+    jars in `my-jdtls-test-bundles-dir' (default ~/.emacs.d/jdtls-bundles/).
+    They aren't published to Maven Central -- they ship inside the
+    `vscjava.vscode-java-test' VS Code extension's `extension/server/'
+    folder. To (re)populate this directory:
+      curl -L -o /tmp/vscode-java-test.vsix \
+        "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
+      unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
+      mkdir -p ~/.emacs.d/jdtls-bundles
+      cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
+    Pick the current version from
+    https://open-vsx.org/extension/vscjava/vscode-java-test.
   - pgformatter on PATH if you want the SQL formatting commands to work.
 
 ## Major areas configured
@@ -129,6 +145,7 @@ My typical alias setup
   - [my-flyspell-prog-mode](#my-flyspell-prog-mode)
   - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
   - [flyspell-toggle](#flyspell-toggle)
+  - [my-flyspell-defer-enable](#my-flyspell-defer-enable)
   - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
 - [diff-hl](#diff-hl)
 - [markdown mode](#markdown-mode)
@@ -148,10 +165,11 @@ My typical alias setup
   - [context-menu-fold-line](#context-menu-fold-line)
   - [my-java-home-set](#my-java-home-set)
   - [setup-common-java](#setup-common-java)
-  - [jsonrpc-elide-text-document](#jsonrpc-elide-text-document)
-  - [jsonrpc-elide-token](#jsonrpc-elide-token)
-  - [jsonrpc-log-text](#jsonrpc-log-text)
-  - [jsonrpc-skip-message-p](#jsonrpc-skip-message-p)
+  - [my-eglot-dape-context-menu](#my-eglot-dape-context-menu)
+  - [my-jsonrpc-elide-text-document](#my-jsonrpc-elide-text-document)
+  - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
+  - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
+  - [my-jsonrpc-skip-message-p](#my-jsonrpc-skip-message-p)
   - [flymake-buffer-quit](#flymake-buffer-quit)
 - [SQL](#sql)
 - [imenu-list](#imenu-list)
@@ -187,34 +205,69 @@ display purposes when using elispdoc rather than commenting whole regions out.
 (defmacro my-ignore (_form))
 ```
 
-Setup melpa as a repository.
+elpaca bootstrap -- verbatim from the installed elpaca's own
+doc/installer.el (progfolio/elpaca), not a memorized/older copy, since
+the internal var names (`elpaca-sources-directory', `elpaca-activate')
+have changed across elpaca releases.
 ```
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-```
-Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
-and `package-pinned-packages`. Most users will not need or want to do this.
-```
-(my-ignore (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t))
+(defvar elpaca-installer-version 0.12)
+(defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
+(defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
+(defvar elpaca-sources-directory (expand-file-name "sources/" elpaca-directory))
+(defvar elpaca-order '(elpaca :repo "https://github.com/progfolio/elpaca.git"
+                              :ref nil :depth 1 :inherit ignore
+                              :files (:defaults "elpaca-test.el" (:exclude "extensions"))
+                              :build (:not elpaca-activate)))
+(let* ((repo  (expand-file-name "elpaca/" elpaca-sources-directory))
+       (build (expand-file-name "elpaca/" elpaca-builds-directory))
+       (order (cdr elpaca-order))
+       (default-directory repo))
+  (add-to-list 'load-path (if (file-exists-p build) build repo))
+  (unless (file-exists-p repo)
+    (make-directory repo t)
+    (when (<= emacs-major-version 28) (require 'subr-x))
+    (condition-case-unless-debug err
+        (if-let* ((buffer (pop-to-buffer-same-window "*elpaca-bootstrap*"))
+                  ((zerop (apply #'call-process `("git" nil ,buffer t "clone"
+                                                  ,@(when-let* ((depth (plist-get order :depth)))
+                                                      (list (format "--depth=%d" depth) "--no-single-branch"))
+                                                  ,(plist-get order :repo) ,repo))))
+                  ((zerop (call-process "git" nil buffer t "checkout"
+                                        (or (plist-get order :ref) "--"))))
+                  (emacs (concat invocation-directory invocation-name))
+                  ((zerop (call-process emacs nil buffer nil "-Q" "-L" "." "--batch"
+                                        "--eval" "(byte-recompile-directory \".\" 0 'force)")))
+                  ((require 'elpaca))
+                  ((elpaca-generate-autoloads "elpaca" repo)))
+            (progn (message "%s" (buffer-string)) (kill-buffer buffer))
+          (error "%s" (with-current-buffer buffer (buffer-string))))
+      ((error) (warn "%s" err) (delete-directory repo 'recursive))))
+  (unless (require 'elpaca-autoloads nil t)
+    (require 'elpaca)
+    (elpaca-generate-autoloads "elpaca" repo)
+    (let ((load-source-file-function nil)) (load "./elpaca-autoloads"))))
+(add-hook 'after-init-hook #'elpaca-process-queues)
+(elpaca `(,@elpaca-order))
 ```
 
-use-package has been part of core emacs since version 29 so I assume its ok to just require it.
+convenience variable when generating a lockfile.
+```
+(defconst my-elpaca-lock-file (expand-file-name "elpaca-lock.eld" user-emacs-directory))
+```
+
+use-package has been part of core emacs since version 29 so I assume its OK
+to just require it.
 ```
 (require 'use-package)
 ```
 
-Legacy Emacs 29 setup for :vc so we can load directly from github for selected packages not in melpa.
-Note: long term move to :fetcher :repo syntax
+Bridge elpaca into use-package's :ensure keyword and make elpaca+its
+use-package integration ready before any use-package form below runs.
 ```
-(when (< emacs-major-version 30)
-  (unless (package-installed-p 'vc-use-package)
-    (package-vc-install "https://github.com/slotThe/vc-use-package"))
-  (require 'vc-use-package))
-```
-
-Enable automatic package installation globally
-```
-(setq use-package-always-ensure t)
+(elpaca elpaca-use-package
+  (elpaca-use-package-mode)
+  (setq use-package-always-ensure t))
+(elpaca-wait)
 ```
 
 early on setup follow-symlinks to true for loaded files
@@ -225,13 +278,12 @@ early on setup follow-symlinks to true for loaded files
 GUI Emacs on macOS is launched by launchd, not a login shell, so it only
 gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
 jdtls and pgformatter aren't visible to `executable-find' without this.
-Pull in the login shell's PATH once at startup to fix that.
+But exec-path-from-shell is relatively expensive so as compromise
+just add homebrew onto the path as needed
+
 ```
-(use-package exec-path-from-shell
-  :ensure t
-  :if (memq window-system '(mac ns))
-  :config
-  (exec-path-from-shell-initialize))
+(unless (member "/opt/homebrew/bin" exec-path)
+  (add-to-list 'exec-path "/opt/homebrew/bin"))
 ```
 
 # Customizations
@@ -245,6 +297,7 @@ to  use i.e with the  ` back tick operator.
 ```
 (defvar margin-tan-bg "#EEE8D5")
 (defvar margin-gray-bg "gray20")
+(defvar margin-light-gray-bg "gray95")
 ```
 
 # Font setup
@@ -277,14 +330,19 @@ Mixed-pitch mode. I use this in markdown and org modes currently.
 
 # modus theme configuration.
 
+Disable the theme safety check.
+```
+(setq custom-safe-themes t)
+```
+
 Disable all previously loaded themes before loading another one.
 ```
 (advice-add 'load-theme :before
             (lambda (&rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)))
-```
 
-These mostly global level changes make switching around easier between themes
+t;; These mostly global level changes make switching around easier between themes
+```
 They preserve the tabbing styling I use and mute the colors a bit.
 The consequence of moving over to modus is the need to not generally customize faces in
 custom.el.
@@ -335,6 +393,10 @@ Make headers all the same color as foreground
         (bg-removed-intense   bg-blue-intense)
         (fg-removed           blue)
         (fg-removed-intense   blue-intense)
+
+	;; default red-syntax is too close to error
+	(warning  yellow-syntax)
+
 	))
 ```
 
@@ -388,11 +450,18 @@ Specific folio theme overrides
 
 (setq modus-vivendi-palette-overrides
       `((bg-margins ,margin-gray-bg)
-;;	(fg-dim blue)
 	(bg-mode-line-emphasis "gray50")
 	(fg-hl-imenu magenta-cooler)
 	))
+
+(setq nano-like-palette-overrides
+      `((bg-margins "gray95")
+	))
+
+(setq modus-vivendi-embers-palette-overrides
+      `((bg-margins ,margin-gray-bg)))
 ```
+
 
 Give nano-like its own fixed/variable-pitch fonts (relies on
 `modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and
@@ -459,31 +528,35 @@ Add the font changes onto the enable theme hook
 
 
 Modus doesn't handle fonts so just set this directly here where all other styling is
-being done.
+being done. I like using a 1.3 scaled version of the system UI font for the tabs.
 ```
 (if (< emacs-major-version 31)
   (custom-set-faces
-   '(tab-line ((t :family "San Francisco (SF Pro)" :height 1.3))))
+   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
 
-  (progn
-    (custom-set-faces
-     '(tab-line-active ((t :family "San Francisco (SF Pro)" :height 1.3))))
+  (custom-set-faces
+   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
 
-    (custom-set-faces
-     '(tab-line-inactive ((t :family "San Francisco (SF Pro)" :height 1.3))))))
+  (custom-set-faces
+   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
+```
+
+Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
+lives alongside this file) discoverable by `load-theme'/`M-x customize-themes'
+without needing a package wrapper.
+```
+(add-to-list 'custom-theme-load-path (file-name-directory (or load-file-name buffer-file-name)))
 ```
 
 Currently trying out the folio theme as my main theme.
 ```
 (use-package folio-theme
-  :vc (:url "https://github.com/kn66/folio-theme.el"
-            :rev :newest)
+  :ensure (:host github :repo "kn66/folio-theme.el")
   :config
   (load-theme 'folio t))
 
 (use-package nano-like-modus-theme
-  :vc (:url "https://github.com/benleis1/nano-like-modus-theme")
-  :ensure t)
+  :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 ```
 
 Deal with dark/light mode macos ui elements like the scrollbar
@@ -492,6 +565,12 @@ Deal with dark/light mode macos ui elements like the scrollbar
   :ensure t
   :config
   (ns-auto-titlebar-mode 1))
+```
+
+Make sure the theme and titlebar packages above are fully installed and
+activated before custom.el (which enables the folio theme by name) loads.
+```
+(elpaca-wait)
 ```
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -533,6 +612,15 @@ turn off tool bar always
 (tool-bar-mode 0)
 ```
 
+Emacs works really hard to be incredibly compatible out-of-the-box
+with a wide variety of languages. That comes at the cost of a
+little performance. These tell Emacs to assume left-to-right text
+in all buffers.
+```
+(setq-default bidi-paragraph-direction 'left-to-right)
+(setq bidi-inhibit-bpa t)
+```
+
 turn on scroll bars when in window mode
 testing on-demand scroll bar
 Use the normal right click brings up a context menu
@@ -540,12 +628,12 @@ Add a faint window divider
 ```
 (when window-system
   (use-package on-demand-scroll-bar
-    :vc (:url "https://github.com/florommel/on-demand-scroll-bar.git")
-
+    :ensure (:host github :repo "florommel/on-demand-scroll-bar")
     :config
     (on-demand-scroll-bar-mode 1))
 
   (context-menu-mode)
+  (mouse-shift-adjust-mode)
 
   ;; Add dividers on the right and bottom
   (setq window-divider-default-places t)
@@ -553,17 +641,14 @@ Add a faint window divider
   (setq window-divider-default-right-width 1
 	window-divider-default-bottom-width 1)
   (window-divider-mode 1)
+
+  ;; Draw tooltips directly - they look better
+  (setq use-system-tooltips nil)
   )
 
 (my-ignore (setq scroll-conservatively 10))
 ```
 don't allow overscrolling.
-
-
-```
-(when window-system
-  (setq use-system-tooltips nil))
-```
 
 Use winner mode by default for managing window configurations
 particularly useful when popping up a 2nd or 3rd window and
@@ -602,7 +687,16 @@ Use short y or no prompts.
 
 Revert buffers when the underlying file has changed
 ```
+(setopt auto-revert-avoid-polling t)
+(my-ignore (setopt auto-revert-interval 5))
+(setopt auto-revert-check-vc-info t)
 (global-auto-revert-mode 1)
+```
+
+Save history of minibuffer: future invocations will have recently-used
+selections sorted first
+```
+(savehist-mode)
 ```
 
 Revert Dired and other buffers
@@ -617,11 +711,18 @@ after copying to the kill ring
 (unless window-system
   (require 'mouse)
   (xterm-mouse-mode t)
-  (defun track-mouse (_e)))
+  (defun track-mouse (_e))) ;;check if stubbing this out is still needed in v31
 ```
 
 Setup recent files mode - this is much more in use now that I have consult
+`recentf-auto-cleanup' defaults to `mode', which runs a synchronous
+`recentf-cleanup' pass (stat-checking every entry in the saved list)
+the moment `recentf-mode' turns on -- measured ~49ms total, of which
+~23ms is the cleanup itself (the rest is just loading the saved list).
+Deferring cleanup to 30s idle keeps it fully automatic but takes it
+off the startup critical path.
 ```
+(setq recentf-auto-cleanup 30)
 (recentf-mode 1)
 (setq recentf-max-menu-items 25)
 (setq recentf-max-saved-items 50)
@@ -639,34 +740,32 @@ Switch focus to help windows when they come up
 ```
 
 # backup and autosave.
-put everything in .saves under .emacs.d
+put old version in .saves under .emacs.d and disable autosaves.
 
-Define a directory for auto-save files
+Define a directory for auto-save and backup files
 ```
-(defconst my-auto-save-folder (locate-user-emacs-file ".saves"))
+(defconst my-save-folder (locate-user-emacs-file ".saves"))
 ```
 
 Ensure the directory exists
 ```
-(unless (file-exists-p my-auto-save-folder)
-  (make-directory my-auto-save-folder t))
+(unless (file-exists-p my-save-folder)
+  (make-directory my-save-folder t))
 
 (setq
- auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
+;; auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
- `(("." . ,my-auto-save-folder))    ; don't litter my fs tree
+ `(("." . ,my-save-folder))    ; don't litter my fs tree
  delete-old-versions t
  kept-new-versions 6
  kept-old-versions 2
- version-control t
- lockfile-name-transforms `((".*" ,my-auto-save-folder t))
- )
+ version-control t)
 ```
 
 alternative strategy - just turn off auto-save.
 ```
-(my-ignore (setq auto-save-default nil))
+(setq auto-save-default nil)
 ```
 
 # Dired
@@ -708,7 +807,10 @@ modeline.el for the full rationale).
 Note: its important to have a nerd font installed for the icons to work properly
 I use DejaVu Sans Mono with the Nerd Font extension. For now I leave the icons on
 even in terminal mode although they are a bit too small there.
+modeline.el calls nerd-icons functions at load time, so make sure it's
+fully activated first.
 ```
+(elpaca-wait)
 (load (locate-user-emacs-file "modeline.el"))
 (my-modeline-mode 1)
 ```
@@ -730,13 +832,16 @@ Control + a number key which are closer than the function keys.
 (global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
 ```
 ```
-(global-set-key (kbd "C-f") 'goto-line)
+(global-set-key (kbd "C-f") 'goto-line) ;; Another swap. I use arrow keys for basic movement.
+```
+```
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
+(global-set-key (kbd "C-3") 'wikimode-toggle)
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
-(global-set-key (kbd "C-3") 'wikimode-toggle)
+(global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
 ```
 
 I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
@@ -878,15 +983,29 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
     (flyspell-on-for-buffer-type)))
 ```
 
-preset modes to have flyspell on
+## my-flyspell-defer-enable
+>Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
+is next idle, so opening a buffer doesn't block on starting Aspell.
+
+preset modes to have flyspell on. Deferred to the next idle moment rather
+than enabled directly in the hook
 ```
-(add-hook 'text-mode-hook 'flyspell-mode)
-(add-hook 'prog-mode-hook 'my-flyspell-prog-mode)
+(defun my-flyspell-defer-enable ()
+  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
+is next idle, so opening a buffer doesn't block on starting Aspell."
+  (let ((buf (current-buffer)))
+    (run-with-idle-timer 0.1 nil
+                          (lambda ()
+                            (when (buffer-live-p buf)
+                              (with-current-buffer buf
+                                (flyspell-on-for-buffer-type)))))))
+
+(add-hook 'text-mode-hook #'my-flyspell-defer-enable)
+(add-hook 'prog-mode-hook #'my-flyspell-defer-enable)
 ```
 
 Enable which key
 ```
-(setq-default which-key-mode t)
 (which-key-mode)
 ```
 
@@ -925,7 +1044,12 @@ sessions that never touch a VC-tracked buffer.
    :defer t)
 
 (use-package stripe-buffer
-   :ensure t)
+   :ensure t
+   :defer t)
+
+(use-package markdown-toc
+  :ensure t
+  :defer t)
 
 (setq markdown-header-scaling t)
 ```
@@ -1158,10 +1282,9 @@ word wrap for normal text and stripe mode for tables
 ```
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-  (add-hook 'org-mode-hook #'stripe-buffer-mode)
-  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5))))
-  (setq-local imenu-depth 4)
-  )
+;; this overstripes things. Revisit table formatting
+;;  (add-hook 'org-mode-hook #'stripe-buffer-mode)
+  (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5)))))
 ```
 
 hide asterisks in headers
@@ -1268,8 +1391,7 @@ I'm using org-pretty-table rather than org-modern's support for now
 because it works better
 ```
 (use-package org-pretty-table
-  :ensure t
-  :vc (:url "https://github.com/Fuco1/org-pretty-table")
+  :ensure (:host github :repo "Fuco1/org-pretty-table")
   :config
   :hook (org-mode . org-pretty-table-mode)
 )
@@ -1292,9 +1414,15 @@ fresh install that satisfies magit's minimum.
 ```
 
 ## my-common-prog-mode-setup
+For all programming modes - use line numbers in the margin, turn on column tracking
+and turnoff the fringe line overflow markers since the line numbers show the same
+thing and are much easier to see.
 ```
 (defun my-common-prog-mode-setup ()
   (display-line-numbers-mode)
+  (setq-local fringe-indicator-alist
+              (delq (assq 'continuation fringe-indicator-alist)
+                    fringe-indicator-alist))
   (column-number-mode))
 ```
 
@@ -1413,8 +1541,7 @@ the gutter when its X is less than the line-number display's pixel width.
   menu)
 
 (use-package treesit-fold
-  :ensure t
-  :vc (:url "https://github.com/emacs-tree-sitter/treesit-fold")
+  :ensure (:host github :repo "emacs-tree-sitter/treesit-fold")
   ;; Only java-mode/java-ts-mode buffers actually call into this (see
   ;; `setup-common-java'), so there's no need to load it eagerly at
   ;; startup -- its own autoloads cover `treesit-fold-mode' et al, and
@@ -1442,19 +1569,18 @@ set java home
 
 ## my-java-home-set
 >Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
-Re-applies JAVA_HOME and the jdtls/dap-mode settings derived from it --
+Re-applies JAVA_HOME and the jdtls settings derived from it --
 so customizing `my-java-home' (e.g. via M-x customize-variable) takes
 effect without a restart.
 
 ```
 (defun my-java-home-set (symbol value)
   "Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
-Re-applies JAVA_HOME and the jdtls/dap-mode settings derived from it --
+Re-applies JAVA_HOME and the jdtls settings derived from it --
 so customizing `my-java-home' (e.g. via M-x customize-variable) takes
 effect without a restart."
   (set-default symbol value)
   (setenv "JAVA_HOME" value)
-  (setq dap-java-java-command (concat value "/bin/java"))
   (setq my-jdtls-settings `(:java (:home ,value)))
   (setq-default eglot-workspace-configuration my-jdtls-settings))
 
@@ -1464,9 +1590,23 @@ effect without a restart."
   :type 'directory
   :set #'my-java-home-set
   :group 'my-environment)
+
+(defcustom my-local-m2-dir
+  (expand-file-name "~/.m2/repository")
+  "Path to the maven local reposistory"
+  :type 'directory
+  :group 'my-environment)
+
+(defcustom my-jdtls-test-bundles-dir
+  (locate-user-emacs-file "jdtls-bundles/")
+  "Directory holding the vscode-java-test OSGi bundle jars used by jdtls.
+See the Prerequisites section at the top of this file for how to
+populate it."
+  :type 'directory
+  :group 'my-environment)
 ```
 
-Establish the initial dap-mode/jdtls settings derived from my-java-home.
+Establish the initial jdtls settings derived from my-java-home.
 This is the single source of truth for that derivation -- see
 `my-java-home-set', which also reruns it on later customization.
 ```
@@ -1482,6 +1622,7 @@ This is the single source of truth for that derivation -- see
   (setq-local imenu-depth 3)
   (setq-local imenu-create-index-function 'ilist-plus-java-ts-index)
   (treesit-fold-mode)
+  (hl-line-mode)
   (treesit-fold-close-java-imports))
 
 (add-hook 'java-mode-hook 'setup-common-java)
@@ -1516,15 +1657,74 @@ prettier format for the json rpc - needed a bit less with the eglot-report-progr
 messages buffer but still easier to parse
 ```
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
+
+(defvar eglot-suppressed-progress-titles '("Publish Diagnostics")
+  "$/progress titles never reported to the message bar or mode line.
+jdtls fires its \"Publish Diagnostics\" task on essentially every edit,
+which drowns out everything else `eglot-report-progress' shows.")
+
+(defvar eglot--suppressed-progress-tokens (make-hash-table :test #'equal)
+  "Tokens of in-flight $/progress tasks currently being suppressed.
+LSP guarantees a task's token is stable across its begin/report/end
+notifications, so membership here is tracked from begin to end.")
+
+(with-eval-after-load 'eglot
+  (advice-add 'eglot-handle-notification :around
+              (lambda (orig server method &rest args)
+                (if (not (eq method '$/progress))
+                    (apply orig server method args)
+                  (let* ((token (plist-get args :token))
+                         (value (plist-get args :value))
+                         (kind (plist-get value :kind))
+                         (title (plist-get value :title)))
+                    (when (and (equal kind "begin")
+                               (member title eglot-suppressed-progress-titles))
+                      (puthash token t eglot--suppressed-progress-tokens))
+                    (let ((suppressed (gethash token eglot--suppressed-progress-tokens)))
+                      (when (and suppressed (equal kind "end"))
+                        (remhash token eglot--suppressed-progress-tokens))
+                      (unless suppressed
+                        (apply orig server method args))))))))
 ```
 
-## jsonrpc-elide-text-document
+## my-eglot-dape-context-menu
+>Augment context menu with Eglot (LSP) and Dape (Debug) commands.
+
+Context menu additions for eglot/dape
+```
+(defun my-eglot-dape-context-menu (menu click)
+  "Augment context menu with Eglot (LSP) and Dape (Debug) commands."
+  (when (derived-mode-p 'prog-mode)
+    ;; --- EGLOT (LSP) SECTIONS ---
+    (when (bound-and-true-p eglot--managed-mode)
+      (define-key-after menu [eglot-sep] '(menu-item "---"))
+      (define-key-after menu [eglot-code-actions]
+        '(menu-item "LSP Code Actions" eglot-code-actions :help "Execute LSP code actions")))
+
+    ;; --- DAPE (Debugger) SECTIONS ---
+    (when (featurep 'dape)
+      (define-key-after menu [dape-sep] '(menu-item "---"))
+      (define-key-after menu [dape-toggle-breakpoint]
+        '(menu-item "Toggle Breakpoint" dape-toggle-breakpoint :help "Set/unset breakpoint"))
+      (define-key-after menu [dape-step-in]
+        '(menu-item "Debug: Step In" dape-step-in :help "Step into function"))
+      (define-key-after menu [dape-next]
+        '(menu-item "Debug: Next (Step Over)" dape-next :help "Step over line"))))
+  menu)
+```
+
+Hook it into the native context menu system
+```
+(add-hook 'context-menu-functions #'my-eglot-dape-context-menu)
+```
+
+## my-jsonrpc-elide-text-document
 >Copy of PARAMS with params.textDocument.text elided.
 That field carries a whole file's contents (e.g. on
 textDocument/didOpen) and otherwise floods the short log format.
 uri/version and everything else in PARAMS are left untouched.
 
-jsonrpc--log-event's `short' branch is just the preamble
+my-jsonrpc--log-event's `short' branch is just the preamble
 (direction/method/id) -- :log-text is only ever populated for
 internal debug/warn events, never for real protocol messages, so
 there's normally nothing after it. Inject a summary of :message
@@ -1532,7 +1732,7 @@ there's normally nothing after it. Inject a summary of :message
 already present; the `full'/`lisp' branches prefer :json/
 :foreign-message over :log-text, so this only affects `short'.
 ```
-(defun jsonrpc-elide-text-document (params)
+(defun my-jsonrpc-elide-text-document (params)
   "Copy of PARAMS with params.textDocument.text elided.
 That field carries a whole file's contents (e.g. on
 textDocument/didOpen) and otherwise floods the short log format.
@@ -1546,13 +1746,13 @@ uri/version and everything else in PARAMS are left untouched."
     params))
 ```
 
-## jsonrpc-elide-token
+## my-jsonrpc-elide-token
 >Copy of PARAMS with a top-level :token field elided.
 $/progress notifications carry a fresh token on every call and
 otherwise flood the short log format with noise.
 
 ```
-(defun jsonrpc-elide-token (params)
+(defun my-jsonrpc-elide-token (params)
   "Copy of PARAMS with a top-level :token field elided.
 $/progress notifications carry a fresh token on every call and
 otherwise flood the short log format with noise."
@@ -1561,12 +1761,12 @@ otherwise flood the short log format with noise."
     params))
 ```
 
-## jsonrpc-log-text
->One-line summary of jsonrpc MESSAGE, for `short' events format.
+## my-jsonrpc-log-text
+>One-line summary of my-jsonrpc MESSAGE, for `short' events format.
 
 ```
-(defun jsonrpc-log-text (message)
-  "One-line summary of jsonrpc MESSAGE, for `short' events format."
+(defun my-jsonrpc-log-text (message)
+  "One-line summary of my-jsonrpc MESSAGE, for `short' events format."
   (cond ((equal (plist-get message :method) "$/progress")
          (let ((value (plist-get (plist-get message :params) :value)))
            (format "%s: %s" (or (plist-get value :kind) "")
@@ -1574,8 +1774,8 @@ otherwise flood the short log format with noise."
         ((plist-get message :method)
          ;; preamble already shows the method name (e.g. "--> $/progress"),
          ;; so only contribute the params here.
-         (format "%s" (or (jsonrpc-elide-token
-                            (jsonrpc-elide-text-document
+         (format "%s" (or (my-jsonrpc-elide-token
+                            (my-jsonrpc-elide-text-document
                              (plist-get message :params)))
                            "")))
         ((plist-get message :result)
@@ -1584,14 +1784,14 @@ otherwise flood the short log format with noise."
          (format "ERROR %s" (plist-get message :error)))))
 ```
 
-## jsonrpc-skip-message-p
+## my-jsonrpc-skip-message-p
 >Non-nil if MESSAGE shouldn't be logged at all.
 Suppresses $/progress begin/end notifications entirely -- `begin'
 just opens a task and `end' just closes it, neither carries
 anything as useful as the `report' messages in between.
 
 ```
-(defun jsonrpc-skip-message-p (message)
+(defun my-jsonrpc-skip-message-p (message)
   "Non-nil if MESSAGE shouldn't be logged at all.
 Suppresses $/progress begin/end notifications entirely -- `begin'
 just opens a task and `end' just closes it, neither carries
@@ -1601,17 +1801,28 @@ anything as useful as the `report' messages in between."
                            :kind)
                '("begin" "end"))))
 
-(with-eval-after-load 'jsonrpc
-  (advice-add 'jsonrpc--log-event :around
+(with-eval-after-load 'my-jsonrpc
+  (advice-add 'my-jsonrpc--log-event :around
               (lambda (orig connection origin &rest plist)
                 (let ((message (plist-get plist :message)))
-                  (unless (jsonrpc-skip-message-p message)
+                  (unless (my-jsonrpc-skip-message-p message)
                     (when (and message (not (plist-get plist :log-text)))
                       (setq plist (plist-put plist :log-text
-                                              (jsonrpc-log-text message))))
+                                              (my-jsonrpc-log-text message))))
                     (apply orig connection origin plist))))))
 
 (with-eval-after-load 'eglot
+  ;; `dape-breakpoint-global-mode' binds [left-fringe mouse-1] globally via
+  ;; minor-mode-map-alist, which wins over the fringe bitmap's lack of its
+  ;; own keymap -- so with dape's breakpoint mode on, that click always set
+  ;; a breakpoint instead of running the code action. Give code actions a
+  ;; real keybinding so it doesn't depend on any of these indicators.
+  (define-key eglot-mode-map (kbd "C-c C-a") #'eglot-code-actions)
+
+  ;; No fringe/margin glyph or ElDoc hint for available code actions --
+  ;; just use `C-c C-a' above when wanted.
+  (setq eglot-code-action-indications nil)
+
   ;; Keep jdtls metadata in a per-project dir under jdtls-cache.
   ;; Must be a lambda, not a precomputed path: eglot only loads
   ;; (and evaluates this let-binding) once, on first use, so a
@@ -1619,15 +1830,510 @@ anything as useful as the `report' messages in between."
   (add-to-list 'eglot-server-programs
                `((java-mode java-ts-mode)
                  . ,(lambda (&optional _interactive project)
-                      (let ((cache-dir (expand-file-name
-                                        (md5 (or (and project (project-root project))
-                                                 default-directory))
-                                        (locate-user-emacs-file "jdtls-cache"))))
+                      (let* ((cache-dir (expand-file-name
+                                         (md5 (or (and project (project-root project))
+                                                  default-directory))
+                                         (locate-user-emacs-file "jdtls-cache")))
+                             (bundles-dir my-jdtls-test-bundles-dir))
                         (list "jdtls"
                               "--jvm-arg=-Djava.import.generatesMetadataFilesAtProjectRoot=false"
                               "-data" cache-dir
                               :initializationOptions
-                              (list :settings my-jdtls-settings)))))))
+                              (list :settings my-jdtls-settings
+				    ;; add on the java.debug.plugin for DAPE and all of the test bundle
+				    ;; jars -- except the standalone test-runner jar, which is meant
+				    ;; to be invoked as its own process/classpath entry (as dap-mode's
+				    ;; dap-java.el does), not loaded into jdtls as an OSGi bundle.
+				    ;; lsp-java excludes the same jar for the same reason; confirmed
+				    ;; live that dropping it changes nothing about test discovery or
+				    ;; junit.argument resolution for this project.
+				    :bundles (vconcat
+					      (vector (concat my-local-m2-dir
+							       "/com/microsoft/java/com.microsoft.java.debug.plugin/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar"))
+					      (seq-remove
+					       (lambda (f) (string-match-p "test\\.runner" f))
+					       (file-expand-wildcards (concat bundles-dir "*.jar"))))
+				    )))))))
+```
+
+#; DAPE debugging
+
+Use dape after eglot is loaded
+```
+(use-package dape
+  :ensure t
+  :after eglot
+  :config
+  ;; Without this, clicking the fringe/margin to toggle a breakpoint does
+  ;; nothing -- the click handlers only exist inside this minor mode, which
+  ;; dape does not turn on for you.
+  (dape-breakpoint-global-mode))
+```
+
+dape config for debugging a JUnit test class via jdtls's
+vscode.java.test.* commands (the built-in `jdtls' dape config only
+knows how to resolve/launch a class with a `main' method, which a
+test class doesn't have).
+```
+(with-eval-after-load 'dape
+  (defvar my-dape-junit-listener nil
+    "Server process standing in for the Eclipse JUnit view.
+See `my-dape--junit-start-listener'.")
+
+  (defvar my-dape-junit-gradle-classpath-cache (make-hash-table :test #'equal)
+    "Cache of MODULE-DIR -> (BUILD-GRADLE-MTIME . CLASSPATH-VECTOR).
+See `my-dape--junit-gradle-classpath'.")
+
+  ;; TODO: I haven't gotten around to a maven version of this.
+  (defun my-dape--junit-gradle-classpath (module-dir)
+    "Return MODULE-DIR's combined sourceSet runtime classpath, via Gradle.
+Shells out to Gradle (through a throwaway `--init-script', so the
+project's own build files aren't touched) to collect every
+sourceSet's `runtimeClasspath' -- this covers the module's own
+compiled output/resources plus all resolved dependencies, including
+sibling modules pulled in via composite builds, which jdtls's own
+classpath resolution doesn't reliably surface for this project.
+Gradle's own output streams live into the \"*dape-junit-gradle*\"
+buffer. Cached per MODULE-DIR, keyed on its `build.gradle' mtime --
+clear `my-dape-junit-gradle-classpath-cache' to force a refresh."
+    (let* ((build-file (expand-file-name "build.gradle" module-dir))
+           (mtime (file-attribute-modification-time (file-attributes build-file)))
+           (cached (gethash module-dir my-dape-junit-gradle-classpath-cache)))
+      (if (and cached (equal (car cached) mtime))
+          (cdr cached)
+        (let* ((gradlew-dir (or (locate-dominating-file module-dir "gradlew")
+                                 (user-error "No `gradlew' found above %s" module-dir)))
+               (gradlew (expand-file-name "gradlew" gradlew-dir))
+               (init-file (make-temp-file
+                           "dape-junit-classpath-" nil ".gradle"
+                           "allprojects { proj ->
+    proj.plugins.withType(org.gradle.api.plugins.JavaBasePlugin) {
+        proj.tasks.register('myDapeClasspath') {
+            doLast {
+                def files = [] as LinkedHashSet
+                proj.sourceSets.each { ss -> files.addAll(ss.runtimeClasspath.files) }
+                println 'MYDAPE_CLASSPATH_BEGIN'
+                println files.collect { it.absolutePath }.join(File.pathSeparator)
+                println 'MYDAPE_CLASSPATH_END'
+            }
+        }
+    }
+}
+"))
+               (default-directory module-dir)
+               (buffer (get-buffer-create "*dape-junit-gradle*")))
+          (with-current-buffer buffer
+            (erase-buffer)
+            (insert (format "$ %s --console=plain --init-script %s myDapeClasspath\n\n"
+                             gradlew init-file)))
+          (display-buffer buffer)
+          (let ((proc (make-process
+                       :name "dape-junit-gradle" :buffer buffer :noquery t
+                       :command (list gradlew "--console=plain" "--init-script" init-file
+                                      "myDapeClasspath"))))
+            (while (process-live-p proc)
+              (accept-process-output proc 0.2))
+            (delete-file init-file)
+            (let ((output (with-current-buffer buffer (buffer-string))))
+              (unless (and (eq (process-exit-status proc) 0)
+                           (string-match "MYDAPE_CLASSPATH_BEGIN\n\\(.*\\)\nMYDAPE_CLASSPATH_END" output))
+                (user-error "Gradle classpath resolution failed, see %s" (buffer-name buffer)))
+              (let ((classpath (vconcat (split-string (match-string 1 output) path-separator t))))
+                (puthash module-dir (cons mtime classpath) my-dape-junit-gradle-classpath-cache)
+                classpath)))))))
+
+  (defun my-dape--junit-codelens-item (server file-uri)
+    "Ask SERVER for the JUnit test class codelens item in FILE-URI."
+    (let ((items (eglot-execute-command
+                  server "vscode.java.test.search.codelens" (vector file-uri))))
+      ;; `:level' is vscode-java-test's numeric TestLevel enum, not a
+      ;; string -- 3 is CLASS (see the item with a `:children' list of
+      ;; method ids), 4 is METHOD.
+      (or (seq-find (lambda (it) (eql (plist-get it :level) 3)) items)
+          (user-error "No JUnit test class found in %s" file-uri))))
+
+  (defun my-dape--junit-launch-arguments (server item)
+    "Resolve the java launch arguments (mainClass, classpath, ...) for ITEM.
+ITEM may be a CLASS-level (:level 3) or METHOD-level (:level 4)
+codelens item; a METHOD item's `:fullName' is \"ClassFullName#method\",
+which is split apart to build the METHOD-scoped launch argument."
+    (let* ((full-name (plist-get item :fullName))
+           (method-p (eql (plist-get item :level) 4))
+           (class-full-name (if method-p (car (split-string full-name "#")) full-name))
+           (test-name (if method-p (cadr (split-string full-name "#")) ""))
+           (project (plist-get item :project))
+           (kind (plist-get item :kind))
+           (uri (plist-get (plist-get item :location) :uri))
+           (argument (json-serialize
+                      `((uri . ,uri)
+                        (classFullName . ,class-full-name)
+                        (fullName . ,full-name)
+                        (testName . ,test-name)
+                        (project . ,project)
+                        (projectName . ,project)
+                        (scope . ,(if method-p "METHOD" "CLASS"))
+                        (testKind . ,kind)))))
+      (let* ((launch (eglot-execute-command server "vscode.java.test.junit.argument" (vector argument)))
+             (root (plist-get launch :workingDirectory)))
+        ;; `vscode.java.test.junit.argument' only returns the runner's own
+        ;; scaffolding classpath (test-runner + junit4/5 runtime jars), not
+        ;; the project's compiled output or dependencies -- and jdtls's own
+        ;; classpath resolution isn't reliable for this project (misses
+        ;; sibling modules pulled in via composite builds), so ask Gradle
+        ;; directly for the real thing.
+        (plist-put launch :classpath
+                   (vconcat (my-dape--junit-gradle-classpath root)
+                            (plist-get launch :classpath)
+                            ;; Eclipse's RemoteTestRunner protocol (which
+                            ;; this launches into) needs classic JUnit4 --
+                            ;; and its own hamcrest-core dependency -- on
+                            ;; the debuggee classpath even for JUnit5-only
+                            ;; projects that don't themselves depend on it.
+                            (mapcar (lambda (rel) (expand-file-name rel my-local-m2-dir))
+                                    '("junit/junit/4.13.1/junit-4.13.1.jar"
+                                      "org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar"))))
+        launch)))
+
+  (defun my-dape--junit-test-name (payload)
+    "Extract the human-readable test name from a \"id,name\" PAYLOAD."
+    (if (string-match "\\`[0-9]+,\\(.*\\)\\'" payload)
+        (match-string 1 payload)
+      payload))
+
+  (defun my-dape--junit-report-test (proc)
+    "Print PROC's just-finished test (name/status/trace) to the REPL."
+    (let ((name (or (process-get proc :junit-cur) "?"))
+          (status (or (process-get proc :junit-status) 'pass))
+          (trace (nreverse (process-get proc :junit-trace))))
+      (pcase status
+        ('pass (process-put proc :junit-pass (1+ (process-get proc :junit-pass)))
+               (dape--repl-insert (format "  PASS   %s\n" name)))
+        ('skip (process-put proc :junit-skip (1+ (process-get proc :junit-skip)))
+               (dape--repl-insert (format "  SKIP   %s\n" name)))
+        (_ (let ((key (if (eq status 'error) :junit-error :junit-fail)))
+             (process-put proc key (1+ (process-get proc key))))
+           (dape--repl-insert-error
+            (format "  %s  %s\n%s"
+                    (if (eq status 'error) "ERROR " "FAILED")
+                    name
+                    (if trace
+                        (concat (mapconcat (lambda (l) (concat "    " l)) trace "\n") "\n")
+                      "")))))))
+
+  (defun my-dape--junit-report-summary (proc elapsed-ms)
+    "Print PROC's final pass/fail/error/skip tally, ELAPSED-MS long, to the REPL."
+    (dape--repl-insert
+     (format "--- JUnit run finished in %sms: %d passed, %d failed, %d errors, %d skipped ---\n"
+             (string-trim elapsed-ms)
+             (process-get proc :junit-pass) (process-get proc :junit-fail)
+             (process-get proc :junit-error) (process-get proc :junit-skip))))
+
+  (defun my-dape--junit-handle-line (proc line)
+    "Decode one LINE of RemoteTestRunner's wire protocol for PROC.
+See `org.eclipse.jdt.internal.junit.runner.MessageIds' for the message
+format this parses: fixed \"%WORD\" markers, optionally followed by a
+payload, with stack traces/diffs sent as raw lines wrapped between a
+\"%..S\"/\"%..E\" start/end marker pair."
+    (cond
+     ((process-get proc :junit-in-raw)
+      (if (string-match "\\`%\\(?:TRACEE\\|RTRACEE\\|EXPECTE\\|ACTUALE\\)\\b" line)
+          (process-put proc :junit-in-raw nil)
+        (process-put proc :junit-trace (cons line (process-get proc :junit-trace)))))
+     ((string-match "\\`%\\([A-Za-z]+\\) *\\(.*\\)\\'" line)
+      (let ((id (match-string 1 line)) (payload (match-string 2 line)))
+        (cond
+         ((member id '("TRACES" "RTRACES" "EXPECTS" "ACTUALS"))
+          (process-put proc :junit-in-raw t))
+         ((equal id "TESTC")
+          (process-put proc :junit-pass 0) (process-put proc :junit-fail 0)
+          (process-put proc :junit-error 0) (process-put proc :junit-skip 0)
+          (dape--repl-insert (format "\n--- JUnit run: %s test(s) ---\n" (car (split-string payload)))))
+         ((equal id "TESTS")
+          (process-put proc :junit-cur (my-dape--junit-test-name payload))
+          (process-put proc :junit-status 'pass)
+          (process-put proc :junit-trace nil))
+         ((equal id "FAILED") (process-put proc :junit-status 'fail))
+         ((equal id "ERROR") (process-put proc :junit-status 'error))
+         ((equal id "TESTI") (process-put proc :junit-status 'skip))
+         ((equal id "TESTE") (my-dape--junit-report-test proc))
+         ((equal id "RUNTIME") (my-dape--junit-report-summary proc payload))
+         ((equal id "TESTSTP") (dape--repl-insert-error "--- JUnit run stopped ---\n")))))))
+
+  (defun my-dape--junit-listener-filter (proc string)
+    "Buffer PROC's incoming STRING into lines and hand each to
+`my-dape--junit-handle-line'."
+    (process-put proc :junit-pending (concat (process-get proc :junit-pending) string))
+    (let ((pending (process-get proc :junit-pending)) (start 0) pos)
+      ;; Capture the newline position from `string-match's return value
+      ;; rather than `(match-end 0)' -- `my-dape--junit-handle-line' runs
+      ;; its own `string-match' calls, which clobber the global match
+      ;; data this loop would otherwise be reading after the fact.
+      (while (setq pos (string-match "\n" pending start))
+        (my-dape--junit-handle-line
+         proc (string-trim-right (substring pending start pos) "\r"))
+        (setq start (1+ pos)))
+      (process-put proc :junit-pending (substring pending start))))
+
+  (defun my-dape--junit-start-listener ()
+    "(Re)start a throwaway socket listener and return its port.
+RemoteTestRunner insists on connecting to the `-port' it's given and
+reporting results over that socket; `my-dape--junit-listener-filter'
+decodes that stream into a running pass/fail summary in the REPL."
+    (when (process-live-p my-dape-junit-listener)
+      (delete-process my-dape-junit-listener))
+    (setq my-dape-junit-listener
+          (make-network-process :name "dape-junit-listener"
+                                 :server t :service t :family 'ipv4
+                                 :filter #'my-dape--junit-listener-filter :noquery t))
+    (cadr (process-contact my-dape-junit-listener)))
+
+  (defun my-dape--junit-rewrite-port (program-arguments port)
+    "Replace the `-port' value in PROGRAM-ARGUMENTS with PORT."
+    (let* ((args (append program-arguments nil))
+           (pos (seq-position args "-port" #'equal)))
+      (when pos
+        (setf (nth (1+ pos) args) (number-to-string port)))
+      args))
+
+  (defun my-dape--junit-capable-p ()
+    "Return non-nil if the current buffer's jdtls bundles the java-test plugin."
+    (seq-contains-p (eglot-server-capable :executeCommandProvider :commands)
+                     "vscode.java.test.junit.argument"))
+
+  (defun my-dape--junit-ensure (config)
+    "Shared `ensure' for the `jdtls-junit' and `jdtls-junit-method' configs."
+    (let ((file (dape-config-get config :filePath)))
+      (unless (and (stringp file) (file-exists-p file))
+        (user-error "Unable to locate :filePath `%s'" file))
+      (with-current-buffer (find-file-noselect file)
+        (unless (and (featurep 'eglot) (eglot-current-server))
+          (user-error "No eglot instance active in buffer %s" (current-buffer)))
+        (unless (my-dape--junit-capable-p)
+          (user-error "Jdtls instance does not bundle the java-test plugin, please install")))))
+
+  (defun my-dape--junit-fn (config item-fn)
+    "Shared `fn' for the `jdtls-junit' and `jdtls-junit-method' configs.
+ITEM-FN is called with SERVER and FILE-URI to resolve the codelens
+item to launch -- the whole class, or the method at point."
+    (with-current-buffer (find-file-noselect (dape-config-get config :filePath))
+      (let* ((server (eglot-current-server))
+             (file-uri (eglot-path-to-uri (buffer-file-name)))
+             (item (funcall item-fn server file-uri))
+             (launch (my-dape--junit-launch-arguments server item))
+             (junit-port (my-dape--junit-start-listener))
+             (program-args (my-dape--junit-rewrite-port
+                            (plist-get launch :programArguments) junit-port))
+             (debug-port (eglot-execute-command server "vscode.java.startDebugSession" nil)))
+        (thread-first config
+                      (plist-put 'port debug-port)
+                      (plist-put :mainClass (plist-get launch :mainClass))
+                      (plist-put :projectName (plist-get launch :projectName))
+                      (plist-put :classPaths (plist-get launch :classpath))
+                      (plist-put :modulePaths (plist-get launch :modulepath))
+                      (plist-put :cwd (plist-get launch :workingDirectory))
+                      (plist-put :vmArgs (mapconcat #'identity
+                                                     (append (plist-get launch :vmArguments) nil)
+                                                     " "))
+                      (plist-put :args (mapconcat #'identity program-args " "))))))
+
+  (add-to-list
+   'dape-configs
+   `(jdtls-junit
+     modes (java-mode java-ts-mode)
+     ensure my-dape--junit-ensure
+     :filePath ,(lambda () (expand-file-name (dape-buffer-default) (dape-cwd)))
+     fn (lambda (config) (my-dape--junit-fn config #'my-dape--junit-codelens-item))
+     :stopOnEntry nil
+     :type "java"
+     :request "launch"
+     :console "integratedConsole"
+     :internalConsoleOptions "neverOpen")))
+```
+
+dape config for debugging a single JUnit test method, resolved from
+the codelens item under point rather than the file's CLASS-level
+item -- otherwise identical to `jdtls-junit'.
+```
+(with-eval-after-load 'dape
+  (defun my-dape--junit-item-line (item)
+    "Return ITEM's declaration line (LSP, zero-origin)."
+    (thread-first item (plist-get :location) (plist-get :range) (plist-get :start) (plist-get :line)))
+
+  (defun my-dape--junit-method-item-at-point (server file-uri)
+    "Ask SERVER for the JUnit test METHOD codelens item enclosing point in FILE-URI.
+Codelens locations only span the method name token, not the method
+body, and the items aren't returned in source order -- so the
+enclosing method is taken to be the METHOD item with the highest
+declaration line at or before point."
+    (let* ((point-line (plist-get (eglot--pos-to-lsp-position) :line))
+           (items (eglot-execute-command
+                   server "vscode.java.test.search.codelens" (vector file-uri)))
+           (candidates (seq-filter
+                        (lambda (it) (and (eql (plist-get it :level) 4)
+                                          (<= (my-dape--junit-item-line it) point-line)))
+                        items)))
+      (or (car (last (seq-sort-by #'my-dape--junit-item-line #'< candidates)))
+          (user-error "No JUnit test method at point in %s" file-uri))))
+
+  (add-to-list
+   'dape-configs
+   `(jdtls-junit-method
+     modes (java-mode java-ts-mode)
+     ensure my-dape--junit-ensure
+     :filePath ,(lambda () (expand-file-name (dape-buffer-default) (dape-cwd)))
+     fn (lambda (config) (my-dape--junit-fn config #'my-dape--junit-method-item-at-point))
+     :stopOnEntry nil
+     :type "java"
+     :request "launch"
+     :console "integratedConsole"
+     :internalConsoleOptions "neverOpen")))
+```
+
+Left-margin arrows next to every jdtls-discovered JUnit test method
+and, if any test methods were found in the buffer, at the test
+class's declaration too -- clickable to start the
+`jdtls-junit-method' or `jdtls-junit' dape config respectively.
+Shares the left margin with flymake's own indicators
+(`flymake-indicator-type' is `margins' above) -- flymake only sets
+`left-margin-width' once, when `flymake-mode' turns on, so it's
+enough to widen it (never shrink it) to fit both glyphs. A single
+`mouse-1' binding on the minor mode's own keymap (rather than a
+`keymap' text property on each overlay) is used so
+`mouse-3'/context-menu clicks there still fall through normally
+instead of being shadowed -- the overlay clicked on records which
+dape config to run, so the one binding can dispatch either arrow.
+```
+(with-eval-after-load 'dape
+  (defface my-dape-run-gutter-face
+    '((t :inherit success))
+    "Face for the clickable dape-runnable margin arrows.")
+
+  (defvar-local my-junit-test-gutter-overlays nil
+    "Overlays placed by `my-junit-test-gutter-refresh'.")
+
+  (defvar-local my-class-run-gutter-overlays nil
+    "Overlays placed by `my-class-run-gutter-refresh'.")
+
+  (defun my-junit-test-gutter-clear ()
+    "Remove all test-gutter overlays from the current buffer."
+    (mapc #'delete-overlay my-junit-test-gutter-overlays)
+    (setq my-junit-test-gutter-overlays nil))
+
+  (defun my-class-run-gutter-clear ()
+    "Remove the main-class-gutter overlay from the current buffer."
+    (mapc #'delete-overlay my-class-run-gutter-overlays)
+    (setq my-class-run-gutter-overlays nil))
+
+  (defun my-dape-gutter-run-clicked (event)
+    "Start the dape config recorded on the margin arrow EVENT was clicked on."
+    (interactive "e")
+    (let* ((posn (event-start event))
+           (window (posn-window posn))
+           (pos (posn-point posn)))
+      (with-selected-window window
+        (goto-char pos)
+        ;; The gutter arrows are zero-length overlays -- `overlays-at'
+        ;; explicitly excludes those, so `overlays-in' is required here.
+        (if-let* ((config (seq-some (lambda (ov) (overlay-get ov 'my-dape-gutter-config))
+                                     (overlays-in pos pos))))
+            (dape (dape--config-eval config nil))
+          (user-error "No runnable dape config at point")))))
+
+  (defun my-dape--gutter-ensure-margin ()
+    "Widen the left margin (never shrink it) to fit the gutter arrows.
+Leaves room for flymake's own indicator (a fixed width of 2, set
+above) plus ours."
+    (setq left-margin-width (max (or left-margin-width 0) 2))
+    (dolist (win (get-buffer-window-list nil nil t))
+      (set-window-margins win left-margin-width (cdr (window-margins win)))))
+
+  (defun my-dape--gutter-arrow-overlay (pos help-echo config)
+    "Build a right-justified green arrow overlay at POS running CONFIG."
+    (let* ((arrow (concat (make-string (max 0 (1- left-margin-width)) ?\s) "▶"))
+           (ov (make-overlay pos pos)))
+      (overlay-put
+       ov 'before-string
+       (propertize
+        " " 'display
+        `((margin left-margin)
+          ,(propertize arrow 'face 'my-dape-run-gutter-face
+                       'mouse-face 'highlight
+                       'help-echo help-echo))))
+      (overlay-put ov 'my-dape-gutter-config config)
+      ov))
+
+  (defun my-junit-test-gutter-refresh ()
+    "Mark every jdtls-discovered JUnit test method with a clickable
+green arrow in the left margin."
+    (interactive)
+    (my-junit-test-gutter-clear)
+    (when (and (featurep 'eglot) (eglot-current-server) (my-dape--junit-capable-p))
+      (let* ((server (eglot-current-server))
+             (file-uri (eglot-path-to-uri (buffer-file-name)))
+             (items (eglot-execute-command
+                     server "vscode.java.test.search.codelens" (vector file-uri))))
+        (my-dape--gutter-ensure-margin)
+        (seq-doseq (it items)
+          (when (eql (plist-get it :level) 4)
+            (let ((pos (save-excursion
+                         (goto-char (point-min))
+                         (forward-line (my-dape--junit-item-line it))
+                         (point))))
+              (push (my-dape--gutter-arrow-overlay pos "mouse-1: debug this test" 'jdtls-junit-method)
+                    my-junit-test-gutter-overlays)))))))
+
+  (defun my-class-run-gutter-refresh ()
+    "Mark the buffer's JUnit test class declaration with a clickable
+green arrow in the left margin that runs every test in the file, if
+jdtls-discovered any runnable test method in it.
+
+Deliberately not gated on jdtls's own \"is this class runnable\"
+determination (`vscode.java.resolveMainClass') -- that's known to
+get it wrong. The presence of a JUnit test method it already
+reports via the same codelens query used for the method-level
+arrows is a more reliable signal."
+    (interactive)
+    (my-class-run-gutter-clear)
+    (when (and (featurep 'eglot) (eglot-current-server) (my-dape--junit-capable-p))
+      (let* ((server (eglot-current-server))
+             (file-uri (eglot-path-to-uri (buffer-file-name)))
+             (items (eglot-execute-command
+                     server "vscode.java.test.search.codelens" (vector file-uri)))
+             (class-item (and (seq-some (lambda (it) (eql (plist-get it :level) 4)) items)
+                               (seq-find (lambda (it) (eql (plist-get it :level) 3)) items))))
+        (when class-item
+          (my-dape--gutter-ensure-margin)
+          (let ((pos (save-excursion
+                       (goto-char (point-min))
+                       (forward-line (my-dape--junit-item-line class-item))
+                       (point))))
+            (push (my-dape--gutter-arrow-overlay pos "mouse-1: run all tests in this file" 'jdtls-junit)
+                  my-class-run-gutter-overlays))))))
+
+  (define-minor-mode my-dape-run-gutter-mode
+    "Show clickable green arrows in the left margin next to every
+jdtls-discovered runnable JUnit test method, and at the test class's
+declaration if any such methods were found."
+    :lighter nil
+    :keymap (let ((m (make-sparse-keymap)))
+              (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
+              m)
+    (if my-dape-run-gutter-mode
+        (progn
+          (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
+          (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
+          (my-junit-test-gutter-refresh)
+          (my-class-run-gutter-refresh))
+      (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
+      (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
+      (my-junit-test-gutter-clear)
+      (my-class-run-gutter-clear)))
+
+  (add-hook 'eglot-managed-mode-hook
+            (lambda ()
+              (my-dape-run-gutter-mode
+               (if (and eglot--managed-mode (derived-mode-p 'java-mode 'java-ts-mode))
+                   1 -1)))))
 ```
 
 #; flymake
@@ -1672,13 +2378,18 @@ Save space by not showing zero warn/error counter in the mode line
 ```
 
 Configure lightbulbs with corresponding diagnostic colors/faces'
-And place them in the margin rather than the fringe
+And place them in the margin rather than the fringe. Pin the margin
+to a fixed width of 2 (rather than `flymake-autoresize-margins'
+auto-sizing it to the icon's own width) and right-justify the icon
+within it, so it lines up with `my-dape-run-gutter-mode''s arrow.
 ```
 (setq flymake-indicator-type 'margins)
+(setq flymake-autoresize-margins nil)
+(setq-default left-margin-width 2)
 (setq flymake-margin-indicators-string
- `((error   ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-error)
-   (warning ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-warning)
-   (note    ,(nerd-icons-mdicon "nf-md-lightbulb") compilation-info)))
+ `((error   ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-error)
+   (warning ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-warning)
+   (note    ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-info)))
 ```
 
 #; python
@@ -1732,10 +2443,9 @@ Note: C-\ is bound to smart toggle.
 Load all of my custom imenu extensions.
 ```
 (use-package ilist-plus
-  :ensure nil
   ;; For local test/dev when turned on.
-;;   :load-path "~/dev/ilist-plus/"
-  :vc (:url "https://github.com/benleis1/ilist-plus")
+  ;;   :load-path "~/dev/ilist-plus/"
+  :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font))
@@ -1743,9 +2453,11 @@ Load all of my custom imenu extensions.
 
 Now that modeline.el (loaded above) has defined the richer dedicated-window
 keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-self-contained fallback after imenu loads.
-
+self-contained fallback after imenu loads. Make sure ilist-plus itself is
+fully activated first since the hook below calls its functions directly.
 ```
+(elpaca-wait)
+
 (with-eval-after-load 'imenu-list
   (setq imenu-list-mode-line-format
 	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
@@ -2038,7 +2750,16 @@ this enables a vertical list of completions with context dependent notes in the 
 
 (use-package marginalia
   :ensure t
-  :init (marginalia-mode 1))
+  :init (marginalia-mode 1)
+  :config
+  ;; elpaca byte-compiles marginalia in a build session where
+  ;; `compat--seconds-to-string' transiently looks fboundp, so its compiled
+  ;; `compat-call' bakes in a hard call to that name -- but `compat.el'
+  ;; deliberately never defines it at runtime on Emacs 31+ (native
+  ;; `seconds-to-string' already covers it), so the baked-in call is void.
+  ;; MELPA's prebuilt .elc doesn't hit this since it's compiled elsewhere.
+  (unless (fboundp 'compat--seconds-to-string)
+    (defalias 'compat--seconds-to-string 'seconds-to-string)))
 ```
 
 Trying out orderless completion
@@ -2051,6 +2772,9 @@ Trying out orderless completion
 
 (use-package corfu
   :ensure t
+  ;; `global-corfu-mode' is commented out below, so nothing currently
+  ;; activates corfu and it can be deferred.
+  :defer t
   :init
 ;;  (global-corfu-mode)
   )
@@ -2193,23 +2917,26 @@ default for markdown.
 ```
 (use-package yasnippet
   :ensure t
-  :config
-  (add-hook 'markdown-mode-hook #'yas-minor-mode)
-  )
+  :defer t
+  :init
+  (add-hook 'markdown-mode-hook #'yas-minor-mode))
 ```
 
 No key binding for now.
 ```
 (use-package consult-yasnippet
-  :ensure t)
+  :ensure t
+  :defer t)
 ```
 
 # Wikimode
 ```
 (use-package wikimode
-  :ensure t
-  :vc (:url "https://github.com/benleis1/wikimode")
-  )
+  :ensure (:host github :repo "benleis1/wikimode")
+  ;; Deferred but wikimode-project-tags is used independently so it's listed
+  ;; explicitly here to get an autoload stub too.
+  :commands (wikimode-toggle wikimode-project-tags)
+  :defer t)
 ```
 
 #  Consult navigation package
@@ -2265,6 +2992,18 @@ No key binding for now.
     (global-completion-preview-mode 1)))
 ```
 
+#; temptemp tryout vertico-posframe - move to vertico section if kept.
+Its cute but not more "ergonomic"
+```
+(my-ignore
+(use-package vertico-posframe
+  :ensure t
+  :init
+  (vertico-posframe-mode 1)
+  :custom
+  (vertico-posframe-width 100)))
+```
+
 # GC tuning
 Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
 collect when Emacs goes idle, instead of paying GC pauses during normal
@@ -2276,6 +3015,13 @@ off.
   :init
   (setq gcmh-high-cons-threshold (* 32 1024 1024))
   (gcmh-mode 1))
+```
+
+Make sure every package above has finished installing/activating before
+init is considered done, rather than leaving elpaca's queue to finish in
+the background after the first frame appears.
+```
+(elpaca-wait)
 ```
 
 > This file was auto-generated by elispdoc.el
