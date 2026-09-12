@@ -14,12 +14,14 @@
 ;; steady-state management once packages are loaded.
 (setq gc-cons-threshold most-positive-fixnum)
 
-;; Disable the tool bar before the first frame is created. Calling
-;; `tool-bar-mode' in init.el (after the frame already has a tool bar)
-;; measured ~104ms, presumably from a native AppKit window-resize round
-;; trip to remove it. Setting this via `default-frame-alist' means the
-;; frame is simply created without one -- no removal needed, and
-;; `tool-bar-mode' in init.el becomes a free no-op safety net.
+;; Packages are managed by elpaca (see init.el) now, not package.el. Emacs
+;; normally auto-activates package.el (and its previously-installed
+;; ~/.emacs.d/elpa packages) before init.el is even loaded; left on, that
+;; races elpaca's own bootstrap and use-package integration.
+(setq package-enable-at-startup nil)
+
+;; Disable the tool bar before the first frame is created. This is cheaper
+;; than disabling it later.
 (push '(tool-bar-lines . 0) default-frame-alist)
 
 ;;; early-init.el ends here

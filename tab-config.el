@@ -39,6 +39,19 @@
 ;; Set tab-line always on except for the exclude modes list
 (setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode ))
 
+;; dape defines a handful of auxiliary major modes for its info/repl/memory
+;; buffers (dape-repl-mode, dape-info-stack-mode, etc). Rather than hand
+;; maintaining the list above as dape adds new ones, enumerate every
+;; `dape-...-mode' major mode once dape is loaded and add any that are
+;; missing.
+(with-eval-after-load 'dape
+  (dolist (mode (apropos-internal "\\`dape-.*-mode\\'"
+                                   (lambda (s) (get s 'derived-mode-parent))))
+    (unless (memq mode tab-line-exclude-modes)
+      (push mode tab-line-exclude-modes)))
+  (tab-line-force-update t))
+
+
 (global-tab-line-mode t)
 
 ;; Always suppress the tab line separator in both windows and term mode

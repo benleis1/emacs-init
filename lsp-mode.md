@@ -201,6 +201,33 @@ Also worth noting, is at one point with lsp-mode I had setup the java mode hooks
 # Faces
 Finally with eglot faces turned off via the :semanticTokensProvider switch I went back to the treesitter formatting configuration. I have an already fairly minimalist set of colors that I use. For most code elements I prefer to just use my default text color. I really only want to see a few things like local variables, strings and function names strongly signaled in a different format.
 
+# DAPE  (run/debug)
+
+The last missing piece was support for running and debugging unit tests. This was never functional
+with lsp-mode so it was green field config.  I hoped that dape, the dap-mode equivalent for eglot,
+would just work but that turned out to not be the case.  None of the needed bundle classes were
+registered with jdtls, it couldn't find any of the tests and there was no real provision to report
+results.  It appears the official current workaround in packages is to launch the unit test in a
+subprocess with a debug port open and then attach. So I burnt some tokens on this problem to deal
+with digging through a fairly complex protocol I didn't want to spend time understanding myself.
+What I have now is a fairly complex set of java that properly sets all of the above up
+	
+1. Bundle of jars needed within  jdtls to support dap.
+2. Decode the results protocol 
+3. Setup a proper dape configuration for running which required shelling to gradle to pickup the
+   classpath. This looks like a weakness in the jdtls implementation itself. It cannot find the
+   correct classpath on its own.  Also, there are a few junit4 jars needed for the protocol that
+   just have to be added on.
+
+I'm not super happy with any of this but as far as I can tell there is no published package out
+there that does any of this and if I find something I can leverage long term I'll cutover.
+
+I also ended up configuring a bit of the UI around this. I turned off the useless fringe indicator
+for code actions since they are always possible and just set up a key binding. Then I turned on the
+debug breakpoint mode so that can be set by clicking on a line in the fringe and added a new fringe
+marker per method that is runable. 
+
+
 # Summary
 All the above configuration, took me a few days on and off.  At the end, I have a basic environment that is usable.  However, sadly I'm still going to continue using my main editor Intellij for my day to day work. That is due to a few things.
 
