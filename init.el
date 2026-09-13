@@ -1229,7 +1229,7 @@ effect without a restart."
   :group 'my-environment)
 
 (defcustom my-jdtls-test-bundles-dir
-  (locate-user-emacs-file "jdtls-bundles/")
+  (expand-file-name "jdtls-bundles/" user-emacs-directory)
   "Directory holding the vscode-java-test OSGi bundle jars used by jdtls.
 See the Prerequisites section at the top of this file for how to
 populate it."
@@ -1263,6 +1263,9 @@ populate it."
 ;; eglot configuration.
 (setq eglot-max-file-watches 5000)
 (setq eglot-connect-timeout 180)
+;; eglot really floods the progress queue during initial connections
+;; and it cuts overhead to have a larger one
+(setq read-process-output-max (* 1024 1024))
 (setq eglot-report-progress 'messages) ;; progress updates in the message bar
 ;; tree sitter is fine for faces and we don't need highlighting on the current line.
 (setq eglot-ignored-server-capabilities '(:semanticTokensProvider :documentHighlightProvider))
@@ -1275,14 +1278,17 @@ populate it."
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
 
 (defvar eglot-suppressed-progress-titles '("Publish Diagnostics")
-  "$/progress titles never reported to the message bar or mode line.
-jdtls fires its \"Publish Diagnostics\" task on essentially every edit,
-which drowns out everything else `eglot-report-progress' shows.")
+  "$/progress titles never reported to the message bar or mode line,
+not even their `report' updates. jdtls fires its \"Publish
+Diagnostics\" task on essentially every edit, which drowns out
+everything else `eglot-report-progress' shows, and none of its
+begin/report/end carries anything useful anyway.")
 
 (defvar eglot--suppressed-progress-tokens (make-hash-table :test #'equal)
-  "Tokens of in-flight $/progress tasks currently being suppressed.
-LSP guarantees a task's token is stable across its begin/report/end
-notifications, so membership here is tracked from begin to end.")
+  "Tokens of in-flight $/progress tasks currently being fully suppressed
+per `eglot-suppressed-progress-titles'. LSP guarantees a task's token
+is stable across its begin/report/end notifications, so membership
+here is tracked from begin to end.")
 
 (with-eval-after-load 'eglot
   (advice-add 'eglot-handle-notification :around
@@ -1293,14 +1299,47 @@ notifications, so membership here is tracked from begin to end.")
                          (value (plist-get args :value))
                          (kind (plist-get value :kind))
                          (title (plist-get value :title)))
+                    ;; `title' is only ever present on `begin' -- `report'/
+                    ;; `end' carry nil, so whether a token is suppressed
+                    ;; has to be decided now and remembered.
                     (when (and (equal kind "begin")
                                (member title eglot-suppressed-progress-titles))
                       (puthash token t eglot--suppressed-progress-tokens))
-                    (let ((suppressed (gethash token eglot--suppressed-progress-tokens)))
-                      (when (and suppressed (equal kind "end"))
+                    (let ((fully-suppressed (gethash token eglot--suppressed-progress-tokens)))
+                      (when (equal kind "end")
                         (remhash token eglot--suppressed-progress-tokens))
-                      (unless suppressed
+                      (unless fully-suppressed
                         (apply orig server method args))))))))
+
+;; Simplify eglot's progress reporter to not throttle. Its more useful to see them all.
+(with-eval-after-load 'eglot
+  (defalias 'eglot--reporter-update
+    (lambda (reporter value &optional update-text)
+      (progress-reporter-force-update reporter value nil update-text))))
+
+;; Several errors  are false positives that I don't want to see in the
+;; warning buffer.
+;; 1. an attempt to reload the core of jdtls that can never happen.
+;; 2. a race to find junit tests before the metadata is setup.
+(defvar my-jdtls-suppressed-error-messages
+  '("Cannot refresh bundle org.eclipse.jdt.ls.core because its dependency closure includes the org.eclipse.jdt.ls.core bundle."
+    "at com.microsoft.java.test.plugin.searcher.JUnit5TestSearcher")
+  "Substrings of jdtls ERROR `window/logMessage' text that are known-benign
+false positives, never worth a `display-warning'.")
+
+;;; Report back warnings of interest after eglot loads
+(with-eval-after-load 'eglot
+  (advice-add 'eglot-handle-notification :before
+              (lambda (_server method &rest params)
+                (when (eq method 'window/logMessage)
+                  (let ((message (plist-get params :message)))
+                    (when (and (eql (plist-get params :type) 1)
+                               (not (seq-some (lambda (s) (string-search s message))
+                                              my-jdtls-suppressed-error-messages)))
+                      (display-warning
+                       'jdtls
+                       (format "jdtls error: %s" (car (split-string message "\n")))
+                       :warning)))))))
 
 ;; Context menu additions for eglot/dape
 (defun my-eglot-dape-context-menu (menu click)
@@ -1382,8 +1421,8 @@ anything as useful as the `report' messages in between."
                            :kind)
                '("begin" "end"))))
 
-(with-eval-after-load 'my-jsonrpc
-  (advice-add 'my-jsonrpc--log-event :around
+(with-eval-after-load 'jsonrpc
+  (advice-add 'jsonrpc--log-event :around
               (lambda (orig connection origin &rest plist)
                 (let ((message (plist-get plist :message)))
                   (unless (my-jsonrpc-skip-message-p message)
@@ -1421,18 +1460,17 @@ anything as useful as the `report' messages in between."
                               "-data" cache-dir
                               :initializationOptions
                               (list :settings my-jdtls-settings
-				    ;; add on the java.debug.plugin for DAPE and all of the test bundle
-				    ;; jars -- except the standalone test-runner jar, which is meant
-				    ;; to be invoked as its own process/classpath entry (as dap-mode's
-				    ;; dap-java.el does), not loaded into jdtls as an OSGi bundle.
-				    ;; lsp-java excludes the same jar for the same reason; confirmed
-				    ;; live that dropping it changes nothing about test discovery or
-				    ;; junit.argument resolution for this project.
+				    ;; add on the java.debug.plugin for DAPE and  all of the test bundle jars except
+
+				    ;; 1. the standalone test-runner jar since we're running embedded.
+				    ;; 2.org.objectweb.asm/.commons/.tree jars which are already loaded in
+				    ;; jdtls's base platform
+				    ;; 3. jacocoagent.jar which isn't a proper OSGi bundle at all
 				    :bundles (vconcat
 					      (vector (concat my-local-m2-dir
 							       "/com/microsoft/java/com.microsoft.java.debug.plugin/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar"))
 					      (seq-remove
-					       (lambda (f) (string-match-p "test\\.runner" f))
+					       (lambda (f) (string-match-p "test\\.runner\\|org\\.objectweb\\.asm\\|jacocoagent" f))
 					       (file-expand-wildcards (concat bundles-dir "*.jar"))))
 				    )))))))
 
@@ -1561,56 +1599,62 @@ clear `my-dape-junit-gradle-classpath-cache' to force a refresh."
                 (puthash module-dir (cons mtime classpath) my-dape-junit-gradle-classpath-cache)
                 classpath)))))))
 
+  (defconst my-dape--junit-search-command "vscode.java.test.findTestTypesAndMethods"
+    "Command to ask jdtls for the JUnit classes/methods in a file.
+The older `vscode.java.test.search.codelens' was removed in
+vscode-java-test 0.31.0 (2021-08-06, microsoft/vscode-java-test#1257)
+-- no bundle worth installing still has it, so this isn't probed
+for, just required outright (see `my-dape--junit-ensure').")
+
+  (defun my-dape--junit-item-testlevel (item)
+    "Return ITEM's TestLevel (5 = CLASS, 6 = METHOD)."
+    (plist-get item :testLevel))
+
+  (defun my-dape--junit-flatten-items (items)
+    "Flatten the ITEMS tree (classes with method/nested-class :children)
+depth-first into a single list."
+    (seq-mapcat (lambda (it) (cons it (my-dape--junit-flatten-items (plist-get it :children))))
+                items))
+
   (defun my-dape--junit-codelens-item (server file-uri)
-    "Ask SERVER for the JUnit test class codelens item in FILE-URI."
-    (let ((items (eglot-execute-command
-                  server "vscode.java.test.search.codelens" (vector file-uri))))
-      ;; `:level' is vscode-java-test's numeric TestLevel enum, not a
-      ;; string -- 3 is CLASS (see the item with a `:children' list of
-      ;; method ids), 4 is METHOD.
-      (or (seq-find (lambda (it) (eql (plist-get it :level) 3)) items)
+    "Ask SERVER for the JUnit test class item in FILE-URI."
+    (let ((items (my-dape--junit-flatten-items
+                  (eglot-execute-command
+                   server my-dape--junit-search-command (vector file-uri)))))
+      (or (seq-find (lambda (it) (eql (my-dape--junit-item-testlevel it) 5)) items)
           (user-error "No JUnit test class found in %s" file-uri))))
 
   (defun my-dape--junit-launch-arguments (server item)
     "Resolve the java launch arguments (mainClass, classpath, ...) for ITEM.
-ITEM may be a CLASS-level (:level 3) or METHOD-level (:level 4)
-codelens item; a METHOD item's `:fullName' is \"ClassFullName#method\",
-which is split apart to build the METHOD-scoped launch argument."
-    (let* ((full-name (plist-get item :fullName))
-           (method-p (eql (plist-get item :level) 4))
-           (class-full-name (if method-p (car (split-string full-name "#")) full-name))
-           (test-name (if method-p (cadr (split-string full-name "#")) ""))
-           (project (plist-get item :project))
-           (kind (plist-get item :kind))
-           (uri (plist-get (plist-get item :location) :uri))
-           (argument (json-serialize
-                      `((uri . ,uri)
-                        (classFullName . ,class-full-name)
-                        (fullName . ,full-name)
-                        (testName . ,test-name)
-                        (project . ,project)
-                        (projectName . ,project)
-                        (scope . ,(if method-p "METHOD" "CLASS"))
-                        (testKind . ,kind)))))
-      (let* ((launch (eglot-execute-command server "vscode.java.test.junit.argument" (vector argument)))
+ITEM may be a CLASS-level or METHOD-level item (see
+`my-dape--junit-item-testlevel'); a METHOD item's `:jdtHandler' is
+what `vscode.java.test.junit.argument' wants to scope the launch to
+just that method."
+    (let* ((testlevel (my-dape--junit-item-testlevel item))
+           (method-p (eql testlevel 6))
+           (argument
+            (json-serialize
+             `((projectName . ,(plist-get item :projectName))
+               (testLevel . ,testlevel)
+               (testKind . ,(plist-get item :testKind))
+               (testNames . ,(vector (if method-p
+                                          (plist-get item :jdtHandler)
+                                        (plist-get item :fullName))))))))
+      (let* ((launch-response (eglot-execute-command server "vscode.java.test.junit.argument" (vector argument)))
+             (launch (plist-get launch-response :body))
              (root (plist-get launch :workingDirectory)))
         ;; `vscode.java.test.junit.argument' only returns the runner's own
         ;; scaffolding classpath (test-runner + junit4/5 runtime jars), not
         ;; the project's compiled output or dependencies -- and jdtls's own
-        ;; classpath resolution isn't reliable for this project (misses
+        ;; classpath resolution isn't reliable for my projects (misses
         ;; sibling modules pulled in via composite builds), so ask Gradle
         ;; directly for the real thing.
         (plist-put launch :classpath
                    (vconcat (my-dape--junit-gradle-classpath root)
                             (plist-get launch :classpath)
-                            ;; Eclipse's RemoteTestRunner protocol (which
-                            ;; this launches into) needs classic JUnit4 --
-                            ;; and its own hamcrest-core dependency -- on
-                            ;; the debuggee classpath even for JUnit5-only
-                            ;; projects that don't themselves depend on it.
-                            (mapcar (lambda (rel) (expand-file-name rel my-local-m2-dir))
-                                    '("junit/junit/4.13.1/junit-4.13.1.jar"
-                                      "org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar"))))
+                            (vector (expand-file-name
+                                     "org/junit/platform/junit-platform-console-standalone/1.9.0/junit-platform-console-standalone-1.9.0.jar"
+                                     my-local-m2-dir))))
         launch)))
 
   (defun my-dape--junit-test-name (payload)
@@ -1716,8 +1760,9 @@ decodes that stream into a running pass/fail summary in the REPL."
 
   (defun my-dape--junit-capable-p ()
     "Return non-nil if the current buffer's jdtls bundles the java-test plugin."
-    (seq-contains-p (eglot-server-capable :executeCommandProvider :commands)
-                     "vscode.java.test.junit.argument"))
+    (let ((commands (eglot-server-capable :executeCommandProvider :commands)))
+      (and (seq-contains-p commands "vscode.java.test.junit.argument" #'equal)
+           (seq-contains-p commands my-dape--junit-search-command #'equal))))
 
   (defun my-dape--junit-ensure (config)
     "Shared `ensure' for the `jdtls-junit' and `jdtls-junit-method' configs."
@@ -1728,7 +1773,8 @@ decodes that stream into a running pass/fail summary in the REPL."
         (unless (and (featurep 'eglot) (eglot-current-server))
           (user-error "No eglot instance active in buffer %s" (current-buffer)))
         (unless (my-dape--junit-capable-p)
-          (user-error "Jdtls instance does not bundle the java-test plugin, please install")))))
+          (user-error "Jdtls instance does not expose `%s' -- is the vscode-java-test bundle installed in `my-jdtls-test-bundles-dir'?"
+                      my-dape--junit-search-command)))))
 
   (defun my-dape--junit-fn (config item-fn)
     "Shared `fn' for the `jdtls-junit' and `jdtls-junit-method' configs.
@@ -1774,19 +1820,20 @@ item to launch -- the whole class, or the method at point."
 (with-eval-after-load 'dape
   (defun my-dape--junit-item-line (item)
     "Return ITEM's declaration line (LSP, zero-origin)."
-    (thread-first item (plist-get :location) (plist-get :range) (plist-get :start) (plist-get :line)))
+    (thread-first item (plist-get :range) (plist-get :start) (plist-get :line)))
 
   (defun my-dape--junit-method-item-at-point (server file-uri)
-    "Ask SERVER for the JUnit test METHOD codelens item enclosing point in FILE-URI.
+    "Ask SERVER for the JUnit test METHOD item enclosing point in FILE-URI.
 Codelens locations only span the method name token, not the method
 body, and the items aren't returned in source order -- so the
 enclosing method is taken to be the METHOD item with the highest
 declaration line at or before point."
     (let* ((point-line (plist-get (eglot--pos-to-lsp-position) :line))
-           (items (eglot-execute-command
-                   server "vscode.java.test.search.codelens" (vector file-uri)))
+           (items (my-dape--junit-flatten-items
+                   (eglot-execute-command
+                    server my-dape--junit-search-command (vector file-uri))))
            (candidates (seq-filter
-                        (lambda (it) (and (eql (plist-get it :level) 4)
+                        (lambda (it) (and (eql (my-dape--junit-item-testlevel it) 6)
                                           (<= (my-dape--junit-item-line it) point-line)))
                         items)))
       (or (car (last (seq-sort-by #'my-dape--junit-item-line #'< candidates)))
@@ -1877,25 +1924,70 @@ above) plus ours."
       (overlay-put ov 'my-dape-gutter-config config)
       ov))
 
+  (defvar my-dape--junit-backoff-initial-delay 2
+    "Seconds before the first retry in `my-dape--junit-fetch-items-async'
+and `my-dape--junit-gutter-refresh-when-ready'.")
+
+  (defvar my-dape--junit-backoff-factor 1.5
+    "Multiplier applied to the delay on each successive retry.")
+
+  (defvar my-dape--junit-backoff-max-delay 60
+    "Cap on the backoff delay -- once reached, keeps retrying at this
+interval indefinitely rather than growing without bound. There's no
+retry limit/timeout: a project that's slow enough to still be
+importing a minute in is unusual but not wrong, and giving up would
+just leave the gutters permanently empty until the next save.")
+
+  (defun my-dape--junit-fetch-items-async (server file-uri callback &optional delay)
+    "Asynchronously ask SERVER for FILE-URI's JUnit items, then call
+CALLBACK with the flattened list (see `my-dape--junit-flatten-items').
+
+Async so a jdtls that's still busy importing the project (this query can
+only answer once the file's project is indexed) doesn't block Emacs for
+however long that takes.
+
+Retries on error, with gradually increasing backoff and no cutoff,
+rather than trying to guess when the project is done importing."
+    (let* ((delay (or delay my-dape--junit-backoff-initial-delay))
+           (retry (lambda (&rest _)
+                    (run-with-timer
+                     delay nil
+                     (lambda (buf)
+                       (when (buffer-live-p buf)
+                         (with-current-buffer buf
+                           (my-dape--junit-fetch-items-async
+                            server file-uri callback
+                            (min (* delay my-dape--junit-backoff-factor)
+                                 my-dape--junit-backoff-max-delay)))))
+                     (current-buffer)))))
+      (eglot--async-request
+       server :workspace/executeCommand
+       `(:command ,my-dape--junit-search-command :arguments ,(vector file-uri))
+       :success-fn (lambda (items) (funcall callback (my-dape--junit-flatten-items items)))
+       ;; We need to retry on both errors and timeouts
+       :error-fn retry
+       :timeout-fn retry
+       :hint my-dape--junit-search-command)))
+
   (defun my-junit-test-gutter-refresh ()
     "Mark every jdtls-discovered JUnit test method with a clickable
 green arrow in the left margin."
     (interactive)
     (my-junit-test-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (my-dape--junit-capable-p))
-      (let* ((server (eglot-current-server))
-             (file-uri (eglot-path-to-uri (buffer-file-name)))
-             (items (eglot-execute-command
-                     server "vscode.java.test.search.codelens" (vector file-uri))))
-        (my-dape--gutter-ensure-margin)
-        (seq-doseq (it items)
-          (when (eql (plist-get it :level) 4)
-            (let ((pos (save-excursion
-                         (goto-char (point-min))
-                         (forward-line (my-dape--junit-item-line it))
-                         (point))))
-              (push (my-dape--gutter-arrow-overlay pos "mouse-1: debug this test" 'jdtls-junit-method)
-                    my-junit-test-gutter-overlays)))))))
+      (my-dape--junit-fetch-items-async
+       (eglot-current-server) (eglot-path-to-uri (buffer-file-name))
+       (lambda (items)
+         (my-junit-test-gutter-clear)
+         (my-dape--gutter-ensure-margin)
+         (seq-doseq (it items)
+           (when (eql (my-dape--junit-item-testlevel it) 6)
+             (let ((pos (save-excursion
+                          (goto-char (point-min))
+                          (forward-line (my-dape--junit-item-line it))
+                          (point))))
+               (push (my-dape--gutter-arrow-overlay pos "mouse-1: debug this test" 'jdtls-junit-method)
+                     my-junit-test-gutter-overlays))))))))
 
   (defun my-class-run-gutter-refresh ()
     "Mark the buffer's JUnit test class declaration with a clickable
@@ -1910,20 +2002,36 @@ arrows is a more reliable signal."
     (interactive)
     (my-class-run-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (my-dape--junit-capable-p))
-      (let* ((server (eglot-current-server))
-             (file-uri (eglot-path-to-uri (buffer-file-name)))
-             (items (eglot-execute-command
-                     server "vscode.java.test.search.codelens" (vector file-uri)))
-             (class-item (and (seq-some (lambda (it) (eql (plist-get it :level) 4)) items)
-                               (seq-find (lambda (it) (eql (plist-get it :level) 3)) items))))
-        (when class-item
-          (my-dape--gutter-ensure-margin)
-          (let ((pos (save-excursion
-                       (goto-char (point-min))
-                       (forward-line (my-dape--junit-item-line class-item))
-                       (point))))
-            (push (my-dape--gutter-arrow-overlay pos "mouse-1: run all tests in this file" 'jdtls-junit)
-                  my-class-run-gutter-overlays))))))
+      (my-dape--junit-fetch-items-async
+       (eglot-current-server) (eglot-path-to-uri (buffer-file-name))
+       (lambda (items)
+         (my-class-run-gutter-clear)
+         (let ((class-item (and (seq-some (lambda (it) (eql (my-dape--junit-item-testlevel it) 6)) items)
+                                 (seq-find (lambda (it) (eql (my-dape--junit-item-testlevel it) 5)) items))))
+           (when class-item
+             (my-dape--gutter-ensure-margin)
+             (let ((pos (save-excursion
+                          (goto-char (point-min))
+                          (forward-line (my-dape--junit-item-line class-item))
+                          (point))))
+               (push (my-dape--gutter-arrow-overlay pos "mouse-1: run all tests in this file" 'jdtls-junit)
+                     my-class-run-gutter-overlays))))))))
+
+  (defun my-dape--junit-gutter-refresh-when-ready (buf &optional delay)
+    "Refresh both JUnit gutters in BUF once jdtls is actually capable
+\(see `my-dape--junit-capable-p'\), retrying with the same gradually
+increasing, never-ending backoff as `my-dape--junit-fetch-items-async'
+if it isn't yet."
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (if (and (featurep 'eglot) (eglot-current-server) (my-dape--junit-capable-p))
+            (progn
+              (my-junit-test-gutter-refresh)
+              (my-class-run-gutter-refresh))
+          (let ((delay (or delay my-dape--junit-backoff-initial-delay)))
+            (run-with-timer
+             delay nil #'my-dape--junit-gutter-refresh-when-ready buf
+             (min (* delay my-dape--junit-backoff-factor) my-dape--junit-backoff-max-delay)))))))
 
   (define-minor-mode my-dape-run-gutter-mode
     "Show clickable green arrows in the left margin next to every
@@ -1937,8 +2045,12 @@ declaration if any such methods were found."
         (progn
           (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
           (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
-          (my-junit-test-gutter-refresh)
-          (my-class-run-gutter-refresh))
+          ;; The mode turns on right at `eglot-managed-mode-hook' time --
+          ;; i.e. exactly when a freshly-connected jdtls is most likely still
+          ;; busy importing the project and in no position to usefully answer a
+          ;; per-file test query yet. So queue delayed gutter refreshes on a
+          ;; timer with the backoff behavior.
+          (run-with-timer 1.0 nil #'my-dape--junit-gutter-refresh-when-ready (current-buffer)))
       (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
       (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
       (my-junit-test-gutter-clear)
