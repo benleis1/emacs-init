@@ -1448,6 +1448,48 @@ anything as useful as the `report' messages in between."
   ;; dape does not turn on for you.
   (dape-breakpoint-global-mode))
 
+;; Visual debug toolbar (continue/step/restart/quit buttons) for dape.
+;; Not on any package archive -- pull it straight from GitHub via elpaca's
+;; recipe syntax. Rendered as a header-line in the `*dape-repl*' buffer
+;; rather than via `dape-toolbar-mode''s own dedicated window -- the repl
+;; is already open for the whole debug session, so there's no extra window
+;; to lay out.
+(use-package dape-toolbar
+  :ensure (:host github :repo "zsxh/dape-toolbar")
+  :after dape
+  :config
+  (defun my-dape-toolbar-header-line-string ()
+    "Render `dape-toolbar-buttons' as a clickable header-line string."
+    (mapconcat
+     #'identity
+     (delq nil
+           (mapcar
+            (lambda (spec)
+              (pcase-let ((`(,icon ,command ,help ,face ,predicate) (cdr spec)))
+                (when (or (not predicate) (funcall predicate))
+                  (propertize (condition-case nil
+                                  (nerd-icons-codicon icon)
+                                (error (propertize "?" 'face 'warning)))
+                              'face `(:inherit ,face :height ,dape-toolbar-button-height)
+                              'help-echo help
+                              'mouse-face 'highlight
+                              'keymap (let ((map (make-sparse-keymap)))
+                                        (define-key map [header-line mouse-1] command)
+                                        map)))))
+            dape-toolbar-buttons))
+     "  "))
+
+  (defun my-dape-toolbar-update-repl-header ()
+    "Refresh the toolbar header-line in the `*dape-repl*' buffer, if live."
+    (when-let* ((buffer (get-buffer "*dape-repl*")))
+      (with-current-buffer buffer
+        (condition-case err
+            (setq header-line-format (my-dape-toolbar-header-line-string))
+          (error (message "my-dape-toolbar-update-repl-header: %s" err))))))
+
+  (add-hook 'dape-repl-mode-hook #'my-dape-toolbar-update-repl-header)
+  (add-hook 'dape-update-ui-hook #'my-dape-toolbar-update-repl-header))
+
 ;; dape config for debugging a JUnit test class via jdtls's
 ;; vscode.java.test.* commands (the built-in `jdtls' dape config only
 ;; knows how to resolve/launch a class with a `main' method, which a
