@@ -97,18 +97,20 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
     mode-line and dired icons to render correctly.
   - aspell installed (falls back to ispell if not found) for flyspell.
-  - A Java installation reachable via `my-java-home' (defaults to a jenv
+  - A Java installation reachable via `my-java-home` (defaults to a jenv
     path) plus jdtls on PATH if you want eglot's Java support.
   - For JUnit test debugging via dape/jdtls: vscode-java-test's bundle
-    jars in `my-jdtls-test-bundles-dir' (default ~/.emacs.d/jdtls-bundles/).
+    jars in `my-jdtls-test-bundles-dir` (default ~/.emacs.d/jdtls-bundles/).
     They aren't published to Maven Central -- they ship inside the
-    `vscjava.vscode-java-test' VS Code extension's `extension/server/'
+    `vscjava.vscode-java-test` VS Code extension's `extension/server/`
     folder. To (re)populate this directory:
+ ```
       curl -L -o /tmp/vscode-java-test.vsix \
         "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
       unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
       mkdir -p ~/.emacs.d/jdtls-bundles
       cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
+ ```
     Pick the current version from
     https://open-vsx.org/extension/vscjava/vscode-java-test.
   - pgformatter on PATH if you want the SQL formatting commands to work.
