@@ -15,11 +15,14 @@
 ;;
 ;; ## Philosophy
 ;;
-;; My emacs configuration is an opinionated (some might say highly opinionated)
-;; setup that I have made public to share pieces with others.  These are the
-;; high level priorities that inform the decisions I've made throughout this
-;; file.  First, unlike many other users who have shared their config files, I
-;; like using the mouse and even the occasional menu rather than remembering key
+;; My emacs configuration is an opinionated setup that I have made public to
+;; share with others. Originally this generation of the config files arose out
+;; of my moving to MacOS and realizing the value of git as a backing store. This
+;; time, these are the high level priorities that inform the decisions I've made
+;; throughout this file.
+;;
+;; First, unlike many other users who have shared their config files, I like
+;; using the mouse and even the occasional menu rather than remembering key
 ;; bindings for everything. So I've spent some time trying to get emacs to work
 ;; more consistently for these modes. For example with flyspell on you can right
 ;; click and get a context menu with the possible spellings like in most other
@@ -65,11 +68,12 @@
 ;; Sample screen:
 ;; ![sample screen](./sample-screen.png)
 ;;
-;; Normally I run a gui standalone emacs as well as an emacs server for terminal mode editing
-;; My typical alias setup
-;;  ```
-;;  # launcher for terminal emacs
-;;  alias emacs='emacsclient -t -s default --alternate-editor=`
+;; Normally I run a gui standalone emacs as well as an emacs server for terminal
+;; mode editing My typical alias setup
+;;
+;; ```
+;; # launcher for terminal emacs alias
+;; emacs='emacsclient -t -s default --alternate-editor=`
 ;;
 ;;  # launcher for gui emacs
 ;;  function gemacs() {
@@ -93,18 +97,20 @@
 ;;   - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
 ;;     mode-line and dired icons to render correctly.
 ;;   - aspell installed (falls back to ispell if not found) for flyspell.
-;;   - A Java installation reachable via `my-java-home' (defaults to a jenv
+;;   - A Java installation reachable via `my-java-home` (defaults to a jenv
 ;;     path) plus jdtls on PATH if you want eglot's Java support.
 ;;   - For JUnit test debugging via dape/jdtls: vscode-java-test's bundle
-;;     jars in `my-jdtls-test-bundles-dir' (default ~/.emacs.d/jdtls-bundles/).
+;;     jars in `my-jdtls-test-bundles-dir` (default ~/.emacs.d/jdtls-bundles/).
 ;;     They aren't published to Maven Central -- they ship inside the
-;;     `vscjava.vscode-java-test' VS Code extension's `extension/server/'
+;;     `vscjava.vscode-java-test` VS Code extension's `extension/server/`
 ;;     folder. To (re)populate this directory:
+;;  ```
 ;;       curl -L -o /tmp/vscode-java-test.vsix \
 ;;         "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
 ;;       unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
 ;;       mkdir -p ~/.emacs.d/jdtls-bundles
 ;;       cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
+;;  ```
 ;;     Pick the current version from
 ;;     https://open-vsx.org/extension/vscjava/vscode-java-test.
 ;;   - pgformatter on PATH if you want the SQL formatting commands to work.
@@ -460,8 +466,8 @@ t;; These mostly global level changes make switching around easier between theme
 
 ;; Initial major mode is text for new buffers
 (setq-default major-mode 'text-mode)
-;; break paragraphs on after 80 characters.
-(setq-default fill-column 80)
+;; break paragraphs on after 100 characters.
+(setq-default fill-column 100)
 
 ;; turn off menu mode in text mode to save space
 (unless window-system
@@ -1091,6 +1097,9 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
               (delq (assq 'continuation fringe-indicator-alist)
                     fringe-indicator-alist))
   (column-number-mode))
+
+;; Add ansi color code support to all compilation buffers.
+(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'my-common-prog-mode-setup)
