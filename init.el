@@ -534,11 +534,27 @@ t;; These mostly global level changes make switching around easier between theme
 ;; Use short y or no prompts.
 (setopt use-short-answers t)
 
-;; Revert buffers when the underlying file has changed
+;; Revert most buffers when the underlying file has changed
 (setopt auto-revert-avoid-polling t)
 (my-ignore (setopt auto-revert-interval 5))
 (setopt auto-revert-check-vc-info t)
 (global-auto-revert-mode 1)
+
+;; Define a size threshold currently 50 megabytes in bytes) for autorevert
+;; larger files will be managed manually. These are typically logs which may
+;; be live and constantly reloading them is disruptive.
+(defcustom my-max-auto-revert-size (* 50 1024 1024)
+  "Maximum file size in bytes to allow auto-reverting."
+  :type 'integer
+  :group 'environment)
+
+;; Function to check if the file is small enough to be considered stale/revertible
+(defun my-skip-large-files-stale-p (buffer)
+  (let* ((filename (buffer-file-name buffer))
+	 (size (and filename (nth  7 (file-attributes filename)))))
+    (and size (> size my-max-auto-revert-size))))
+
+(setq-default global-auto-revert-ignore-buffer #'my-skip-large-files-stale-p)
 
 ;; Save history of minibuffer: future invocations will have recently-used
 ;; selections sorted first
@@ -968,7 +984,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 (defcustom my-org-root "~/org" "Root location for org files"
   :type 'string
-  :group 'local)
+  :group 'environment)
 
 ;; mouse support
 ;; This is fairly expensive so we defer it until org is actually loaded
@@ -1235,7 +1251,7 @@ effect without a restart."
   (expand-file-name "~/.m2/repository")
   "Path to the maven local reposistory"
   :type 'directory
-  :group 'my-environment)
+  :group 'environment)
 
 ;; Establish the initial jdtls settings derived from my-java-home.
 ;; This is the single source of truth for that derivation -- see
@@ -1718,6 +1734,20 @@ declaration if any such methods were found."
               (my-dape-run-gutter-mode
                (if (and eglot--managed-mode (derived-mode-p 'java-mode 'java-ts-mode))
                    1 -1)))))
+
+;; In process - a treesitter mechanism to find test annotations instead.
+(defun my-get-test-annotations ()
+  "Get all @Test marker_annotation nodes inside methods of a class."
+  (interactive)
+  (let* ((query (treesit-query-compile
+                 'java
+                 '((class_declaration
+                    body: (class_body
+                           (method_declaration
+                            (modifiers (marker_annotation name: (identifier) @annotation-name))
+                            (:equal "Test" @annotation-name)))))))
+         (nodes (treesit-query-capture (treesit-buffer-root-node) query)))
+    (mapcar #'cdr nodes)))
 
 ;;;; flymake
 

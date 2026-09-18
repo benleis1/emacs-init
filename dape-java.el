@@ -23,14 +23,19 @@
 ;;    `dape-java-test-bundles-dir' (default ~/.emacs.d/jdtls-bundles/).
 ;;    They aren't published to Maven Central -- they ship inside the
 ;;    `vscjava.vscode-java-test' VS Code extension's `extension/server/'
-;;    folder. To (re)populate this directory:
+;;    folder. `M-x dape-java-fetch-test-bundle' automates fetching and
+;;    unpacking them (see `dape-java-test-bundle-version' for which
+;;    version); equivalently, by hand:
 ;;      curl -L -o /tmp/vscode-java-test.vsix \
 ;;        "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
 ;;      unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
 ;;      mkdir -p ~/.emacs.d/jdtls-bundles
 ;;      cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
 ;;    Pick the current version from
-;;    https://open-vsx.org/extension/vscjava/vscode-java-test.
+;;    https://open-vsx.org/extension/vscjava/vscode-java-test -- this
+;;    is the only place still serving prebuilt versioned vsix files
+;;    for this extension (GitHub Releases stopped attaching them as
+;;    of 0.39.1, and they were never on Maven Central or a p2 site).
 
 ;; 2. The microsoft java debug plugin jar, expected at
 ;;    `dape-java-ms-debug-plugin' (default under
@@ -58,7 +63,9 @@
 
 ;; 3. `dape-java-diagnostics` is provided for troubleshooting if dape doesn't work.
 
-;; 4. `dape-java-get-test-bundle-vector` is meant for use in the jtdls bundle setup
+;; 4. `dape-java-get-test-bundle-vector` is meant for use in the jdtls bundle setup.
+;;    `dape-java-fetch-test-bundle` automates populating
+;;    `dape-java-test-bundles-dir` in the first place -- see Prerequisites above.
 
 ;; Example usage:
 ;; (add-to-list 'eglot-server-programs
@@ -111,7 +118,7 @@ plugin and the needed functions."
 			      (eglot-execute-command server dape-java--junit-search-command (vector uri)))))
 	    (with-current-buffer (get-buffer-create "*dape-diagnostics*")
 	      (erase-buffer)
-	      (insert (format "Bundle is loaded and debug functions are available in jtdls: %s\n" jdtls-support))
+	      (insert (format "Bundle is loaded and debug functions are available in jdtls: %s\n" jdtls-support))
 	      (insert (format "Current buffer is considered a test file: %s\n" test-file-p))
 	      (insert (format "project root: %s\n\n" (plist-get result :projectRoot)))
 	      (insert (format "classpaths (%d):\n" (length (plist-get result :classpaths))))
@@ -163,21 +170,27 @@ depth-first into a single list."
     (or (seq-find (lambda (it) (eql (dape-java-junit-item-testlevel it) 5)) items)
         (user-error "No JUnit test class found in %s" file-uri))))
 
-(defun dape-java--gradle-project-p (module-dir)
-  "Return non-nil if MODULE-DIR is a Gradle module -- i.e. it
-has its own `build.gradle' or `build.gradle.kts'."
-  (or (file-exists-p (expand-file-name "build.gradle" module-dir))
-      (file-exists-p (expand-file-name "build.gradle.kts" module-dir))))
+(defun dape-java--gradle-project-script (module-dir)
+  "Return the build file name either build.gradle or build.gradle.kts if
+MODULE-DIR is a Gradle module or nil if not"
+  (if (file-exists-p (expand-file-name "build.gradle" module-dir))
+      "build.gradle"
+    (if (file-exists-p (expand-file-name "build.gradle.kts" module-dir))
+	"build.gradle.kts"
+      nil)))
 
 (defvar dape-java--junit-gradle-classpath-cache (make-hash-table :test #'equal)
     "Cache of MODULE-DIR -> (BUILD-GRADLE-MTIME . CLASSPATH-VECTOR).
 See `dape-java--junit-gradle-classpath-cached'.")
 
 ;; The contents of the temporary gradle file to compute the classpath.
+;; `dependsOn' each sourceSet's own compile task so that running this
+;; task always rebuilds anything Gradle considers stale first.
 (defconst dape-java--gradle-file-contents
   "allprojects { proj ->
     proj.plugins.withType(org.gradle.api.plugins.JavaBasePlugin) {
         proj.tasks.register('myDapeClasspath') {
+            dependsOn proj.sourceSets.collect { ss -> ss.compileJavaTaskName }
             doLast {
                 def files = [] as LinkedHashSet
                 proj.sourceSets.each { ss -> files.addAll(ss.runtimeClasspath.files) }
@@ -195,9 +208,15 @@ See `dape-java--junit-gradle-classpath-cached'.")
 
 (defcustom dape-java-use-gradle-for-classpaths nil
   "If true then use gradle to resolve the classpath for tests rather
-than relying on jtdls which has issues with some more complex gradle
+than relying on jdtls which has issues with some more complex gradle
 projects."
   :type 'boolean
+  :group 'dape-java)
+
+(defcustom dape-java-junit-gradle-jvm-args "-Xmx2g"
+  "Extra JVM args for the Gradle daemon. Currently bumping the heap space
+to 2gig by default"
+  :type '(choice (const :tag "Use Gradle's own default" nil) string)
   :group 'dape-java)
 
 (defun dape-java--junit-gradle-classpath-file (module-dir)
@@ -217,9 +236,10 @@ Checked on every `dape-java--junit-fn' pass. A nil return means the
 hasn't finished -- the caller is expected to gate the launch behind
 that as a `compile' step rather than blocking here.
 
-Cached per MODULE-DIR, keyed on its `build.gradle' mtime -- clear
+Cached per MODULE-DIR, keyed on its build file  mtime -- clear
 `dape-java--junit-gradle-classpath-cache' to force a refresh."
-  (let* ((build-file (expand-file-name "build.gradle" module-dir))
+  (let* ((gradle-file (dape-java--gradle-project-script module-dir))
+	 (build-file (expand-file-name gradle-file module-dir))
          (mtime (file-attribute-modification-time (file-attributes build-file)))
          (cached (gethash module-dir dape-java--junit-gradle-classpath-cache)))
     (if (and cached (equal (car cached) mtime))
@@ -253,18 +273,23 @@ sourceSet's `runtimeClasspath' -- this covers the module's own
 compiled output/resources plus all resolved dependencies, including
 sibling modules pulled in via composite builds, which jdtls's own
 classpath resolution doesn't reliably surface for this project."
-  (let* ((gradlew-dir (or (locate-dominating-file module-dir "gradlew")
+  (let* ((module-dir (expand-file-name module-dir))
+         (gradlew-dir (or (locate-dominating-file module-dir "gradlew")
                            (user-error "No `gradlew' found above %s" module-dir)))
          (gradlew (expand-file-name "gradlew" gradlew-dir))
          (init-file (make-temp-file "dape-junit-classpath-" nil ".gradle"
                                      dape-java--gradle-file-contents))
          (out-file (dape-java--junit-gradle-classpath-file module-dir)))
-    (format "rm -f %s; cd %s && %s --console=plain --init-script %s -PdapeClasspathOut=%s myDapeClasspath; ec=$?; rm -f %s; exit $ec"
+    (format "rm -f %s; cd %s && %s --console=plain --init-script %s -PdapeClasspathOut=%s%s myDapeClasspath; ec=$?; rm -f %s; exit $ec"
             (shell-quote-argument out-file)
             (shell-quote-argument module-dir)
             (shell-quote-argument gradlew)
             (shell-quote-argument init-file)
             (shell-quote-argument out-file)
+            (if dape-java-junit-gradle-jvm-args
+                (concat " " (shell-quote-argument
+                             (format "-Dorg.gradle.jvmargs=%s" dape-java-junit-gradle-jvm-args)))
+              "")
             (shell-quote-argument init-file))))
 
 (defun dape-java--junit-launch-arguments (server item)
@@ -400,7 +425,7 @@ the connection closes."
   :group 'dape-java)
 
 (defvar dape-java--junit-listener nil
-  "Server process that listens for test ruslts.
+  "Server process that listens for test results.
 See `dape-java--junit-start-listener'.")
 
 (defun dape-java--junit-start-listener ()
@@ -426,12 +451,6 @@ decodes that stream into a running pass/fail summary in the REPL."
       (setf (nth (1+ pos) args) (number-to-string port)))
     args))
 
-(defcustom dape-java-local-m2-dir
-  (expand-file-name "~/.m2/repository")
-  "Path to the maven local reposistory"
-  :type 'directory
-  :group 'dape-java)
-
 (defun dape-java--junit-fn (config item-fn)
   "Shared `fn' for the `jdtls-junit' and `jdtls-junit-method' configs.
 ITEM-FN is called with SERVER and FILE-URI to resolve the codelens
@@ -444,17 +463,16 @@ early, without starting the JUnit listener or a jdtls debug session --
 success, and by then `dape-java--junit-gradle-classpath-cached' is
 warm, so this function falls through to the real launch below.
 
-Maven modules (per `dape-java--gradle-project-p') have no
-classpath-resolution path yet (see the top-of-file TODO) -- they
-skip the Gradle compile/merge step entirely and launch with just
-jdtls's own launch classpath, untried for now."
+Maven modules have no custom classpath-resolution path they skip the
+Gradle compile/merge step entirely and launch with just jdtls's own
+launch classpath."
   (with-current-buffer (find-file-noselect (dape-config-get config :filePath))
     (let* ((server (eglot-current-server))
            (file-uri (eglot-path-to-uri (buffer-file-name)))
            (item (funcall item-fn server file-uri))
            (launch (dape-java--junit-launch-arguments server item))
            (root (plist-get launch :workingDirectory))
-           (gradle-p (dape-java--gradle-project-p root))
+           (gradle-p (dape-java--gradle-project-script root))
            (gradle-classpath (and gradle-p (dape-java--junit-gradle-classpath-cached root))))
       ;; early exit if we need to run compile and generate a classpath - that
       ;; will pick setting up the config up when its done.
@@ -472,10 +490,7 @@ jdtls's own launch classpath, untried for now."
                         (plist-put :mainClass (plist-get launch :mainClass))
                         (plist-put :projectName (plist-get launch :projectName))
                         (plist-put :classPaths (vconcat gradle-classpath
-                                                        (plist-get launch :classpath)
-                                                        (vector (expand-file-name
-                                                                 "org/junit/platform/junit-platform-console-standalone/1.9.0/junit-platform-console-standalone-1.9.0.jar"
-                                                                 dape-java-local-m2-dir))))
+                                                        (plist-get launch :classpath)))
                         (plist-put :modulePaths (plist-get launch :modulepath))
                         (plist-put :cwd (plist-get launch :workingDirectory))
                         (plist-put :vmArgs (mapconcat #'identity
@@ -601,9 +616,58 @@ rather than trying to guess when the project is done importing."
   (expand-file-name "jdtls-bundles/" user-emacs-directory)
   "Directory holding the vscode-java-test OSGi bundle jars used by jdtls.
 See the Prerequisites section at the top of this file for how to
-populate it."
+populate it, or `dape-java-fetch-test-bundle' to do it automatically."
   :type 'directory
   :group 'dape-java)
+
+(defcustom dape-java-test-bundle-version "0.40.1"
+  "Version of the `vscjava.vscode-java-test' extension
+`dape-java-fetch-test-bundle' fetches.
+
+Check https://open-vsx.org/extension/vscjava/vscode-java-test for the
+current release and bump this to match. There's no Maven-Central-style
+version-alignment metadata tying this to a jdtls/`com.microsoft.java.debug.plugin'
+version -- if jdtls starts rejecting the bundle after an upgrade,
+that's the first thing to try changing."
+  :type 'string
+  :group 'dape-java)
+
+(defun dape-java-fetch-test-bundle (&optional version)
+  "Download and install the vscode-java-test OSGi bundle jars into
+`dape-java-test-bundles-dir', fetching VERSION (default
+`dape-java-test-bundle-version') from open-vsx.org.
+
+Automates the VSIX-unzip procedure in the Prerequisites section at
+the top of this file. open-vsx.org is, as of this writing, the only
+place still serving prebuilt versioned vsix files for this extension
+-- microsoft/vscode-java-test stopped attaching them to GitHub
+Releases as of 0.39.1, and the jars were never published to Maven
+Central or any p2 update site.).
+Requires `unzip' on PATH."
+  (interactive
+   (list (read-string "vscode-java-test version: " dape-java-test-bundle-version)))
+  (let* ((version (or version dape-java-test-bundle-version))
+         (url (format
+               "https://open-vsx.org/api/vscjava/vscode-java-test/%s/file/vscjava.vscode-java-test-%s.vsix"
+               version version))
+         (vsix-file (make-temp-file "dape-java-test-bundle-" nil ".vsix"))
+         (extract-dir (make-temp-file "dape-java-test-bundle-" t)))
+    (unwind-protect
+        (progn
+          (message "dape-java-fetch-test-bundle: downloading %s" url)
+          (url-copy-file url vsix-file t)
+          (unless (zerop (call-process "unzip" nil nil nil "-q" "-o" vsix-file "-d" extract-dir))
+            (user-error "dape-java-fetch-test-bundle: `unzip' failed on %s" vsix-file))
+          (make-directory dape-java-test-bundles-dir t)
+          (dolist (jar (directory-files
+                        (expand-file-name "extension/server" extract-dir)
+                        t "\\.jar\\'"))
+            (copy-file jar (expand-file-name (file-name-nondirectory jar)
+                                              dape-java-test-bundles-dir)
+                       t))
+          (message "dape-java-fetch-test-bundle: installed to %s" dape-java-test-bundles-dir))
+      (delete-file vsix-file)
+      (delete-directory extract-dir t))))
 
 (defun dape-java-get-test-bundle-vector ()
   "Return back the vector of debug jar names to supply to jdtls that will enable DAP"

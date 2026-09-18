@@ -37,7 +37,7 @@
 ;;; Code:
 
 ;; Set tab-line always on except for the exclude modes list
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode ))
+(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode ))
 
 ;; dape defines a handful of auxiliary major modes for its info/repl/memory
 ;; buffers (dape-repl-mode, dape-info-stack-mode, etc). Rather than hand
