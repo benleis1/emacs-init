@@ -206,7 +206,13 @@
 (defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
   "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font "Helvetica"
-    "Default variable-pitch font family.")
+  "Default variable-pitch font family.")
+
+;; Expand the default font height enough that emacs looks normal when opened.
+(set-face-attribute 'default nil :height 160)
+
+;; Tooltips are set to 1.3 for readability
+(set-face-attribute 'tooltip nil :height 1.3)
 
 (use-package mixed-pitch
   :ensure t
@@ -705,6 +711,7 @@
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
 (setq save-interprogram-paste-before-kill t)
+
 
 ;;; flyspell config
 ;; currently not bound to a key
@@ -1851,6 +1858,10 @@ declaration if any such methods were found."
 	;; rescan buffers as they change
 	imenu-auto-rescan t))
 
+;; ilist-plus :config below requires 'imenu-list synchronously, so imenu-list's
+;; elpaca install/build must be finished first, not just queued.
+(elpaca-wait)
+
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
@@ -1859,7 +1870,7 @@ declaration if any such methods were found."
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
-  :custom
+  :config
   (ilist-plus-mode))
 
 ;; Now that modeline.el (loaded above) has defined the richer dedicated-window
@@ -2322,16 +2333,6 @@ tag, followed by the normal editable field."
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
-
-;;;; temptemp tryout vertico-posframe - move to vertico section if kept.
-;; Its cute but not more "ergonomic"
-(my-ignore
-(use-package vertico-posframe
-  :ensure t
-  :init
-  (vertico-posframe-mode 1)
-  :custom
-  (vertico-posframe-width 100)))
 
 ;;; GC tuning
 ;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
