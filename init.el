@@ -522,6 +522,9 @@
 ;; wanting to go back to the previous config.
 (winner-mode 1)
 
+;; Typing over an active selection should replace it, like every other app.
+(delete-selection-mode 1)
+
 ;; Generally remove trailing white space except on markdown where trailing space is meaningful
 (defun my-before-save-hook ()
   (unless (equal major-mode 'markdown-mode)
@@ -1284,9 +1287,24 @@ effect without a restart."
 (add-hook 'java-mode-hook 'setup-common-java)
 (add-hook 'java-ts-mode-hook 'setup-common-java)
 
-; Setup automatic mode remapping so we always use treesitter for java
-(setq major-mode-remap-alist
-      '((java-mode . java-ts-mode)))
+;; The Java tree-sitter grammar isn't bundled with Emacs -- it has to be
+;; built once via `treesit-install-language-grammar'. Register the repo so a
+;; fresh checkout of this config fetches it automatically instead of
+;; requiring a manual step.
+(add-to-list 'treesit-language-source-alist
+             '(java "https://github.com/tree-sitter/tree-sitter-java"))
+
+(when (and (treesit-available-p)
+           (not (treesit-language-available-p 'java)))
+  (ignore-errors (treesit-install-language-grammar 'java)))
+
+; Setup automatic mode remapping so we always use treesitter for java, but
+; only once the grammar is actually available -- otherwise leave java-mode
+; in place rather than having every .java file fail to open (e.g. no git or
+; C compiler on PATH to build the grammar with).
+(when (treesit-language-available-p 'java)
+  (setq major-mode-remap-alist
+        '((java-mode . java-ts-mode))))
 
 ;;;; eglot
 
@@ -2297,6 +2315,11 @@ tag, followed by the normal editable field."
   ;; live preview when M-. is pressed rather than automatically since it easily
   ;; splits the window
   (setq consult-preview-key "M-.")
+
+  ;; Route xref (e.g. eglot's jump-to-definition/references in Java) through
+  ;; consult's UI instead of the default *xref* buffer.
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
 
   ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
   ;; completion-at-point, which otherwise falls back to the *Completions*
