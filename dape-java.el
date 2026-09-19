@@ -63,6 +63,10 @@
 
 ;; 3. `dape-java-diagnostics` is provided for troubleshooting if dape doesn't work.
 
+;; 3a. Running `jdtls-junit`/`jdtls-junit-method` pops up a
+;;     `*dape-junit-results*' window next to `*dape-repl*' that lists
+;;     each test with a pass/fail mark, live-updated as tests finish.
+
 ;; 4. `dape-java-get-test-bundle-vector` is meant for use in the jdtls bundle setup.
 ;;    `dape-java-fetch-test-bundle` automates populating
 ;;    `dape-java-test-bundles-dir` in the first place -- see Prerequisites above.
@@ -321,6 +325,185 @@ launch-ready."
       (match-string 1 payload)
     payload))
 
+(defun dape-java--junit-split-test-name (name)
+  "Split NAME (as produced by `dape-java--junit-test-name') into a
+\(CLASS . METHOD) pair for the results tree, using whichever
+delimiter the RemoteTestRunner payload actually used --
+\"method(Class)\" (classic JUnit4 wire format), \"Class#method\", or
+\"Class::method\" (JUnit5-style fully qualified method names). Falls
+back to a nil CLASS (grouped together under `?') if NAME matches none
+of those."
+  (cond
+   ((string-match "\\`\\(.*\\)(\\(.*\\))\\'" name)
+    (cons (match-string 2 name) (match-string 1 name)))
+   ((string-match "\\`\\(.*\\)#\\(.*\\)\\'" name)
+    (cons (match-string 1 name) (match-string 2 name)))
+   ((string-match "\\`\\(.*\\)::\\(.*\\)\\'" name)
+    (cons (match-string 1 name) (match-string 2 name)))
+   (t (cons nil name))))
+
+(defun dape-java--junit-simple-class-name (class)
+  "Strip CLASS's package prefix, for display in the results tree.
+Grouping itself still keys on the fully-qualified CLASS (see
+`dape-java--junit-results-redraw') so same-named classes in different
+packages don't collapse into one entry -- this is display-only."
+  (and class (car (last (split-string class "\\.")))))
+
+(defface dape-java-junit-pass-face
+  '((t :inherit success))
+  "Face for the mark next to a passing test in the JUnit results window.
+Inherits `success' so it tracks whatever green the active theme (e.g.
+modus-themes) assigns that semantic face."
+  :group 'dape-java)
+
+(defface dape-java-junit-fail-face
+  '((t :inherit error))
+  "Face for the mark next to a failing/erroring test in the JUnit
+results window. Inherits `error' so it tracks whatever red the active
+theme (e.g. modus-themes) assigns that semantic face."
+  :group 'dape-java)
+
+(defvar dape-java-junit-results-buffer-name "*dape-junit-results*"
+  "Name of the buffer `dape-java--junit-results-display' pops up next
+to `*dape-repl*', listing the current JUnit run's tests with a
+pass/fail mark (see `dape-java--junit-results-redraw').")
+
+(define-derived-mode dape-java-results-mode special-mode "JUnit-Results"
+  "Major mode for the read-only JUnit results window.")
+
+;; Add this to the tab line exclude list because this is being defined late.
+(push 'dape-java-results-mode tab-line-exclude-modes)
+
+tab-line-exclude-modes
+
+
+(defun dape-java--junit-results-buffer ()
+  "Return the (possibly newly created) JUnit results buffer."
+  (let ((buf (get-buffer-create dape-java-junit-results-buffer-name)))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'dape-java-results-mode)
+        (dape-java-results-mode)))
+    buf))
+
+(defcustom dape-java-junit-results-window-width 30
+  "Width, in columns, of the JUnit results window (see
+`dape-java--junit-results-display'). Matches the default width
+Emacs's side-window layout gives `dape.el''s own info windows
+\(breakpoints, threads, ...\), so the JUnit results window doesn't
+stand out as oddly narrow or wide next to them."
+  :type 'integer
+  :group 'dape-java)
+
+(defun dape-java--junit-results-display ()
+  "Show the JUnit results window immediately to the left of `*dape-repl*'.
+`dape.el''s own `dape--display-buffer' always places the repl at
+`(side . bottom) (slot . -1)' -- as a *side* window, not an ordinary
+one -- regardless of `dape-buffer-window-arrangement', so splitting
+off of its window with `display-buffer-in-direction' fights Emacs's
+restrictions on carving ordinary windows out of the side-window area
+and can misfire onto some unrelated window instead. Placing this
+buffer as a side window of its own, one slot further left (slot -2),
+lands it in the same bottom row, directly left of the repl, the way
+Emacs's side-window slots are documented to order (ascending left to
+right)."
+  (let ((buf (dape-java--junit-results-buffer)))
+    (unless (get-buffer-window buf 'visible)
+      (display-buffer
+       buf `(display-buffer-in-side-window
+             (side . bottom)
+             (slot . -2)
+             (window-height . 10)
+             (window-width . ,dape-java-junit-results-window-width)
+             (dedicated . t))))))
+
+(defun dape-java--kill-buffer-and-window (buffer-or-name)
+  "Kill BUFFER-OR-NAME and delete its window, if either exists.
+Kills the buffer first, mirroring `dape.el''s own `dape--kill-buffers' --
+killing a buffer in a dedicated side window often takes the window
+down with it already, so `delete-window' only runs if one's still
+left afterwards."
+  (when-let* ((buf (get-buffer buffer-or-name)))
+    (let ((win (get-buffer-window buf t)))
+      (kill-buffer buf)
+      (when (window-live-p win)
+        (delete-window win)))))
+
+(defun dape-java--junit-results-close ()
+  "Kill the JUnit results buffer and the leftover Gradle classpath
+`*compilation*' buffer (see `dape-java--junit-gradle-compile-command'),
+alongside `*dape-repl*'.
+Hooked buffer-locally onto the repl buffer's own `kill-buffer-hook'
+\(see the `dape-repl-mode-hook' addition below\), mirroring how
+`dape.el''s own `dape--kill-buffers' cleans up its other side-window
+buffers: `dape-quit' -- run by both the toolbar's quit button and `q'
+in the repl -- kills `*dape-repl*', which triggers this, so neither
+window lingers stranded after the session ends. The `*compilation*'
+buffer is a one-shot precondition for the launch (resolving the
+module's classpath), not something worth keeping open once the
+session it fed is gone."
+  (dape-java--kill-buffer-and-window dape-java-junit-results-buffer-name)
+  (dape-java--kill-buffer-and-window "*compilation*"))
+
+(with-eval-after-load 'dape
+  (add-hook 'dape-repl-mode-hook
+            (lambda ()
+              (add-hook 'kill-buffer-hook #'dape-java--junit-results-close nil t))))
+
+(defun dape-java--junit-results-redraw (proc)
+  "Redraw the JUnit results buffer from PROC's :junit-results (see
+`dape-java--junit-results-record') and its running pass/fail/error
+tally (see `dape-java--junit-report-test'). Starts with one summary
+line each for the passed/failed/error counts, omitting any that are
+still zero, then a tree: each test class on its own line, its
+non-skipped methods indented underneath, each preceded by a check
+mark (pass) or x mark (fail/error) in
+`dape-java-junit-pass-face'/`dape-java-junit-fail-face'. Skipped tests
+are omitted from the tree, only counted in the summary tally (which
+this function does not print -- see `dape-java--junit-report-summary'
+for the REPL's own skip count). Classes and, within a class, methods
+are listed in the order they finished running (see
+`dape-java--junit-split-test-name' for how CLASS is recovered from the
+wire protocol's fully-qualified test name)."
+  (with-current-buffer (dape-java--junit-results-buffer)
+    (let ((inhibit-read-only t)
+          classes)
+      (erase-buffer)
+      (let ((pass (or (process-get proc :junit-pass) 0))
+            (fail (or (process-get proc :junit-fail) 0))
+            (err (or (process-get proc :junit-error) 0)))
+        (unless (zerop pass) (insert (format "%d passed\n" pass)))
+        (unless (zerop fail) (insert (format "%d failed\n" fail)))
+        (unless (zerop err) (insert (format "%d errors\n" err))))
+      (insert "\n")
+      (dolist (entry (reverse (process-get proc :junit-results)))
+        (let ((status (cdr entry)))
+          (unless (eq status 'skip)
+            (pcase-let ((`(,class . ,method) (dape-java--junit-split-test-name (car entry))))
+              (let ((cell (assoc class classes)))
+                (if cell
+                    (setcdr cell (cons (cons method status) (cdr cell)))
+                  (push (cons class (list (cons method status))) classes)))))))
+      (dolist (c (nreverse classes))
+        (insert (or (dape-java--junit-simple-class-name (car c)) "?") "\n")
+        (dolist (m (nreverse (cdr c)))
+          (insert "  ")
+          (insert (propertize (if (memq (cdr m) '(fail error)) "✘" "✔")
+                               'face (if (memq (cdr m) '(fail error))
+                                         'dape-java-junit-fail-face
+                                       'dape-java-junit-pass-face)))
+          (insert " " (car m) "\n")))
+      (goto-char (point-min)))))
+
+(defun dape-java--junit-results-record (proc)
+  "Append PROC's just-finished test -- name/status already set by
+`dape-java--junit-report-test' -- to :junit-results, and redraw the
+JUnit results window."
+  (process-put proc :junit-results
+                (cons (cons (process-get proc :junit-cur)
+                            (process-get proc :junit-status))
+                      (process-get proc :junit-results)))
+  (dape-java--junit-results-redraw proc))
+
 (defun dape-java--junit-report-test (proc)
   "Print PROC's just-finished test (name/status/trace) to the REPL."
   (let ((name (or (process-get proc :junit-cur) "?"))
@@ -368,6 +551,9 @@ payload, with stack traces/diffs sent as raw lines wrapped between a
        ((equal id "TESTC")
         (process-put proc :junit-pass 0) (process-put proc :junit-fail 0)
         (process-put proc :junit-error 0) (process-put proc :junit-skip 0)
+        (process-put proc :junit-results nil)
+        (dape-java--junit-results-display)
+        (dape-java--junit-results-redraw proc)
         (dape--repl-insert (format "\n--- JUnit run: %s test(s) ---\n" (car (split-string payload)))))
        ((equal id "TESTS")
         (process-put proc :junit-cur (dape-java--junit-test-name payload))
@@ -376,7 +562,9 @@ payload, with stack traces/diffs sent as raw lines wrapped between a
        ((equal id "FAILED") (process-put proc :junit-status 'fail))
        ((equal id "ERROR") (process-put proc :junit-status 'error))
        ((equal id "TESTI") (process-put proc :junit-status 'skip))
-       ((equal id "TESTE") (dape-java--junit-report-test proc))
+       ((equal id "TESTE")
+        (dape-java--junit-report-test proc)
+        (dape-java--junit-results-record proc))
        ((equal id "RUNTIME") (dape-java--junit-report-summary proc payload))
        ((equal id "TESTSTP") (dape--repl-insert-error "--- JUnit run stopped ---\n")))))))
 
@@ -531,6 +719,32 @@ declaration line at or before point."
     (or (car (last (seq-sort-by #'dape-java-junit-item-line #'< candidates)))
         (user-error "No JUnit test method at point in %s" file-uri))))
 
+(defvar dape-java--last-junit-filepath nil
+  "Absolute path of the last source file resolved for a `jdtls-junit'/
+`jdtls-junit-method' launch (see `dape-java--junit-resolve-filepath').
+`dape-restart', once the JVM from a previous run has already exited
+\(so there's no live connection or adapter-side restart support left\),
+falls back to re-evaluating the *raw* `dape-configs' template from
+`dape-history' from scratch -- in whatever buffer happens to be
+current when the toolbar's restart button is clicked, i.e. `*dape-repl*',
+which has no file of its own. Remembering the last resolved path here
+lets that re-evaluation still find the right file instead of erroring
+out of `dape-buffer-default'.")
+
+(defun dape-java--junit-resolve-filepath ()
+  "Resolve `:filePath' for the `jdtls-junit'/`jdtls-junit-method' configs.
+When the current buffer has a file (the normal case: invoked from the
+Java source buffer via the margin arrow or `M-x dape'), resolves and
+remembers it in `dape-java--last-junit-filepath'. Otherwise -- e.g.
+re-evaluated from `*dape-repl*' on restart, see that variable -- falls
+back to whatever was last remembered, so restarting still reruns the
+same test."
+  (if (buffer-file-name)
+      (setq dape-java--last-junit-filepath
+            (expand-file-name (dape-buffer-default) (dape-cwd)))
+    (or dape-java--last-junit-filepath
+        (user-error "No buffer file name, and no previous JUnit run to fall back to"))))
+
 (with-eval-after-load 'dape
   ;; dape config for all tests in the file
   (add-to-list
@@ -538,7 +752,7 @@ declaration line at or before point."
    `(jdtls-junit
      modes (java-mode java-ts-mode)
      ensure dape-java--junit-ensure
-     :filePath ,(lambda () (expand-file-name (dape-buffer-default) (dape-cwd)))
+     :filePath dape-java--junit-resolve-filepath
      fn (lambda (config) (dape-java--junit-fn config #'dape-java--find-tests))
      :stopOnEntry nil
      :type "java"
@@ -552,7 +766,7 @@ declaration line at or before point."
    `(jdtls-junit-method
      modes (java-mode java-ts-mode)
      ensure dape-java--junit-ensure
-     :filePath ,(lambda () (expand-file-name (dape-buffer-default) (dape-cwd)))
+     :filePath dape-java--junit-resolve-filepath
      fn (lambda (config) (dape-java--junit-fn config #'dape-java--junit-method-item-at-point))
      :stopOnEntry nil
      :type "java"

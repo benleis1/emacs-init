@@ -30,4 +30,5 @@ jobs:
             -l ert \
             -l init.el \
             -l tests.el \
+            -l dape-java-tests.el \
             -f ert-run-tests-batch-and-exit

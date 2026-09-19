@@ -51,7 +51,6 @@
       (push mode tab-line-exclude-modes)))
   (tab-line-force-update t))
 
-
 (global-tab-line-mode t)
 
 ;; Always suppress the tab line separator in both windows and term mode

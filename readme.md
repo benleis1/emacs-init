@@ -140,6 +140,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [my-before-save-hook](#my-before-save-hook)
+  - [my-skip-large-files-stale-p](#my-skip-large-files-stale-p)
 - [backup and autosave.](#backup-and-autosave)
 - [Dired](#dired)
 - [modeline](#modeline)
@@ -183,6 +184,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
     - [my-jdtls-cache-dir](#my-jdtls-cache-dir)
     - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
   - [DAPE debugging](#dape-debugging)
+    - [my-get-test-annotations](#my-get-test-annotations)
   - [flymake](#flymake)
     - [flymake-buffer-quit](#flymake-buffer-quit)
   - [python](#python)
@@ -300,18 +302,6 @@ just add homebrew onto the path as needed
 
 # Customizations
 
-
-Color name redirection for use with custom faces
-requires manual editing of custom-set-faces or modus definitions
-to  use i.e with the  ` back tick operator.
-
-
-```
-(defvar margin-tan-bg "#EEE8D5")
-(defvar margin-gray-bg "gray20")
-(defvar margin-light-gray-bg "gray95")
-```
-
 # Font setup
 This needs to be done prior to theme setup.
 
@@ -342,6 +332,18 @@ Mixed-pitch mode. I use this in markdown and org modes currently.
 
 # modus theme configuration.
 
+
+Color name redirection for use with custom faces
+requires manual editing of custom-set-faces or modus definitions
+to  use i.e with the  ` back tick operator.
+
+
+```
+(defvar margin-tan-bg "#EEE8D5")
+(defvar margin-gray-bg "gray20")
+(defvar margin-light-gray-bg "gray95")
+```
+
 Disable the theme safety check.
 ```
 (setq custom-safe-themes t)
@@ -352,16 +354,17 @@ Disable all previously loaded themes before loading another one.
 (advice-add 'load-theme :before
             (lambda (&rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)))
-
-t;; These mostly global level changes make switching around easier between themes
 ```
+
+These mostly global level changes make switching around easier between themes
 They preserve the tabbing styling I use and mute the colors a bit.
 The consequence of moving over to modus is the need to not generally customize faces in
 custom.el.
 
-Override all modus themes to use the background color from tab-line
-This keeps visual parity with what I currently use
-Make headers all the same color as foreground
+Specifically:
+* Override all modus themes to use the background color from tab-line
+* This keeps visual parity with what I currently use
+* Make headers all the same color as foreground
 
 ```
 (setq modus-themes-common-palette-overrides
@@ -697,12 +700,33 @@ Use short y or no prompts.
 (setopt use-short-answers t)
 ```
 
-Revert buffers when the underlying file has changed
+Revert most buffers when the underlying file has changed
 ```
 (setopt auto-revert-avoid-polling t)
 (my-ignore (setopt auto-revert-interval 5))
 (setopt auto-revert-check-vc-info t)
 (global-auto-revert-mode 1)
+```
+
+Define a size threshold currently 50 megabytes in bytes) for autorevert
+larger files will be managed manually. These are typically logs which may
+be live and constantly reloading them is disruptive.
+```
+(defcustom my-max-auto-revert-size (* 50 1024 1024)
+  "Maximum file size in bytes to allow auto-reverting."
+  :type 'integer
+  :group 'environment)
+```
+
+## my-skip-large-files-stale-p
+Function to check if the file is small enough to be considered stale/revertible
+```
+(defun my-skip-large-files-stale-p (buffer)
+  (let* ((filename (buffer-file-name buffer))
+	 (size (and filename (nth  7 (file-attributes filename)))))
+    (and size (> size my-max-auto-revert-size))))
+
+(setq-default global-auto-revert-ignore-buffer #'my-skip-large-files-stale-p)
 ```
 
 Save history of minibuffer: future invocations will have recently-used
@@ -896,6 +920,13 @@ for terminal mode cut to system clipboard
 
 (unless window-system
   (setq interprogram-cut-function 'paste-for-osx))
+```
+
+
+Don't lose a paste from outside emacs because you killed a line
+in preparation before pasting.
+```
+(setq save-interprogram-paste-before-kill t)
 ```
 
 # flyspell config
@@ -1274,7 +1305,7 @@ Define an org root directory
 ```
 (defcustom my-org-root "~/org" "Root location for org files"
   :type 'string
-  :group 'local)
+  :group 'environment)
 ```
 
 mouse support
@@ -1436,6 +1467,11 @@ thing and are much easier to see.
               (delq (assq 'continuation fringe-indicator-alist)
                     fringe-indicator-alist))
   (column-number-mode))
+```
+
+Add ansi color code support to all compilation buffers.
+```
+(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 ```
 
 Set display line number mode on
@@ -1607,7 +1643,7 @@ effect without a restart."
   (expand-file-name "~/.m2/repository")
   "Path to the maven local reposistory"
   :type 'directory
-  :group 'my-environment)
+  :group 'environment)
 ```
 
 Establish the initial jdtls settings derived from my-java-home.
@@ -2051,7 +2087,18 @@ dape config to run, so the one binding can dispatch either arrow.
         ;; explicitly excludes those, so `overlays-in' is required here.
         (if-let* ((config (seq-some (lambda (ov) (overlay-get ov 'my-dape-gutter-config))
                                      (overlays-in pos pos))))
-            (dape (dape--config-eval config nil))
+            (progn
+              ;; `dape-restart' falls back to replaying `(car dape-history)'
+              ;; once a run's one-shot JVM has already exited -- but that
+              ;; history is only ever populated by `dape''s own interactive
+              ;; minibuffer read, never by this direct, non-interactive
+              ;; call. Without pushing here, restart would keep replaying
+              ;; whichever config was last run *interactively* (possibly
+              ;; stale, and possibly the wrong kind -- e.g. a single test
+              ;; method's config when the whole-class arrow was just
+              ;; clicked) instead of the one actually just started.
+              (push (symbol-name config) dape-history)
+              (dape (dape--config-eval config nil)))
           (user-error "No runnable dape config at point")))))
 
   (defun my-dape--gutter-ensure-margin ()
@@ -2168,6 +2215,25 @@ declaration if any such methods were found."
               (my-dape-run-gutter-mode
                (if (and eglot--managed-mode (derived-mode-p 'java-mode 'java-ts-mode))
                    1 -1)))))
+```
+
+### my-get-test-annotations
+>Get all @Test marker_annotation nodes inside methods of a class.
+
+In process - a treesitter mechanism to find test annotations instead.
+```
+(defun my-get-test-annotations ()
+  "Get all @Test marker_annotation nodes inside methods of a class."
+  (interactive)
+  (let* ((query (treesit-query-compile
+                 'java
+                 '((class_declaration
+                    body: (class_body
+                           (method_declaration
+                            (modifiers (marker_annotation name: (identifier) @annotation-name))
+                            (:equal "Test" @annotation-name)))))))
+         (nodes (treesit-query-capture (treesit-buffer-root-node) query)))
+    (mapcar #'cdr nodes)))
 ```
 
 ## flymake

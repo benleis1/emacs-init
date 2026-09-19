@@ -199,16 +199,6 @@
 
 ;;; Customizations
 
-;;
-;; Color name redirection for use with custom faces
-;; requires manual editing of custom-set-faces or modus definitions
-;; to  use i.e with the  ` back tick operator.
-;;
-
-(defvar margin-tan-bg "#EEE8D5")
-(defvar margin-gray-bg "gray20")
-(defvar margin-light-gray-bg "gray95")
-
 ;;; Font setup
 ;; This needs to be done prior to theme setup.
 
@@ -237,6 +227,16 @@
 
 ;;; modus theme configuration.
 
+;;
+;; Color name redirection for use with custom faces
+;; requires manual editing of custom-set-faces or modus definitions
+;; to  use i.e with the  ` back tick operator.
+;;
+
+(defvar margin-tan-bg "#EEE8D5")
+(defvar margin-gray-bg "gray20")
+(defvar margin-light-gray-bg "gray95")
+
 ;; Disable the theme safety check.
 (setq custom-safe-themes t)
 
@@ -245,14 +245,15 @@
             (lambda (&rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)))
 
-t;; These mostly global level changes make switching around easier between themes
+;; These mostly global level changes make switching around easier between themes
 ;; They preserve the tabbing styling I use and mute the colors a bit.
 ;; The consequence of moving over to modus is the need to not generally customize faces in
 ;; custom.el.
 
-;; Override all modus themes to use the background color from tab-line
-;; This keeps visual parity with what I currently use
-;; Make headers all the same color as foreground
+;; Specifically:
+;; * Override all modus themes to use the background color from tab-line
+;; * This keeps visual parity with what I currently use
+;; * Make headers all the same color as foreground
 
 (setq modus-themes-common-palette-overrides
       `((bg-margins ,margin-tan-bg)  ;; common setup for a color alias to override.
@@ -699,6 +700,11 @@ t;; These mostly global level changes make switching around easier between theme
 
 (unless window-system
   (setq interprogram-cut-function 'paste-for-osx))
+
+
+;; Don't lose a paste from outside emacs because you killed a line
+;; in preparation before pasting.
+(setq save-interprogram-paste-before-kill t)
 
 ;;; flyspell config
 ;; currently not bound to a key
@@ -1617,7 +1623,18 @@ each project gets its own persistent jdtls workspace."
         ;; explicitly excludes those, so `overlays-in' is required here.
         (if-let* ((config (seq-some (lambda (ov) (overlay-get ov 'my-dape-gutter-config))
                                      (overlays-in pos pos))))
-            (dape (dape--config-eval config nil))
+            (progn
+              ;; `dape-restart' falls back to replaying `(car dape-history)'
+              ;; once a run's one-shot JVM has already exited -- but that
+              ;; history is only ever populated by `dape''s own interactive
+              ;; minibuffer read, never by this direct, non-interactive
+              ;; call. Without pushing here, restart would keep replaying
+              ;; whichever config was last run *interactively* (possibly
+              ;; stale, and possibly the wrong kind -- e.g. a single test
+              ;; method's config when the whole-class arrow was just
+              ;; clicked) instead of the one actually just started.
+              (push (symbol-name config) dape-history)
+              (dape (dape--config-eval config nil)))
           (user-error "No runnable dape config at point")))))
 
   (defun my-dape--gutter-ensure-margin ()
