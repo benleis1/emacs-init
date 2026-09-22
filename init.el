@@ -100,19 +100,7 @@
 ;;   - A Java installation reachable via `my-java-home` (defaults to a jenv
 ;;     path) plus jdtls on PATH if you want eglot's Java support.
 ;;   - For JUnit test debugging via dape/jdtls: vscode-java-test's bundle
-;;     jars in `my-jdtls-test-bundles-dir` (default ~/.emacs.d/jdtls-bundles/).
-;;     They aren't published to Maven Central -- they ship inside the
-;;     `vscjava.vscode-java-test` VS Code extension's `extension/server/`
-;;     folder. To (re)populate this directory:
-;;  ```
-;;       curl -L -o /tmp/vscode-java-test.vsix \
-;;         "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
-;;       unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
-;;       mkdir -p ~/.emacs.d/jdtls-bundles
-;;       cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
-;;  ```
-;;     Pick the current version from
-;;     https://open-vsx.org/extension/vscjava/vscode-java-test.
+;;     jars. Use `dape-java-fetch-test-bundle` to set this up.
 ;;   - pgformatter on PATH if you want the SQL formatting commands to work.
 ;;
 ;; ## Major areas configured
@@ -597,8 +585,9 @@
 ;; the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 
-;; Switch focus to help windows when they come up
+;; Switch focus to help windows when they come up and kill rather thn bury them when you quit
 (setq help-window-select t)
+(setq quit-window-kill-buffer t)
 
 ;;; backup and autosave.
 ;; put old version in .saves under .emacs.d and disable autosaves.
@@ -710,11 +699,9 @@
 (unless window-system
   (setq interprogram-cut-function 'paste-for-osx))
 
-
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
 (setq save-interprogram-paste-before-kill t)
-
 
 ;;; flyspell config
 ;; currently not bound to a key
@@ -1263,12 +1250,6 @@ effect without a restart."
   :set #'my-java-home-set
   :group 'my-environment)
 
-(defcustom my-local-m2-dir
-  (expand-file-name "~/.m2/repository")
-  "Path to the maven local reposistory"
-  :type 'directory
-  :group 'environment)
-
 ;; Establish the initial jdtls settings derived from my-java-home.
 ;; This is the single source of truth for that derivation -- see
 ;; `my-java-home-set', which also reruns it on later customization.
@@ -1287,24 +1268,20 @@ effect without a restart."
 (add-hook 'java-mode-hook 'setup-common-java)
 (add-hook 'java-ts-mode-hook 'setup-common-java)
 
-;; The Java tree-sitter grammar isn't bundled with Emacs -- it has to be
+;; The Java tree-sitter grammar isn't bundled with Emacs. It has to be
 ;; built once via `treesit-install-language-grammar'. Register the repo so a
 ;; fresh checkout of this config fetches it automatically instead of
 ;; requiring a manual step.
-(add-to-list 'treesit-language-source-alist
-             '(java "https://github.com/tree-sitter/tree-sitter-java"))
+(with-eval-after-load 'treesit
+  (add-to-list 'treesit-language-source-alist
+               '(java "https://github.com/tree-sitter/tree-sitter-java"))
 
-(when (and (treesit-available-p)
-           (not (treesit-language-available-p 'java)))
-  (ignore-errors (treesit-install-language-grammar 'java)))
+  (when (and (treesit-available-p)
+             (not (treesit-language-available-p 'java)))
+    (ignore-errorse (treesit-install-language-grammar 'java))))
 
-; Setup automatic mode remapping so we always use treesitter for java, but
-; only once the grammar is actually available -- otherwise leave java-mode
-; in place rather than having every .java file fail to open (e.g. no git or
-; C compiler on PATH to build the grammar with).
-(when (treesit-language-available-p 'java)
-  (setq major-mode-remap-alist
-        '((java-mode . java-ts-mode))))
+(setq major-mode-remap-alist
+      '((java-mode . java-ts-mode)))
 
 ;;;; eglot
 
@@ -1883,7 +1860,7 @@ declaration if any such methods were found."
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
-;;  :load-path "~/dev/ilist-plus/"
+  ;;  :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
@@ -1950,8 +1927,7 @@ declaration if any such methods were found."
   (setq excorporate-update-org t)
   ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
   ;; setq excorporate-org-buffer-name "~/org/daily-meetings.org"
-  (setq	excorporate-org-persist-buffer t)
-  )
+  (setq	excorporate-org-persist-buffer t))
 
 ;; Track whether we've turned excorporate on or not
 (setq my-calendar-init nil)
@@ -2352,7 +2328,7 @@ tag, followed by the normal editable field."
       ;; show more completion candidates at once.
       ("<tab>" . completion-preview-complete))
     :config
-    (setq completion-preview-minimum-symbol-length 3)
+    (setq completion-preview-minimum-symbol-length 4)
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
