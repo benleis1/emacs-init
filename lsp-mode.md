@@ -201,6 +201,58 @@ Also worth noting, is at one point with lsp-mode I had setup the java mode hooks
 # Faces
 Finally with eglot faces turned off via the :semanticTokensProvider switch I went back to the treesitter formatting configuration. I have an already fairly minimalist set of colors that I use. For most code elements I prefer to just use my default text color. I really only want to see a few things like local variables, strings and function names strongly signaled in a different format.
 
+# xref for external jars
+After using things for a while I realized that xref worked fine for the local sources but was failing to pull up the source files for other jars included in the project.  Interestingly the eldoc support worked fine in this case.   It turns out after a bit of research that you need to plumb in support for embedded jars that come in a jdt URI format.
+
+```
+(defvar my-jdt-uri-cache-dir
+  (locate-user-emacs-file "jdtls-decompiled")
+  "Cache directory for source decompiled by jdtls from jar files.")
+
+(defun my-jdt-uri-handler (operation &rest args)
+  "Handle file operations on jdtls's `jdt://' URIs.
+
+jdtls returns these for definitions/references that resolve into a
+class inside a jar (library code, JDK classes) rather than a project
+source file. There's no file on disk at that URI, so translate it
+into a locally cached decompiled source file fetched from the server
+via the `java/classFileContents' request, the first time it's seen."
+  (let* ((uri (car args))
+         (_ (unless (string-match
+                     "\\`jdt://contents/\\([^/]+\\)/\\(.+\\)\\.\\([^.]+\\)\\?" uri)
+              (error "Unrecognized jdt:// URI: %s" uri)))
+         (jar (match-string 1 uri))
+         ;; jdtls encodes the fully-qualified class name with `/' as the
+         ;; package separator; use it verbatim so the class name is real
+         ;; and readable instead of an opaque hash.
+         (class-name (match-string 2 uri))
+         (ext (match-string 3 uri))
+         (cache-file (expand-file-name
+                      (concat class-name "." (if (string= ext "class") "java" ext))
+                      (expand-file-name jar my-jdt-uri-cache-dir))))
+    (unless (file-readable-p cache-file)
+      (let* ((server (eglot-current-server))
+             (content (and server
+                           (jsonrpc-request server :java/classFileContents
+                                             (list :uri uri)))))
+        (unless content
+          (error "jdtls: no class file contents for %s" uri))
+        (make-directory (file-name-directory cache-file) t)
+        (with-temp-file cache-file (insert content))))
+    (if (memq operation '(expand-file-name file-truename file-local-name))
+        cache-file
+      (let ((inhibit-file-name-handlers
+             (cons 'my-jdt-uri-handler
+                   (and (eq inhibit-file-name-operation operation)
+                        inhibit-file-name-handlers)))
+            (inhibit-file-name-operation operation))
+        (apply operation args)))))
+
+(add-to-list 'file-name-handler-alist '("\\`jdt://" . my-jdt-uri-handler))
+
+```
+
+
 # DAPE  (run/debug)
 
 The last missing piece was support for running and debugging unit tests. This was never functional
