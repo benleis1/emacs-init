@@ -118,6 +118,12 @@ plugin and the needed functions."
 		 (test-file-p (eglot-execute-command server "java.project.isTestFile" (vector uri)))
 		 (result (eglot-execute-command server "java.project.getClasspaths"
 						 (vector uri (json-serialize '(:scope "test")))))
+		 (jdk-settings (eglot-execute-command
+				server "java.project.getSettings"
+				(vector uri (vector "org.eclipse.jdt.ls.core.vm.location"
+						    "org.eclipse.jdt.core.compiler.compliance"
+						    "org.eclipse.jdt.core.compiler.source"
+						    "org.eclipse.jdt.core.compiler.codegen.targetPlatform"))))
 		 (test-items (dape-java--junit-flatten-items
 			      (eglot-execute-command server dape-java--junit-search-command (vector uri)))))
 	    (with-current-buffer (get-buffer-create "*dape-diagnostics*")
@@ -125,7 +131,12 @@ plugin and the needed functions."
 	      (insert (format "Bundle is loaded and debug functions are available in jdtls: %s\n" jdtls-support))
 	      (insert (format "Current buffer is considered a test file: %s\n" test-file-p))
 	      (insert (format "project root: %s\n\n" (plist-get result :projectRoot)))
-	      (insert (format "classpaths (%d):\n" (length (plist-get result :classpaths))))
+	      (insert "jdk settings:\n")
+	      (let ((rest jdk-settings))
+		(while rest
+		  (insert (format "  %s: %s\n" (substring (symbol-name (car rest)) 1) (cadr rest)))
+		  (setq rest (cddr rest))))
+	      (insert (format "\nclasspaths (%d):\n" (length (plist-get result :classpaths))))
 	      (seq-each (lambda (e) (insert "  " e "\n")) (plist-get result :classpaths))
 	      (insert (format "\nmodulepaths (%d):\n" (length (plist-get result :modulepaths))))
 	      (seq-each (lambda (e) (insert "  " e "\n")) (plist-get result :modulepaths))
