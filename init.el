@@ -1000,8 +1000,6 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
 
 ;;; Appt setup
-;; For now its easiest to import calendars via the diary
-;; once excorporate is working revisit.
 
 ;; Set warning time in minutes before the event
 (setq appt-message-warning-time 10)
@@ -1019,8 +1017,18 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; Sort diary everything by time in fancy-diary. Mostly superseded by org-agenda
 (add-hook 'diary-list-entries-hook #'diary-sort-entries t)
 
-;; Hook into diary/calendar
-(add-hook 'diary-hook 'appt-make-list)
+;; Populate `appt-time-msg-list' from Org's own SCHEDULED/DEADLINE
+;; timestamps in `org-agenda-files', refreshed whenever the agenda
+;; rebuilds and hourly besides, so it stays current even if the agenda is
+;; never opened. `org-agenda' is otherwise deferred until first use, so
+;; do the first population (and the `org-agenda' load it triggers) on
+;; Emacs's first idle moment instead of blocking startup.
+(run-with-idle-timer
+ 1 nil
+ (lambda ()
+   (add-hook 'org-agenda-finalize-hook (lambda () (org-agenda-to-appt t)))
+   (org-agenda-to-appt t)
+   (run-with-timer 3600 3600 (lambda () (org-agenda-to-appt t)))))
 
 ;; Replace the default "App't in N min." mode-line text with an alarm-clock glyph and a bare
 ;; countdown; the full title(s) go on the help-echo tooltip The glyph's color is interpolated across
@@ -1210,6 +1218,17 @@ Takes an optional, ignored argument so it tolerates being called as
   :type 'string
   :group 'environment)
 
+;; How `my-meetings-file' actually gets populated is set up in local.el.
+;; once excorporate is settled again it will be done there.
+(defconst my-meetings-file (file-name-concat my-org-root "meetings.org")
+  "Org file holding external meetings from outlook in my case.
+Part of `org-agenda-files' so meetings show up in the agenda, the
+org-timegrid strip/week view, and via `org-agenda-to-appt' in the
+mode-line appointment countdown.")
+
+(with-eval-after-load 'org
+  (add-to-list 'org-agenda-files my-meetings-file))
+
 ;; mouse support
 ;; This is fairly expensive so we defer it until org is actually loaded
 ;; rather than paying the cost on every startup.
@@ -1235,7 +1254,8 @@ Takes an optional, ignored argument so it tolerates being called as
   (tags  . " %i %-12:c")
   (search . " %i %-12:c")))
 
-(setq org-agenda-include-diary t)
+;; Meetings live in Org now (`my-meetings-file'), not the diary.
+(setq org-agenda-include-diary nil)
 
 ;; `org-agenda-add-time-grid-maybe' only applies the `org-agenda-current-time'
 ;; face from character 2 onward, leaving the leading prefix (a space and the
@@ -1317,6 +1337,20 @@ Takes an optional, ignored argument so it tolerates being called as
   :config
   :hook (org-mode . org-pretty-table-mode)
 )
+
+;; SVG calendar view
+(use-package org-timegrid
+  :ensure (:host github :repo "Gleek/org-timegrid")
+  :commands (org-timegrid-week)
+  ;; Add the daily strip at the top of agendas.
+  :init
+  (org-timegrid-agenda-mode 1)
+  (with-eval-after-load 'org-timegrid-agenda
+    ;; The strip otherwise mirrors `org-starting-day', which for our default
+    ;; Monday-anchored weekly agenda span is the preceding Monday, not
+    ;; today -- keep the strip itself always on today regardless of span.
+    (advice-add 'org-timegrid-agenda--display-day :override
+                (lambda () (calendar-absolute-from-gregorian (calendar-current-date))))))
 
 ;;; Programming modes
 
