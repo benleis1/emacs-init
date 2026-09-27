@@ -256,8 +256,14 @@
         (bg-tab-other bg-margins)
 	(bg-line-number-inactive bg-margins)
 
-	;; custom hl face for imenu-list
-	(fg-hl-imenu  "DarkOrange2")
+	;; A highlight emphasis color
+	(fg-hl-emphasis  "DarkOrange2")
+
+	;; Wire it to the imenu highlight
+	(fg-hl-imenu  fg-hl-emphasis)
+
+	;; Use it also for current date
+	(date-now fg-hl-emphasis)
 
 	;; Tone down the headings: use the default foreground instead
         ;; of the theme's per-level accent colors.
@@ -1231,6 +1237,20 @@ Takes an optional, ignored argument so it tolerates being called as
 
 (setq org-agenda-include-diary t)
 
+;; `org-agenda-add-time-grid-maybe' only applies the `org-agenda-current-time'
+;; face from character 2 onward, leaving the leading prefix (a space and the
+;; first digit of the padded time, from our " %-12t " prefix format)
+;; unfaced. Extend the face to cover the whole line.
+(defun my-org-agenda-extend-current-time-face (list)
+  (dolist (item list list)
+    (when (and (stringp item)
+               (> (length item) 2)
+               (eq (get-text-property 2 'face item) 'org-agenda-current-time))
+      (put-text-property 0 2 'face 'org-agenda-current-time item))))
+
+(advice-add 'org-agenda-add-time-grid-maybe :filter-return
+            #'my-org-agenda-extend-current-time-face)
+
 ;; replace the default "?" binding with describe-mode to show the full keymap
 (with-eval-after-load 'org-agenda
   (define-key org-agenda-mode-map "?" #'describe-mode))
@@ -1661,6 +1681,51 @@ anything as useful as the `report' messages in between."
                                               (my-jsonrpc-log-text message))))
                     (apply orig connection origin plist))))))
 
+(defvar my-jdt-uri-cache-dir
+  (locate-user-emacs-file "jdtls-decompiled")
+  "Cache directory for source decompiled by jdtls from jar files.")
+
+(defun my-jdt-uri-handler (operation &rest args)
+  "Handle file operations on jdtls's `jdt://' URIs.
+
+jdtls returns these for definitions/references that resolve into a
+class inside a jar (library code, JDK classes) rather than a project
+source file. There's no file on disk at that URI, so translate it
+into a locally cached decompiled source file fetched from the server
+via the `java/classFileContents' request, the first time it's seen."
+  (let* ((uri (car args))
+         (_ (unless (string-match
+                     "\\`jdt://contents/\\([^/]+\\)/\\(.+\\)\\.\\([^.]+\\)\\?" uri)
+              (error "Unrecognized jdt:// URI: %s" uri)))
+         (jar (match-string 1 uri))
+         ;; jdtls encodes the fully-qualified class name with `/' as the
+         ;; package separator; use it verbatim so the class name is real
+         ;; and readable instead of an opaque hash.
+         (class-name (match-string 2 uri))
+         (ext (match-string 3 uri))
+         (cache-file (expand-file-name
+                      (concat class-name "." (if (string= ext "class") "java" ext))
+                      (expand-file-name jar my-jdt-uri-cache-dir))))
+    (unless (file-readable-p cache-file)
+      (let* ((server (eglot-current-server))
+             (content (and server
+                           (jsonrpc-request server :java/classFileContents
+                                             (list :uri uri)))))
+        (unless content
+          (error "jdtls: no class file contents for %s" uri))
+        (make-directory (file-name-directory cache-file) t)
+        (with-temp-file cache-file (insert content))))
+    (if (memq operation '(expand-file-name file-truename file-local-name))
+        cache-file
+      (let ((inhibit-file-name-handlers
+             (cons 'my-jdt-uri-handler
+                   (and (eq inhibit-file-name-operation operation)
+                        inhibit-file-name-handlers)))
+            (inhibit-file-name-operation operation))
+        (apply operation args)))))
+
+(add-to-list 'file-name-handler-alist '("\\`jdt://" . my-jdt-uri-handler))
+
 (defun my-jdtls-cache-dir (&optional project)
   "Return the jdtls `-data' workspace directory for PROJECT (or
 `default-directory' if PROJECT is nil) -- the same path
@@ -1724,6 +1789,8 @@ each project gets its own persistent jdtls workspace."
                               :initializationOptions
                               (list :settings my-jdtls-settings
 				    :bundles (dape-java-get-test-bundle-vector)
+				    :extendedClientCapabilities
+				    (list :classFileContentsSupport t)
 				    )))))))
 
 ;;;; DAPE debugging
