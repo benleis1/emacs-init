@@ -920,6 +920,23 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
 (add-hook 'markdown-mode-hook 'imenu-add-menubar-index)
 (add-hook 'org-mode-hook 'imenu-add-menubar-index)
 
+;; markdown-mode's own nested imenu index marks a heading's jump-to-self
+;; entry with a literal "." leaf but I prefer the larger dot glyph for
+;; readability.
+(defun my-markdown-imenu-dot-glyph (index-alist)
+  (dolist (entry index-alist index-alist)
+    (when (equal (car entry) ".")
+      (setcar entry ""))
+    (when (imenu--subalist-p entry)
+      (my-markdown-imenu-dot-glyph (cdr entry)))))
+
+(defun my-markdown-imenu-create-nested-index ()
+  (my-markdown-imenu-dot-glyph (markdown-imenu-create-nested-index)))
+
+(add-hook 'markdown-mode-hook
+          (lambda ()
+            (setq-local imenu-create-index-function 'my-markdown-imenu-create-nested-index)))
+
 ;; Complete a frontmatter "tags:" value against every tag already used
 ;; elsewhere in the project, via wikimode's project-wide tag scan
 ;; (`wikimode-project-tags').
@@ -976,6 +993,204 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (add-hook 'markdown-mode-hook
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
 
+;;; Appt setup
+;; For now its easiest to import calendars via the diary
+;; once excorporate is working revisit.
+
+;; Set warning time in minutes before the event
+(setq appt-message-warning-time 10)
+
+;; Only do mode line notifications - my calendar is already sync'ed
+;; with the OS notification center. Emacs isn't the source of truth.
+(setq appt-display-format 'mode)
+
+;; don't do a popup on activation of the diary.
+(setq appt-display-diary nil)
+
+;; Activate appointment notifications
+(appt-activate t)
+
+;; Sort diary everything by time in fancy-diary. Mostly superseded by org-agenda
+(add-hook 'diary-list-entries-hook #'diary-sort-entries t)
+
+;; Hook into diary/calendar
+(add-hook 'diary-hook 'appt-make-list)
+
+;; Replace the default "App't in N min." mode-line text with an alarm-clock glyph and a bare
+;; countdown; the full title(s) go on the help-echo tooltip The glyph's color is interpolated across
+;; the whole warning window, from `my-appt-mode-line-color-far' when it first appears down to
+;; `my-appt-mode-line-color-near' right as the appointment hits. The ramp is eased quadratically
+;; (not linear) so it stays calm for most of the window and then intensifies sharply near the end,
+;; and the glyph turns bold once that intensity is high.
+(require 'color)
+
+(defvar my-appt-mode-line-color-far nil
+  "Glyph color when an appointment has just entered its warning window.
+Nil means use the current `default' face foreground, so it stays legible
+across light/dark theme switches instead of a fixed color like green.")
+
+(defvar my-appt-mode-line-color-near (modus-themes-get-color-value 'date-deadline t)
+  "Glyph color when an appointment is due now.")
+
+(defvar my-appt-mode-line-bold-intensity 0.6
+  "Intensity (0..1) above which the mode-line glyph is shown bold.")
+
+(defun my-appt-mode-line-intensity (min-to-app warn-time)
+  "Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME."
+  (let* ((warn-time (max warn-time 1))
+         (frac (- 1.0 (/ (float (min min-to-app warn-time)) warn-time))))
+    (expt frac 2)))
+
+(defun my-appt-mode-line-color (intensity)
+  "Interpolate the glyph color for the given eased urgency INTENSITY."
+  (let ((from (color-name-to-rgb (or my-appt-mode-line-color-far
+                                      (face-foreground 'default nil t))))
+        (to (color-name-to-rgb my-appt-mode-line-color-near)))
+    (apply #'color-rgb-to-hex
+           (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
+                   '(2)))))
+
+(defun my-appt-due-list ()
+  "Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
+every call -- so dismissal can identify a given appointment occurrence
+across checks."
+  (let* ((now (decode-time))
+         (now-mins (+ (* 60 (decoded-time-hour now)) (decoded-time-minute now))))
+    (delq nil
+          (mapcar (lambda (appt)
+                    (let* ((min-to-app (- (caar appt) now-mins))
+                           (warn-time (or (nth 3 appt) appt-message-warning-time)))
+                      (when (and (>= min-to-app 0) (<= min-to-app warn-time))
+                        (list min-to-app (cadr appt) warn-time (cons (caar appt) (cadr appt))))))
+                  appt-time-msg-list))))
+
+(defvar my-appt-dismissed-keys nil
+  "Appointment KEYs (see `my-appt-due-list') dismissed from the mode line.
+An entry stays suppressed until it ages out of the warning window on its own.")
+
+(defvar my-appt-overdue-list nil
+  "List of (TITLE . KEY) for appointments whose time has passed.
+`appt-check' deletes an appointment from `appt-time-msg-list' the moment it
+is reached, so this is the only record of it left; it is shown as \"Due\"
+in the mode line until dismissed or superseded by another appointment
+entering its warning window.")
+
+(defvar my-appt--pre-check-due nil
+  "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
+`appt-time-msg-list', so `my-appt-mode-line-update' can tell which
+appointment -- if any -- just matured and was deleted by this check.")
+
+(defun play-mac-sound (sound-name)
+  "Play a macOS system sound asynchronously."
+  (let ((sound-path (format "/System/Library/Sounds/%s.aiff" sound-name)))
+    (if (file-exists-p sound-path)
+        (start-process "mac-sound" nil "afplay" sound-path)
+      (message "Sound file not found: %s" sound-path))))
+
+;; Replace the appointment tone with glass-bell
+(defun my-appt-glass-bell (orig-fun &rest args)
+  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
+or silence it if every appointment due right now has been dismissed.
+Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
+runs, so `my-appt-mode-line-update' can detect appointments that matured
+during this check."
+  (setq my-appt--pre-check-due (my-appt-due-list))
+  (let* ((undismissed (seq-remove (lambda (entry)
+                                     (member (nth 3 entry) my-appt-dismissed-keys))
+                                   my-appt--pre-check-due))
+         (ring-bell-function (if undismissed
+                                 (lambda () (play-mac-sound "Glass"))
+                               #'ignore)))
+    (apply orig-fun args)))
+
+(advice-add 'appt-check :around #'my-appt-glass-bell)
+
+;; TODO: should this move to modeline.el?
+
+(defun my-appt-mode-line-open-agenda (_event)
+  "Open org-agenda from the appointment mode-line segment and select its window."
+  (interactive "e")
+  (org-agenda-list))
+
+(defun my-appt-mode-line-dismiss (_event)
+  "Dismiss the appointment(s) currently shown in the mode line, whether
+still counting down or already overdue.
+Each stays dismissed until it ages out of the warning window on its own."
+  (interactive "e")
+  (dolist (entry (my-appt-due-list))
+    (push (nth 3 entry) my-appt-dismissed-keys))
+  (dolist (entry my-appt-overdue-list)
+    (push (cdr entry) my-appt-dismissed-keys))
+  (setq my-appt-overdue-list nil)
+  (my-appt-mode-line-update)
+  (force-mode-line-update t))
+
+(defvar my-appt-mode-line-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mode-line mouse-1] #'my-appt-mode-line-open-agenda)
+    (define-key map [mode-line mouse-3] #'my-appt-mode-line-dismiss)
+    map)
+  "Keymap for mouse clicks on the appointment mode-line segment.")
+
+(defun my-appt-mode-line-update (&optional _force)
+  "Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
+a lingering \"Due\" glyph for an appointment whose time has passed.
+Takes an optional, ignored argument so it tolerates being called as
+:after advice on `appt-check', which itself takes an optional FORCE arg."
+  (let* ((raw-post (my-appt-due-list))
+         (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
+                           raw-post)))
+    ;; `appt-check' deletes an appointment from `appt-time-msg-list' the moment
+    ;; it matures, so anything that was in the pre-check snapshot at 0 minutes
+    ;; and is now simply gone from `raw-post' just matured this check.
+    (dolist (entry my-appt--pre-check-due)
+      (let ((key (nth 3 entry)))
+        (when (and (zerop (nth 0 entry))
+                   (not (member key my-appt-dismissed-keys))
+                   (not (seq-some (lambda (e) (equal (nth 3 e) key)) raw-post))
+                   (not (rassoc key my-appt-overdue-list)))
+          (push (cons (nth 1 entry) key) my-appt-overdue-list))))
+    ;; Drop overdue entries dismissed in the meantime, and let a newly active
+    ;; appointment supersede any lingering "Due" ones.
+    (setq my-appt-overdue-list
+          (seq-remove (lambda (e) (member (cdr e) my-appt-dismissed-keys)) my-appt-overdue-list))
+    (when due (setq my-appt-overdue-list nil))
+    (setq appt-mode-string
+          (cond
+           (due
+            (let* ((soonest-entry (car (sort (copy-sequence due)
+                                              (lambda (a b) (< (car a) (car b))))))
+                   (soonest (nth 0 soonest-entry))
+                   (warn-time (nth 2 soonest-entry))
+                   (titles (mapconcat (lambda (entry) (nth 1 entry)) due "\n"))
+                   (intensity (my-appt-mode-line-intensity soonest warn-time))
+                   (color (my-appt-mode-line-color intensity)))
+              (concat (propertize (format "⏰ %s" (if (zerop soonest) "now"
+                                                  (format "%dm" soonest)))
+                                   'face (list :inherit 'appt-notification
+                                               :foreground color
+                                               :weight (if (>= intensity my-appt-mode-line-bold-intensity)
+                                                           'bold
+                                                         'normal))
+                                   'help-echo (concat titles
+                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                   'mouse-face 'mode-line-highlight
+                                   'keymap my-appt-mode-line-keymap)
+                      " ")))
+           (my-appt-overdue-list
+            (let ((titles (mapconcat #'car my-appt-overdue-list "\n")))
+              (concat (propertize "⏰ Due"
+                                   'face (list :inherit 'appt-notification
+                                               :foreground my-appt-mode-line-color-near
+                                               :weight 'bold)
+                                   'help-echo (concat titles
+                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                   'mouse-face 'mode-line-highlight
+                                   'keymap my-appt-mode-line-keymap)
+                      " ")))))))
+
+(advice-add 'appt-check :after #'my-appt-mode-line-update)
 
 ;;; org-mode
 ;; My typical usage of Org includes a main work tracking file, org-agenda,
@@ -1005,22 +1220,6 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;;  (add-hook 'org-mode-hook #'stripe-buffer-mode)
   (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5)))))
 
-;; hide asterisks in headers
-;; ignored because right now I'm using base org-bullets-mode instead
-(my-ignore
- (use-package org-bullets
-   :ensure t
-   :config
-   (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1)))
-   (setq org-bullets-bullet-list '("\u200b"))
-   ))
-
-;; change list markers from hyphens ;to squares
-;; ignored currently
-(my-ignore (font-lock-add-keywords 'org-mode
-                        '(("^ *\\([-]\\) "
-                          (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "▪")))))))
-
 ;; set the org-agenda prefix to skip printing the source files
 (setq org-agenda-prefix-format '(
   ;; (agenda  . " %i %-12:c%?-12t% s") ;; file name + org-agenda-entry-type
@@ -1029,6 +1228,12 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
   (todo  . " %i %-12:c")
   (tags  . " %i %-12:c")
   (search . " %i %-12:c")))
+
+(setq org-agenda-include-diary t)
+
+;; replace the default "?" binding with describe-mode to show the full keymap
+(with-eval-after-load 'org-agenda
+  (define-key org-agenda-mode-map "?" #'describe-mode))
 
 ;; 3 States for TODO
 (setq org-todo-keywords
@@ -1860,7 +2065,7 @@ declaration if any such methods were found."
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
-  ;;  :load-path "~/dev/ilist-plus/"
+  ;; :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
@@ -1973,12 +2178,8 @@ declaration if any such methods were found."
 	   (year (nth 5 time-list)))
       (exco-org-show-day month day year))))
 
-(advice-add 'org-agenda :before #'my-agenda-update-diary)
-
-;; Import emacs calendar/diary entries in org. Ignored currently due to
-;; the customizations done above
-(my-ignore (setq org-agenda-include-diary t))
-
+;; Disable until oauth2 is settled again.
+(my-ignore (advice-add 'org-agenda :before #'my-agenda-update-diary))
 
 ;;; ediff
 
@@ -2332,6 +2533,22 @@ tag, followed by the normal editable field."
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
+
+(my-ignore (use-package calfw
+  :ensure (:host github :repo "kiwanami/emacs-calfw")))
+
+(my-ignore
+ (require 'calfw-cal))
+
+; Unicode characters
+(my-ignore (setq calfw-fchar-junction ?╋
+      calfw-fchar-vertical-line ?┃
+      calfw-fchar-horizontal-line ?━
+      calfw-fchar-left-junction ?┣
+      calfw-fchar-right-junction ?┫
+      calfw-fchar-top-junction ?┯
+      calfw-fchar-top-left-corner ?┏
+      calfw-fchar-top-right-corner ?┓))
 
 ;;; GC tuning
 ;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
