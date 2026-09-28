@@ -36,17 +36,25 @@
 ;; slower CI runner; 1.5s still catches a regression the size of the
 ;; org-timegrid one (which took cold start from ~1.1s to ~1.5s).
 (ert-deftest my/test-startup-time-under-threshold ()
-  "Test that loading early-init.el + init.el in a fresh Emacs takes < 1.5s."
+  "Test that loading early-init.el + init.el in a fresh Emacs takes < 1.5s.
+
+Elpaca clones and builds every `:ensure'd package on first use, and on a
+cold CI runner (no cache between jobs) that alone can take minutes -- time
+that has nothing to do with actual startup speed. So we run an untimed
+warm-up load first to force elpaca to finish installing/building
+everything on disk, then only time a second, now genuinely warm, load."
   (let* ((emacs (or (executable-find "emacs") "emacs"))
          (early (expand-file-name "early-init.el" user-emacs-directory))
          (init (expand-file-name "init.el" user-emacs-directory))
-         (form (format "(let ((start (current-time))) (load %S) (load %S) \
+         (warmup-form (format "(load %S) (load %S)" early init))
+         (timed-form (format "(let ((start (current-time))) (load %S) (load %S) \
 (princ (format \"MY-ELAPSED %%s\" (float-time (time-subtract (current-time) start)))))"
-                       early init))
-         (output (with-temp-buffer
-                   (call-process emacs nil t nil "--batch" "--eval" form)
-                   (buffer-string)))
-         (elapsed (and (string-match "MY-ELAPSED \\([0-9.]+\\)" output)
-                       (string-to-number (match-string 1 output)))))
-    (should elapsed)
-    (should (< elapsed 1.5))))
+                       early init)))
+    (call-process emacs nil nil nil "--batch" "--eval" warmup-form)
+    (let* ((output (with-temp-buffer
+                      (call-process emacs nil t nil "--batch" "--eval" timed-form)
+                      (buffer-string)))
+           (elapsed (and (string-match "MY-ELAPSED \\([0-9.]+\\)" output)
+                         (string-to-number (match-string 1 output)))))
+      (should elapsed)
+      (should (< elapsed 1.5)))))
