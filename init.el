@@ -15,55 +15,54 @@
 ;;
 ;; ## Philosophy
 ;;
-;; My emacs configuration is an opinionated setup that I have made public to
-;; share with others. Originally this generation of the config files arose out
-;; of my moving to MacOS and realizing the value of git as a backing store. This
-;; time, these are the high level priorities that inform the decisions I've made
-;; throughout this file.
+;; My emacs configuration is an opinionated personal setup that I have made public to share with
+;; others. Originally this generation of the config files arose out of my migration to MacOS and
+;; realizing the value of git as a backing store. This time, these are the high level priorities
+;; that inform the decisions I've made throughout this file.
 ;;
-;; First, unlike many other users who have shared their config files, I like
-;; using the mouse and even the occasional menu rather than remembering key
-;; bindings for everything. So I've spent some time trying to get emacs to work
-;; more consistently for these modes. For example with flyspell on you can right
-;; click and get a context menu with the possible spellings like in most other
-;; applications.
+;; Philosophically, I have strong instincts about how I want an editor to behave and part of the
+;; appeal of emacs is the ability to configure as deeply as I want. While I try to find the cleanest
+;; mechanisms to do so, I will use advice and replace systems that don't meet my needs. The tradeoff
+;; here is the possibility of more maintenance fixes from release to release. Periodically, I like to
+;; revisit some of the larger decisions I've made. For example my current DAPE customizations have
+;; become large and perhaps the public packages will catch up and then I'll return back to them.
 ;;
-;; If possible I'll use built in functionality or packages that require minimal
-;; adaptation and just a use-package declaration. If not I try to keep
-;; everything in one section by general functionality area. Along these lines
-;; currently I prefer one larger file to a series of smaller ones for both
-;; reading and modifying.  This may shift in the future but currently I only
-;; move code out to a new file if it reaches a "sufficiently" large size. I also
-;; do not use a literate style config file and prefer a code first strategy with
-;; embedded comments. However, I do want to generate readable documentation and
-;; I accomplish that through consistent structured comments and my own package,
-;; elispdoc, which takes an elisp file and builds markup out of it.
+;; Unlike many other users who have shared their config files, I like using the mouse and even the
+;; occasional menu rather than remembering key bindings for everything. So I've spent some time
+;; trying to get emacs to work more consistently for these modes. For example with flyspell on you
+;; can right click and get a context menu with the possible spellings like in most other
+;; applications.  Whereever possible I try to wire in useful help text to show when hovering. This
+;; is most extensive in the modeline pieces.
 ;;
-;; Two areas in particular are key to many of my workflows. First, is imenu and
-;; imenu-list which I use in multiple modes to see document structure and leave
-;; open on the right side at almost all times. I've invested a fair amount of
-;; configuration tailoring this via custom indexing, styling key mode maps,
-;; sorting and modeline changes. Second, is the completion framework which I
-;; have increasingly found to be fundamental. I use the modern completion stack
-;; of vertico, orderless marginalia and consult. And where needed I have added
-;; additional completion at point routines like the ones I added for markdown
-;; tags.
+;; If possible I'll use built in functionality or packages that require minimal adaptation and just
+;; a use-package declaration. If not I try to keep everything in one section by general
+;; functionality area. Along these lines currently I prefer one larger file to a series of smaller
+;; ones for both reading and modifying.  This may shift in the future but currently I only move code
+;; out to a new file if it reaches a "sufficiently" large size. I also do not use a literate style
+;; config file and prefer a code first strategy with embedded comments. However, I do want to
+;; generate readable documentation and I accomplish that through consistent structured comments and
+;; my own package, elispdoc, which takes an elisp file and builds markup out of it.
 ;;
-;; I have a work style where I want to have a manageable small set of files open
-;; in a tabbed format.  I'll save these to a desktop and reload them when I
-;; start things up again. I've plumbed save/load desktop into the system menus
-;; and also extensively modified tab-line to fit my work flow.  Longterm if the
-;; need arises I plan to either integrate in bookmark+ or activities to save
-;; related sets of these files. For now I have customized tab-line with "views"
-;; to facilitate this. See tab-config.el for more details.
+;; Two areas in particular are key to many of my workflows. First, is imenu and imenu-list which I
+;; use in multiple modes to see document structure and leave open on the right side at almost all
+;; times. I've invested a fair amount of configuration tailoring this via custom indexing, styling
+;; key mode maps, sorting and modeline changes. Second, is the completion framework which I have
+;; increasingly found to be fundamental. I use the modern completion stack of vertico, orderless
+;; marginalia and consult. And where needed I have added additional completion at point routines
+;; like the ones I added for markdown tags.
 ;;
-;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the
-;; folio theme which is based on the builtin modus-themes and have changed most
-;; faces to just use the same default foreground color or a bolder one for
-;; emphasis. I really only want color in critical locations.  Likewise, I
-;; currently have a very minimal custom mode line that only features segments I
-;; actually use and leverages the hover help text to convey extra information
-;; like a full buffer file path.
+;; I have a work style where I want to have a manageable small set of files open in a tabbed format.
+;; I'll save these to a desktop and reload them when I start things up again. I've plumbed save/load
+;; desktop into the system menus and also extensively modified tab-line to fit my work flow.
+;; Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related
+;; sets of these files. For now I have customized tab-line with "views" to facilitate this. See
+;; tab-config.el for more details.
+;;
+;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
+;; based on the builtin modus-themes and have changed most faces to just use the same default
+;; foreground color or a bolder one for emphasis. I really only want color in critical locations.
+;; Likewise, I currently have a very minimal custom mode line that only features segments I actually
+;; use and leverages the hover help text to convey extra information like a full buffer file path.
 ;;
 ;; Sample screen:
 ;; ![sample screen](./sample-screen.png)
@@ -189,7 +188,7 @@
   "Default variable-pitch font family.")
 
 ;; I like using a 1.3 scaled version of the system UI font for the tabs.
-(if (eq system-type 'darwin)
+(when (eq system-type 'darwin)
   (custom-set-faces
    '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
 
@@ -372,7 +371,7 @@
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (when (bound-and-true-p mixed-pitch-mode)
-	(mixed-pitch-mode)))))
+	(mixed-pitch-mode 1)))))
 
 ;; Add the font changes onto the enable theme hook
 (add-hook 'enable-theme-functions
@@ -1490,8 +1489,9 @@ effect without a restart."
              (not (treesit-language-available-p 'java)))
     (ignore-errors (treesit-install-language-grammar 'java))))
 
-(setq major-mode-remap-alist
-      '((java-mode . java-ts-mode)))
+(when (treesit-language-available-p 'java)
+  (setq major-mode-remap-alist
+	'((java-mode . java-ts-mode))))
 
 ;;;; eglot
 
@@ -2406,14 +2406,16 @@ declaration if any such methods were found."
   (completion-styles '(orderless basic))
   (completion-category-overrides '((file (styles partial-completion)))))
 
-(use-package corfu
+
+;; Turned off while I try out the built in completion framework in emacs 31
+(my-ignore (use-package corfu
   :ensure t
   ;; `global-corfu-mode' is commented out below, so nothing currently
   ;; activates corfu and it can be deferred.
   :defer t
   :init
-;;  (global-corfu-mode)
-  )
+  (global-corfu-mode)
+  ))
 
 ;;; Font name completion for customize buffers
 ;; This was added to base emacs in version 31 and I will remove it soon.
@@ -2584,22 +2586,6 @@ tag, followed by the normal editable field."
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
-
-(my-ignore (use-package calfw
-  :ensure (:host github :repo "kiwanami/emacs-calfw")))
-
-(my-ignore
- (require 'calfw-cal))
-
-; Unicode characters
-(my-ignore (setq calfw-fchar-junction ?╋
-      calfw-fchar-vertical-line ?┃
-      calfw-fchar-horizontal-line ?━
-      calfw-fchar-left-junction ?┣
-      calfw-fchar-right-junction ?┫
-      calfw-fchar-top-junction ?┯
-      calfw-fchar-top-left-corner ?┏
-      calfw-fchar-top-right-corner ?┓))
 
 ;;; GC tuning
 ;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
