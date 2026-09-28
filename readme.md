@@ -15,55 +15,54 @@ Author: Benjamin Leis
 
 ## Philosophy
 
-My emacs configuration is an opinionated setup that I have made public to
-share with others. Originally this generation of the config files arose out
-of my moving to MacOS and realizing the value of git as a backing store. This
-time, these are the high level priorities that inform the decisions I've made
-throughout this file.
+My emacs configuration is an opinionated personal setup that I have made public to share with
+others. Originally this generation of the config files arose out of my migration to MacOS and
+realizing the value of git as a backing store. This time, these are the high level priorities
+that inform the decisions I've made throughout this file.
 
-First, unlike many other users who have shared their config files, I like
-using the mouse and even the occasional menu rather than remembering key
-bindings for everything. So I've spent some time trying to get emacs to work
-more consistently for these modes. For example with flyspell on you can right
-click and get a context menu with the possible spellings like in most other
-applications.
+Philosophically, I have strong instincts about how I want an editor to behave and part of the
+appeal of emacs is the ability to configure as deeply as I want. While I try to find the cleanest
+mechanisms to do so, I will use advice and replace systems that don't meet my needs. The tradeoff
+here is the possibility of more maintenance fixes from release to release. Periodically, I like to
+revisit some of the larger decisions I've made. For example my current DAPE customizations have
+become large and perhaps the public packages will catch up and then I'll return back to them.
 
-If possible I'll use built in functionality or packages that require minimal
-adaptation and just a use-package declaration. If not I try to keep
-everything in one section by general functionality area. Along these lines
-currently I prefer one larger file to a series of smaller ones for both
-reading and modifying.  This may shift in the future but currently I only
-move code out to a new file if it reaches a "sufficiently" large size. I also
-do not use a literate style config file and prefer a code first strategy with
-embedded comments. However, I do want to generate readable documentation and
-I accomplish that through consistent structured comments and my own package,
-elispdoc, which takes an elisp file and builds markup out of it.
+Unlike many other users who have shared their config files, I like using the mouse and even the
+occasional menu rather than remembering key bindings for everything. So I've spent some time
+trying to get emacs to work more consistently for these modes. For example with flyspell on you
+can right click and get a context menu with the possible spellings like in most other
+applications.  Whereever possible I try to wire in useful help text to show when hovering. This
+is most extensive in the modeline pieces.
 
-Two areas in particular are key to many of my workflows. First, is imenu and
-imenu-list which I use in multiple modes to see document structure and leave
-open on the right side at almost all times. I've invested a fair amount of
-configuration tailoring this via custom indexing, styling key mode maps,
-sorting and modeline changes. Second, is the completion framework which I
-have increasingly found to be fundamental. I use the modern completion stack
-of vertico, orderless marginalia and consult. And where needed I have added
-additional completion at point routines like the ones I added for markdown
-tags.
+If possible I'll use built in functionality or packages that require minimal adaptation and just
+a use-package declaration. If not I try to keep everything in one section by general
+functionality area. Along these lines currently I prefer one larger file to a series of smaller
+ones for both reading and modifying.  This may shift in the future but currently I only move code
+out to a new file if it reaches a "sufficiently" large size. I also do not use a literate style
+config file and prefer a code first strategy with embedded comments. However, I do want to
+generate readable documentation and I accomplish that through consistent structured comments and
+my own package, elispdoc, which takes an elisp file and builds markup out of it.
 
-I have a work style where I want to have a manageable small set of files open
-in a tabbed format.  I'll save these to a desktop and reload them when I
-start things up again. I've plumbed save/load desktop into the system menus
-and also extensively modified tab-line to fit my work flow.  Longterm if the
-need arises I plan to either integrate in bookmark+ or activities to save
-related sets of these files. For now I have customized tab-line with "views"
-to facilitate this. See tab-config.el for more details.
+Two areas in particular are key to many of my workflows. First, is imenu and imenu-list which I
+use in multiple modes to see document structure and leave open on the right side at almost all
+times. I've invested a fair amount of configuration tailoring this via custom indexing, styling
+key mode maps, sorting and modeline changes. Second, is the completion framework which I have
+increasingly found to be fundamental. I use the modern completion stack of vertico, orderless
+marginalia and consult. And where needed I have added additional completion at point routines
+like the ones I added for markdown tags.
 
-Style-wise, I prefer a fairly minimal design theme. I'm currently using the
-folio theme which is based on the builtin modus-themes and have changed most
-faces to just use the same default foreground color or a bolder one for
-emphasis. I really only want color in critical locations.  Likewise, I
-currently have a very minimal custom mode line that only features segments I
-actually use and leverages the hover help text to convey extra information
-like a full buffer file path.
+I have a work style where I want to have a manageable small set of files open in a tabbed format.
+I'll save these to a desktop and reload them when I start things up again. I've plumbed save/load
+desktop into the system menus and also extensively modified tab-line to fit my work flow.
+Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related
+sets of these files. For now I have customized tab-line with "views" to facilitate this. See
+tab-config.el for more details.
+
+Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
+based on the builtin modus-themes and have changed most faces to just use the same default
+foreground color or a bolder one for emphasis. I really only want color in critical locations.
+Likewise, I currently have a very minimal custom mode line that only features segments I actually
+use and leverages the hover help text to convey extra information like a full buffer file path.
 
 Sample screen:
 ![sample screen](./sample-screen.png)
@@ -100,19 +99,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - A Java installation reachable via `my-java-home` (defaults to a jenv
     path) plus jdtls on PATH if you want eglot's Java support.
   - For JUnit test debugging via dape/jdtls: vscode-java-test's bundle
-    jars in `my-jdtls-test-bundles-dir` (default ~/.emacs.d/jdtls-bundles/).
-    They aren't published to Maven Central -- they ship inside the
-    `vscjava.vscode-java-test` VS Code extension's `extension/server/`
-    folder. To (re)populate this directory:
- ```
-      curl -L -o /tmp/vscode-java-test.vsix \
-        "https://open-vsx.org/api/vscjava/vscode-java-test/<version>/file/vscjava.vscode-java-test-<version>.vsix"
-      unzip /tmp/vscode-java-test.vsix -d /tmp/vjt
-      mkdir -p ~/.emacs.d/jdtls-bundles
-      cp /tmp/vjt/extension/server/*.jar ~/.emacs.d/jdtls-bundles/
- ```
-    Pick the current version from
-    https://open-vsx.org/extension/vscjava/vscode-java-test.
+    jars. Use `dape-java-fetch-test-bundle` to set this up.
   - pgformatter on PATH if you want the SQL formatting commands to work.
 
 ## Major areas configured
@@ -145,9 +132,6 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - [Dired](#dired)
 - [modeline](#modeline)
 - [Global key bindings](#global-key-bindings)
-  - [pbcopy-region](#pbcopy-region)
-  - [pbcopy-kill-ring](#pbcopy-kill-ring)
-  - [paste-for-osx](#paste-for-osx)
 - [flyspell config](#flyspell-config)
   - [my-flyspell-prog-mode](#my-flyspell-prog-mode)
   - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
@@ -160,10 +144,20 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - [insert-date](#insert-date)
   - [my-markdown-liquid-post-url-at-point](#my-markdown-liquid-post-url-at-point)
   - [my-markdown-follow-liquid-post-url](#my-markdown-follow-liquid-post-url)
+  - [my-markdown-imenu-dot-glyph](#my-markdown-imenu-dot-glyph)
+  - [my-markdown-imenu-create-nested-index](#my-markdown-imenu-create-nested-index)
   - [my-markdown-frontmatter-bounds](#my-markdown-frontmatter-bounds)
   - [my-markdown-tags-line-value-start](#my-markdown-tags-line-value-start)
   - [my-markdown-tags-capf](#my-markdown-tags-capf)
+- [Appt setup](#appt-setup)
+  - [my-appt-mode-line-intensity](#my-appt-mode-line-intensity)
+  - [my-appt-mode-line-color](#my-appt-mode-line-color)
+  - [my-appt-due-list](#my-appt-due-list)
+  - [my-appt-mode-line-open-agenda](#my-appt-mode-line-open-agenda)
+  - [my-appt-mode-line-dismiss](#my-appt-mode-line-dismiss)
+  - [my-appt-mode-line-update](#my-appt-mode-line-update)
 - [org-mode](#org-mode)
+  - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
 - [Programming modes](#programming-modes)
   - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
   - [Project.el settings.](#projectel-settings)
@@ -181,6 +175,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
     - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
     - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
     - [my-jsonrpc-skip-message-p](#my-jsonrpc-skip-message-p)
+    - [my-jdt-uri-handler](#my-jdt-uri-handler)
     - [my-jdtls-cache-dir](#my-jdtls-cache-dir)
     - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
   - [DAPE debugging](#dape-debugging)
@@ -211,7 +206,6 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - [Consult navigation package](#consult-navigation-package)
 - [Local.el loading](#localel-loading)
 - [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
-  - [temptemp tryout vertico-posframe - move to vertico section if kept.](#temptemp-tryout-vertico-posframe---move-to-vertico-section-if-kept)
 - [GC tuning](#gc-tuning)
 
 <!-- markdown-toc end -->
@@ -289,28 +283,41 @@ early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
 ```
 
-GUI Emacs on macOS is launched by launchd, not a login shell, so it only
-gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
-jdtls and pgformatter aren't visible to `executable-find' without this.
-But exec-path-from-shell is relatively expensive so as compromise
-just add homebrew onto the path as needed
-
-```
-(unless (member "/opt/homebrew/bin" exec-path)
-  (add-to-list 'exec-path "/opt/homebrew/bin"))
-```
-
 # Customizations
 
 # Font setup
 This needs to be done prior to theme setup.
+Note: font sets are to some extent os dependent
 
 Mixed-pitch mode. I use this in markdown and org modes currently.
 ```
 (defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
   "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font "Helvetica"
-    "Default variable-pitch font family.")
+  "Default variable-pitch font family.")
+```
+
+I like using a 1.3 scaled version of the system UI font for the tabs.
+```
+(when (eq system-type 'darwin)
+  (custom-set-faces
+   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
+
+  (custom-set-faces
+   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
+
+  (custom-set-faces
+   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
+```
+
+Expand the default font height enough that emacs looks normal when opened.
+```
+(set-face-attribute 'default nil :height 160)
+```
+
+Tooltips are set to 1.3 for readability
+```
+(set-face-attribute 'tooltip nil :height 1.3)
 
 (use-package mixed-pitch
   :ensure t
@@ -344,11 +351,6 @@ to  use i.e with the  ` back tick operator.
 (defvar margin-light-gray-bg "gray95")
 ```
 
-Disable the theme safety check.
-```
-(setq custom-safe-themes t)
-```
-
 Disable all previously loaded themes before loading another one.
 ```
 (advice-add 'load-theme :before
@@ -374,8 +376,14 @@ Specifically:
         (bg-tab-other bg-margins)
 	(bg-line-number-inactive bg-margins)
 
-	;; custom hl face for imenu-list
-	(fg-hl-imenu  "DarkOrange2")
+	;; A highlight emphasis color
+	(fg-hl-emphasis  "DarkOrange2")
+
+	;; Wire it to the imenu highlight
+	(fg-hl-imenu  fg-hl-emphasis)
+
+	;; Use it also for current date
+	(date-now fg-hl-emphasis)
 
 	;; Tone down the headings: use the default foreground instead
         ;; of the theme's per-level accent colors.
@@ -497,7 +505,7 @@ Loop through all the buffers and force mixed-pitch-mode ones to reload.
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (when (bound-and-true-p mixed-pitch-mode)
-	(mixed-pitch-mode)))))
+	(mixed-pitch-mode 1)))))
 ```
 
 Add the font changes onto the enable theme hook
@@ -541,21 +549,6 @@ Add the font changes onto the enable theme hook
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 ```
 
-
-Modus doesn't handle fonts so just set this directly here where all other styling is
-being done. I like using a 1.3 scaled version of the system UI font for the tabs.
-```
-(if (< emacs-major-version 31)
-  (custom-set-faces
-   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
-
-  (custom-set-faces
-   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
-
-  (custom-set-faces
-   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
-```
-
 Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
 lives alongside this file) discoverable by `load-theme'/`M-x customize-themes'
 without needing a package wrapper.
@@ -574,12 +567,14 @@ Currently trying out the folio theme as my main theme.
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 ```
 
-Deal with dark/light mode macos ui elements like the scrollbar
+macOS-specific config (homebrew exec-path, ns-auto-titlebar, pbcopy/paste,
+appt glass-bell sound) lives in macos.el. Loaded here, after elpaca/
+use-package are ready, and before the `elpaca-wait' below -- that wait
+covers ns-auto-titlebar (declared inside macos.el) as well as the theme
+packages above, so macos.el must be loaded before it runs.
 ```
-(use-package ns-auto-titlebar
-  :ensure t
-  :config
-  (ns-auto-titlebar-mode 1))
+(when (eq system-type 'darwin)
+  (load (locate-user-emacs-file "macos.el")))
 ```
 
 Make sure the theme and titlebar packages above are fully installed and
@@ -670,6 +665,11 @@ particularly useful when popping up a 2nd or 3rd window and
 wanting to go back to the previous config.
 ```
 (winner-mode 1)
+```
+
+Typing over an active selection should replace it, like every other app.
+```
+(delete-selection-mode 1)
 ```
 
 ## my-before-save-hook
@@ -770,9 +770,10 @@ the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 ```
 
-Switch focus to help windows when they come up
+Switch focus to help windows when they come up and kill rather thn bury them when you quit
 ```
 (setq help-window-select t)
+(setq quit-window-kill-buffer t)
 ```
 
 # backup and autosave.
@@ -886,42 +887,8 @@ TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 (global-set-key (kbd "s-x") 'execute-extended-command)
 ```
 
-## pbcopy-region
-Copy to clipboard functions for terminal mode
-copy the current region directly
-```
-(defun pbcopy-region ()
-  (interactive)
-  (call-process-region (point) (mark) "pbcopy")
-  (setq deactivate-mark t))
-```
-
-## pbcopy-kill-ring
-copy the latest kill ring
-```
-(defun pbcopy-kill-ring (&optional _xpush)
-  (interactive)
-  (let ((process-connection-type nil)
-	(text (current-kill 0)))
-    (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
-      (process-send-string proc text)
-      (process-send-eof proc))))
-```
-
-## paste-for-osx
-Final version hook into interprogram-cut-function instead
-for terminal mode cut to system clipboard
-```
-(defun paste-for-osx (text &optional _push)
-  (let ((process-connection-type nil))
-    (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
-      (process-send-string proc text)
-      (process-send-eof proc))))
-
-(unless window-system
-  (setq interprogram-cut-function 'paste-for-osx))
-```
-
+Copy to clipboard functions for terminal mode are macOS-specific; see
+macos.el (pbcopy-region, pbcopy-kill-ring, paste-for-osx).
 
 Don't lose a paste from outside emacs because you killed a line
 in preparation before pasting.
@@ -1220,6 +1187,29 @@ also be available via the context menus
 (add-hook 'org-mode-hook 'imenu-add-menubar-index)
 ```
 
+## my-markdown-imenu-dot-glyph
+markdown-mode's own nested imenu index marks a heading's jump-to-self
+entry with a literal "." leaf but I prefer the larger dot glyph for
+readability.
+```
+(defun my-markdown-imenu-dot-glyph (index-alist)
+  (dolist (entry index-alist index-alist)
+    (when (equal (car entry) ".")
+      (setcar entry ""))
+    (when (imenu--subalist-p entry)
+      (my-markdown-imenu-dot-glyph (cdr entry)))))
+```
+
+## my-markdown-imenu-create-nested-index
+```
+(defun my-markdown-imenu-create-nested-index ()
+  (my-markdown-imenu-dot-glyph (markdown-imenu-create-nested-index)))
+
+(add-hook 'markdown-mode-hook
+          (lambda ()
+            (setq-local imenu-create-index-function 'my-markdown-imenu-create-nested-index)))
+```
+
 ## my-markdown-frontmatter-bounds
 >Return (START . END) of the current buffer's YAML frontmatter body, or nil.
 
@@ -1293,6 +1283,249 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
 ```
 
+# Appt setup
+
+Set warning time in minutes before the event
+```
+(setq appt-message-warning-time 10)
+```
+
+Only do mode line notifications - my calendar is already sync'ed
+with the OS notification center. Emacs isn't the source of truth.
+```
+(setq appt-display-format 'mode)
+```
+
+don't do a popup on activation of the diary.
+```
+(setq appt-display-diary nil)
+```
+
+Activate appointment notifications
+```
+(appt-activate t)
+```
+
+Sort diary everything by time in fancy-diary. Mostly superseded by org-agenda
+```
+(add-hook 'diary-list-entries-hook #'diary-sort-entries t)
+```
+
+Populate `appt-time-msg-list' from Org's own SCHEDULED/DEADLINE
+timestamps in `org-agenda-files', refreshed whenever the agenda
+rebuilds and hourly besides, so it stays current even if the agenda is
+never opened. `org-agenda' is otherwise deferred until first use, so
+do the first population (and the `org-agenda' load it triggers) on
+Emacs's first idle moment instead of blocking startup.
+```
+(run-with-idle-timer
+ 1 nil
+ (lambda ()
+   (add-hook 'org-agenda-finalize-hook (lambda () (org-agenda-to-appt t)))
+   (org-agenda-to-appt t)
+   (run-with-timer 3600 3600 (lambda () (org-agenda-to-appt t)))))
+```
+
+Replace the default "App't in N min." mode-line text with an alarm-clock glyph and a bare
+countdown; the full title(s) go on the help-echo tooltip The glyph's color is interpolated across
+the whole warning window, from `my-appt-mode-line-color-far' when it first appears down to
+`my-appt-mode-line-color-near' right as the appointment hits. The ramp is eased quadratically
+(not linear) so it stays calm for most of the window and then intensifies sharply near the end,
+and the glyph turns bold once that intensity is high.
+```
+(require 'color)
+
+(defvar my-appt-mode-line-color-far nil
+  "Glyph color when an appointment has just entered its warning window.
+Nil means use the current `default' face foreground, so it stays legible
+across light/dark theme switches instead of a fixed color like green.")
+
+(defvar my-appt-mode-line-color-near (modus-themes-get-color-value 'date-deadline t)
+  "Glyph color when an appointment is due now.")
+
+(defvar my-appt-mode-line-bold-intensity 0.6
+  "Intensity (0..1) above which the mode-line glyph is shown bold.")
+```
+
+## my-appt-mode-line-intensity
+>Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME.
+
+```
+(defun my-appt-mode-line-intensity (min-to-app warn-time)
+  "Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME."
+  (let* ((warn-time (max warn-time 1))
+         (frac (- 1.0 (/ (float (min min-to-app warn-time)) warn-time))))
+    (expt frac 2)))
+```
+
+## my-appt-mode-line-color
+>Interpolate the glyph color for the given eased urgency INTENSITY.
+
+```
+(defun my-appt-mode-line-color (intensity)
+  "Interpolate the glyph color for the given eased urgency INTENSITY."
+  (let ((from (color-name-to-rgb (or my-appt-mode-line-color-far
+                                      (face-foreground 'default nil t))))
+        (to (color-name-to-rgb my-appt-mode-line-color-near)))
+    (apply #'color-rgb-to-hex
+           (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
+                   '(2)))))
+```
+
+## my-appt-due-list
+>Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
+every call -- so dismissal can identify a given appointment occurrence
+across checks.
+
+```
+(defun my-appt-due-list ()
+  "Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
+every call -- so dismissal can identify a given appointment occurrence
+across checks."
+  (let* ((now (decode-time))
+         (now-mins (+ (* 60 (decoded-time-hour now)) (decoded-time-minute now))))
+    (delq nil
+          (mapcar (lambda (appt)
+                    (let* ((min-to-app (- (caar appt) now-mins))
+                           (warn-time (or (nth 3 appt) appt-message-warning-time)))
+                      (when (and (>= min-to-app 0) (<= min-to-app warn-time))
+                        (list min-to-app (cadr appt) warn-time (cons (caar appt) (cadr appt))))))
+                  appt-time-msg-list))))
+
+(defvar my-appt-dismissed-keys nil
+  "Appointment KEYs (see `my-appt-due-list') dismissed from the mode line.
+An entry stays suppressed until it ages out of the warning window on its own.")
+
+(defvar my-appt-overdue-list nil
+  "List of (TITLE . KEY) for appointments whose time has passed.
+`appt-check' deletes an appointment from `appt-time-msg-list' the moment it
+is reached, so this is the only record of it left; it is shown as \"Due\"
+in the mode line until dismissed or superseded by another appointment
+entering its warning window.")
+
+(defvar my-appt--pre-check-due nil
+  "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
+`appt-time-msg-list', so `my-appt-mode-line-update' can tell which
+appointment -- if any -- just matured and was deleted by this check.")
+```
+
+The appointment glass-bell sound (play-mac-sound, my-appt-glass-bell) is
+defined in macos.el, but wired up here rather than there: `appt-activate'
+above calls `appt-check' synchronously as part of activating, before
+`my-appt-due-list' is even defined, so the advice must not become active
+until after that point.
+```
+(when (eq system-type 'darwin)
+  (advice-add 'appt-check :around #'my-appt-glass-bell))
+```
+
+TODO: should this move to modeline.el?
+
+## my-appt-mode-line-open-agenda
+>Open org-agenda from the appointment mode-line segment and select its window.
+
+```
+(defun my-appt-mode-line-open-agenda (_event)
+  "Open org-agenda from the appointment mode-line segment and select its window."
+  (interactive "e")
+  (org-agenda-list))
+```
+
+## my-appt-mode-line-dismiss
+>Dismiss the appointment(s) currently shown in the mode line, whether
+still counting down or already overdue.
+Each stays dismissed until it ages out of the warning window on its own.
+
+```
+(defun my-appt-mode-line-dismiss (_event)
+  "Dismiss the appointment(s) currently shown in the mode line, whether
+still counting down or already overdue.
+Each stays dismissed until it ages out of the warning window on its own."
+  (interactive "e")
+  (dolist (entry (my-appt-due-list))
+    (push (nth 3 entry) my-appt-dismissed-keys))
+  (dolist (entry my-appt-overdue-list)
+    (push (cdr entry) my-appt-dismissed-keys))
+  (setq my-appt-overdue-list nil)
+  (my-appt-mode-line-update)
+  (force-mode-line-update t))
+
+(defvar my-appt-mode-line-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mode-line mouse-1] #'my-appt-mode-line-open-agenda)
+    (define-key map [mode-line mouse-3] #'my-appt-mode-line-dismiss)
+    map)
+  "Keymap for mouse clicks on the appointment mode-line segment.")
+```
+
+## my-appt-mode-line-update
+>Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
+a lingering "Due" glyph for an appointment whose time has passed.
+Takes an optional, ignored argument so it tolerates being called as
+:after advice on `appt-check', which itself takes an optional FORCE arg.
+
+```
+(defun my-appt-mode-line-update (&optional _force)
+  "Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
+a lingering \"Due\" glyph for an appointment whose time has passed.
+Takes an optional, ignored argument so it tolerates being called as
+:after advice on `appt-check', which itself takes an optional FORCE arg."
+  (let* ((raw-post (my-appt-due-list))
+         (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
+                           raw-post)))
+    ;; `appt-check' deletes an appointment from `appt-time-msg-list' the moment
+    ;; it matures, so anything that was in the pre-check snapshot at 0 minutes
+    ;; and is now simply gone from `raw-post' just matured this check.
+    (dolist (entry my-appt--pre-check-due)
+      (let ((key (nth 3 entry)))
+        (when (and (zerop (nth 0 entry))
+                   (not (member key my-appt-dismissed-keys))
+                   (not (seq-some (lambda (e) (equal (nth 3 e) key)) raw-post))
+                   (not (rassoc key my-appt-overdue-list)))
+          (push (cons (nth 1 entry) key) my-appt-overdue-list))))
+    ;; Drop overdue entries dismissed in the meantime, and let a newly active
+    ;; appointment supersede any lingering "Due" ones.
+    (setq my-appt-overdue-list
+          (seq-remove (lambda (e) (member (cdr e) my-appt-dismissed-keys)) my-appt-overdue-list))
+    (when due (setq my-appt-overdue-list nil))
+    (setq appt-mode-string
+          (cond
+           (due
+            (let* ((soonest-entry (car (sort (copy-sequence due)
+                                              (lambda (a b) (< (car a) (car b))))))
+                   (soonest (nth 0 soonest-entry))
+                   (warn-time (nth 2 soonest-entry))
+                   (titles (mapconcat (lambda (entry) (nth 1 entry)) due "\n"))
+                   (intensity (my-appt-mode-line-intensity soonest warn-time))
+                   (color (my-appt-mode-line-color intensity)))
+              (concat (propertize (format "⏰ %s" (if (zerop soonest) "now"
+                                                  (format "%dm" soonest)))
+                                   'face (list :inherit 'appt-notification
+                                               :foreground color
+                                               :weight (if (>= intensity my-appt-mode-line-bold-intensity)
+                                                           'bold
+                                                         'normal))
+                                   'help-echo (concat titles
+                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                   'mouse-face 'mode-line-highlight
+                                   'keymap my-appt-mode-line-keymap)
+                      " ")))
+           (my-appt-overdue-list
+            (let ((titles (mapconcat #'car my-appt-overdue-list "\n")))
+              (concat (propertize "⏰ Due"
+                                   'face (list :inherit 'appt-notification
+                                               :foreground my-appt-mode-line-color-near
+                                               :weight 'bold)
+                                   'help-echo (concat titles
+                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                   'mouse-face 'mode-line-highlight
+                                   'keymap my-appt-mode-line-keymap)
+                      " ")))))))
+
+(advice-add 'appt-check :after #'my-appt-mode-line-update)
+```
 
 # org-mode
 My typical usage of Org includes a main work tracking file, org-agenda,
@@ -1306,6 +1539,19 @@ Define an org root directory
 (defcustom my-org-root "~/org" "Root location for org files"
   :type 'string
   :group 'environment)
+```
+
+How `my-meetings-file' actually gets populated is set up in local.el.
+once excorporate is settled again it will be done there.
+```
+(defconst my-meetings-file (file-name-concat my-org-root "meetings.org")
+  "Org file holding external meetings from outlook in my case.
+Part of `org-agenda-files' so meetings show up in the agenda, the
+org-timegrid strip/week view, and via `org-agenda-to-appt' in the
+mode-line appointment countdown.")
+
+(with-eval-after-load 'org
+  (add-to-list 'org-agenda-files my-meetings-file))
 ```
 
 mouse support
@@ -1330,26 +1576,6 @@ word wrap for normal text and stripe mode for tables
   (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5)))))
 ```
 
-hide asterisks in headers
-ignored because right now I'm using base org-bullets-mode instead
-```
-(my-ignore
- (use-package org-bullets
-   :ensure t
-   :config
-   (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1)))
-   (setq org-bullets-bullet-list '("\u200b"))
-   ))
-```
-
-change list markers from hyphens ;to squares
-ignored currently
-```
-(my-ignore (font-lock-add-keywords 'org-mode
-                        '(("^ *\\([-]\\) "
-                          (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "▪")))))))
-```
-
 set the org-agenda prefix to skip printing the source files
 ```
 (setq org-agenda-prefix-format '(
@@ -1359,6 +1585,34 @@ set the org-agenda prefix to skip printing the source files
   (todo  . " %i %-12:c")
   (tags  . " %i %-12:c")
   (search . " %i %-12:c")))
+```
+
+Meetings live in Org now (`my-meetings-file'), not the diary.
+```
+(setq org-agenda-include-diary nil)
+```
+
+## my-org-agenda-extend-current-time-face
+`org-agenda-add-time-grid-maybe' only applies the `org-agenda-current-time'
+face from character 2 onward, leaving the leading prefix (a space and the
+first digit of the padded time, from our " %-12t " prefix format)
+unfaced. Extend the face to cover the whole line.
+```
+(defun my-org-agenda-extend-current-time-face (list)
+  (dolist (item list list)
+    (when (and (stringp item)
+               (> (length item) 2)
+               (eq (get-text-property 2 'face item) 'org-agenda-current-time))
+      (put-text-property 0 2 'face 'org-agenda-current-time item))))
+
+(advice-add 'org-agenda-add-time-grid-maybe :filter-return
+            #'my-org-agenda-extend-current-time-face)
+```
+
+replace the default "?" binding with describe-mode to show the full keymap
+```
+(with-eval-after-load 'org-agenda
+  (define-key org-agenda-mode-map "?" #'describe-mode))
 ```
 
 3 States for TODO
@@ -1438,6 +1692,25 @@ because it works better
   :config
   :hook (org-mode . org-pretty-table-mode)
 )
+```
+
+SVG calendar view
+```
+(use-package org-timegrid
+  :ensure (:host github :repo "Gleek/org-timegrid")
+  :commands (org-timegrid-week)
+  ;; Add the daily strip at the top of agendas. Deferred to `org-agenda'
+  ;; loading (not `:init', which would run at startup) so that enabling the
+  ;; strip mode doesn't force org-agenda's own require chain eagerly.
+  :init
+  (with-eval-after-load 'org-agenda
+    (org-timegrid-agenda-mode 1))
+  (with-eval-after-load 'org-timegrid-agenda
+    ;; The strip otherwise mirrors `org-starting-day', which for our default
+    ;; Monday-anchored weekly agenda span is the preceding Monday, not
+    ;; today -- keep the strip itself always on today regardless of span.
+    (advice-add 'org-timegrid-agenda--display-day :override
+                (lambda () (calendar-absolute-from-gregorian (calendar-current-date))))))
 ```
 
 # Programming modes
@@ -1638,12 +1911,6 @@ effect without a restart."
   :type 'directory
   :set #'my-java-home-set
   :group 'my-environment)
-
-(defcustom my-local-m2-dir
-  (expand-file-name "~/.m2/repository")
-  "Path to the maven local reposistory"
-  :type 'directory
-  :group 'environment)
 ```
 
 Establish the initial jdtls settings derived from my-java-home.
@@ -1669,10 +1936,22 @@ This is the single source of truth for that derivation -- see
 (add-hook 'java-ts-mode-hook 'setup-common-java)
 ```
 
-Setup automatic mode remapping so we always use treesitter for java
+The Java tree-sitter grammar isn't bundled with Emacs. It has to be
+built once via `treesit-install-language-grammar'. Register the repo so a
+fresh checkout of this config fetches it automatically instead of
+requiring a manual step.
 ```
-(setq major-mode-remap-alist
-      '((java-mode . java-ts-mode)))
+(with-eval-after-load 'treesit
+  (add-to-list 'treesit-language-source-alist
+               '(java "https://github.com/tree-sitter/tree-sitter-java"))
+
+  (when (and (treesit-available-p)
+             (not (treesit-language-available-p 'java)))
+    (ignore-errors (treesit-install-language-grammar 'java))))
+
+(when (treesit-language-available-p 'java)
+  (setq major-mode-remap-alist
+	'((java-mode . java-ts-mode))))
 ```
 
 ## eglot
@@ -1897,6 +2176,62 @@ anything as useful as the `report' messages in between."
                       (setq plist (plist-put plist :log-text
                                               (my-jsonrpc-log-text message))))
                     (apply orig connection origin plist))))))
+
+(defvar my-jdt-uri-cache-dir
+  (locate-user-emacs-file "jdtls-decompiled")
+  "Cache directory for source decompiled by jdtls from jar files.")
+```
+
+### my-jdt-uri-handler
+>Handle file operations on jdtls's `jdt://' URIs.
+
+jdtls returns these for definitions/references that resolve into a
+class inside a jar (library code, JDK classes) rather than a project
+source file. There's no file on disk at that URI, so translate it
+into a locally cached decompiled source file fetched from the server
+via the `java/classFileContents' request, the first time it's seen.
+
+```
+(defun my-jdt-uri-handler (operation &rest args)
+  "Handle file operations on jdtls's `jdt://' URIs.
+
+jdtls returns these for definitions/references that resolve into a
+class inside a jar (library code, JDK classes) rather than a project
+source file. There's no file on disk at that URI, so translate it
+into a locally cached decompiled source file fetched from the server
+via the `java/classFileContents' request, the first time it's seen."
+  (let* ((uri (car args))
+         (_ (unless (string-match
+                     "\\`jdt://contents/\\([^/]+\\)/\\(.+\\)\\.\\([^.]+\\)\\?" uri)
+              (error "Unrecognized jdt:// URI: %s" uri)))
+         (jar (match-string 1 uri))
+         ;; jdtls encodes the fully-qualified class name with `/' as the
+         ;; package separator; use it verbatim so the class name is real
+         ;; and readable instead of an opaque hash.
+         (class-name (match-string 2 uri))
+         (ext (match-string 3 uri))
+         (cache-file (expand-file-name
+                      (concat class-name "." (if (string= ext "class") "java" ext))
+                      (expand-file-name jar my-jdt-uri-cache-dir))))
+    (unless (file-readable-p cache-file)
+      (let* ((server (eglot-current-server))
+             (content (and server
+                           (jsonrpc-request server :java/classFileContents
+                                             (list :uri uri)))))
+        (unless content
+          (error "jdtls: no class file contents for %s" uri))
+        (make-directory (file-name-directory cache-file) t)
+        (with-temp-file cache-file (insert content))))
+    (if (memq operation '(expand-file-name file-truename file-local-name))
+        cache-file
+      (let ((inhibit-file-name-handlers
+             (cons 'my-jdt-uri-handler
+                   (and (eq inhibit-file-name-operation operation)
+                        inhibit-file-name-handlers)))
+            (inhibit-file-name-operation operation))
+        (apply operation args)))))
+
+(add-to-list 'file-name-handler-alist '("\\`jdt://" . my-jdt-uri-handler))
 ```
 
 ### my-jdtls-cache-dir
@@ -1975,6 +2310,8 @@ Clean function for the jdtls workspace.
                               :initializationOptions
                               (list :settings my-jdtls-settings
 				    :bundles (dape-java-get-test-bundle-vector)
+				    :extendedClientCapabilities
+				    (list :classFileContentsSupport t)
 				    )))))))
 ```
 
@@ -2296,7 +2633,6 @@ within it, so it lines up with `my-dape-run-gutter-mode''s arrow.
 
 TODO turn on eglot integration later.
 
-
 ## elisp
 
 Group `use-package` declarations under their own imenu heading.
@@ -2340,16 +2676,22 @@ Note: C-\ is bound to smart toggle.
 	imenu-auto-rescan t))
 ```
 
+ilist-plus :config below requires 'imenu-list synchronously, so imenu-list's
+elpaca install/build must be finished first, not just queued.
+```
+(elpaca-wait)
+```
+
 Load all of my custom imenu extensions.
 ```
 (use-package ilist-plus
   ;; For local test/dev when turned on.
-;;  :load-path "~/dev/ilist-plus/"
+  ;; :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
-  :custom
+  :config
   (ilist-plus-mode))
 ```
 
@@ -2421,8 +2763,7 @@ I've modified this quite a bit to directly generate org files.
   (setq excorporate-update-org t)
   ;; Configure excorporate to use the a file which I've linked to agenda for daily meetings
   ;; setq excorporate-org-buffer-name "~/org/daily-meetings.org"
-  (setq	excorporate-org-persist-buffer t)
-  )
+  (setq	excorporate-org-persist-buffer t))
 ```
 
 Track whether we've turned excorporate on or not
@@ -2477,16 +2818,12 @@ The agenda itself loads the diary buffer - we should probably just leave it off 
 	   (month (nth 4 time-list))
 	   (year (nth 5 time-list)))
       (exco-org-show-day month day year))))
-
-(advice-add 'org-agenda :before #'my-agenda-update-diary)
 ```
 
-Import emacs calendar/diary entries in org. Ignored currently due to
-the customizations done above
+Disable until oauth2 is settled again.
 ```
-(my-ignore (setq org-agenda-include-diary t))
+(my-ignore (advice-add 'org-agenda :before #'my-agenda-update-diary))
 ```
-
 
 # ediff
 
@@ -2671,15 +3008,19 @@ Trying out orderless completion
   :custom
   (completion-styles '(orderless basic))
   (completion-category-overrides '((file (styles partial-completion)))))
+```
 
-(use-package corfu
+
+Turned off while I try out the built in completion framework in emacs 31
+```
+(my-ignore (use-package corfu
   :ensure t
   ;; `global-corfu-mode' is commented out below, so nothing currently
   ;; activates corfu and it can be deferred.
   :defer t
   :init
-;;  (global-corfu-mode)
-  )
+  (global-corfu-mode)
+  ))
 ```
 
 # Font name completion for customize buffers
@@ -2853,6 +3194,11 @@ No key binding for now.
   ;; splits the window
   (setq consult-preview-key "M-.")
 
+  ;; Route xref (e.g. eglot's jump-to-definition/references in Java) through
+  ;; consult's UI instead of the default *xref* buffer.
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+
   ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
   ;; completion-at-point, which otherwise falls back to the *Completions*
   ;; buffer popup (e.g. for the font-family widget completion done earlier). Route it
@@ -2888,22 +3234,10 @@ No key binding for now.
       ;; show more completion candidates at once.
       ("<tab>" . completion-preview-complete))
     :config
-    (setq completion-preview-minimum-symbol-length 3)
+    (setq completion-preview-minimum-symbol-length 4)
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
-```
-
-## temptemp tryout vertico-posframe - move to vertico section if kept.
-Its cute but not more "ergonomic"
-```
-(my-ignore
-(use-package vertico-posframe
-  :ensure t
-  :init
-  (vertico-posframe-mode 1)
-  :custom
-  (vertico-posframe-width 100)))
 ```
 
 # GC tuning
