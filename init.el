@@ -428,16 +428,14 @@
 
 ;; macOS-specific config (homebrew exec-path, ns-auto-titlebar, pbcopy/paste,
 ;; appt glass-bell sound) lives in macos.el. Loaded here, after elpaca/
-;; use-package are ready, and before the `elpaca-wait' below -- that wait
-;; covers ns-auto-titlebar (declared inside macos.el) as well as the theme
-;; packages above, so macos.el must be loaded before it runs.
+;; use-package are ready.
 (when (eq system-type 'darwin)
   (load (locate-user-emacs-file "macos.el")))
 
-;; Make sure the theme and titlebar packages above are fully installed and
-;; activated before custom.el (which enables the folio theme by name) loads.
-(elpaca-wait)
-
+;; No elpaca-wait needed here: the active theme is set explicitly via
+;; `load-theme' above, not by custom.el. custom-enabled-themes only ends up
+;; in custom.el if you use "Save Theme Settings" in `M-x customize-themes';
+;; as long as that's avoided, custom.el never races the theme package install.
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 ;; All customizations are stored on the side in custom.el
 (setq custom-file (concat user-emacs-directory "custom.el"))
@@ -2109,15 +2107,12 @@ declaration if any such methods were found."
 	;; rescan buffers as they change
 	imenu-auto-rescan t))
 
-;; ilist-plus :config below requires 'imenu-list synchronously, so imenu-list's
-;; elpaca install/build must be finished first, not just queued.
-(elpaca-wait)
-
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
   ;; :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
+  :after imenu-list
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
@@ -2126,11 +2121,8 @@ declaration if any such methods were found."
 
 ;; Now that modeline.el (loaded above) has defined the richer dedicated-window
 ;; keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-;; self-contained fallback after imenu loads. Make sure ilist-plus itself is
-;; fully activated first since the hook below calls its functions directly.
-(elpaca-wait)
-
-(with-eval-after-load 'imenu-list
+;; self-contained fallback.
+(with-eval-after-load 'ilist-plus
   (setq imenu-list-mode-line-format
 	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
 
