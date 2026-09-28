@@ -176,25 +176,28 @@
 ;; early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
 
-;; GUI Emacs on macOS is launched by launchd, not a login shell, so it only
-;; gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
-;; jdtls and pgformatter aren't visible to `executable-find' without this.
-;; But exec-path-from-shell is relatively expensive so as compromise
-;; just add homebrew onto the path as needed
-
-(unless (member "/opt/homebrew/bin" exec-path)
-  (add-to-list 'exec-path "/opt/homebrew/bin"))
-
 ;;; Customizations
 
 ;;; Font setup
 ;; This needs to be done prior to theme setup.
+;; Note: font sets are to some extent os dependent
 
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
 (defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
   "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font "Helvetica"
   "Default variable-pitch font family.")
+
+;; I like using a 1.3 scaled version of the system UI font for the tabs.
+(if (eq system-type 'darwin)
+  (custom-set-faces
+   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
+
+  (custom-set-faces
+   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
+
+  (custom-set-faces
+   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
 
 ;; Expand the default font height enough that emacs looks normal when opened.
 (set-face-attribute 'default nil :height 160)
@@ -230,9 +233,6 @@
 (defvar margin-tan-bg "#EEE8D5")
 (defvar margin-gray-bg "gray20")
 (defvar margin-light-gray-bg "gray95")
-
-;; Disable the theme safety check.
-(setq custom-safe-themes t)
 
 ;; Disable all previously loaded themes before loading another one.
 (advice-add 'load-theme :before
@@ -413,19 +413,6 @@
 		(set-face-attribute 'my-modeline-position-face nil :background
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 
-
-;; Modus doesn't handle fonts so just set this directly here where all other styling is
-;; being done. I like using a 1.3 scaled version of the system UI font for the tabs.
-(if (< emacs-major-version 31)
-  (custom-set-faces
-   '(tab-line ((t :family ".AppleSystemUIFont" :height 1.3))))
-
-  (custom-set-faces
-   '(tab-line-active ((t :family ".AppleSystemUIFont" :height 1.3))))
-
-  (custom-set-faces
-   '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
-
 ;; Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
 ;; lives alongside this file) discoverable by `load-theme'/`M-x customize-themes'
 ;; without needing a package wrapper.
@@ -440,11 +427,13 @@
 (use-package nano-like-modus-theme
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 
-;; Deal with dark/light mode macos ui elements like the scrollbar
-(use-package ns-auto-titlebar
-  :ensure t
-  :config
-  (ns-auto-titlebar-mode 1))
+;; macOS-specific config (homebrew exec-path, ns-auto-titlebar, pbcopy/paste,
+;; appt glass-bell sound) lives in macos.el. Loaded here, after elpaca/
+;; use-package are ready, and before the `elpaca-wait' below -- that wait
+;; covers ns-auto-titlebar (declared inside macos.el) as well as the theme
+;; packages above, so macos.el must be loaded before it runs.
+(when (eq system-type 'darwin)
+  (load (locate-user-emacs-file "macos.el")))
 
 ;; Make sure the theme and titlebar packages above are fully installed and
 ;; activated before custom.el (which enables the folio theme by name) loads.
@@ -678,32 +667,8 @@
 ;; TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
-;; Copy to clipboard functions for terminal mode
-;; copy the current region directly
-(defun pbcopy-region ()
-  (interactive)
-  (call-process-region (point) (mark) "pbcopy")
-  (setq deactivate-mark t))
-
-;; copy the latest kill ring
-(defun pbcopy-kill-ring (&optional _xpush)
-  (interactive)
-  (let ((process-connection-type nil)
-	(text (current-kill 0)))
-    (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
-      (process-send-string proc text)
-      (process-send-eof proc))))
-
-;; Final version hook into interprogram-cut-function instead
-;; for terminal mode cut to system clipboard
-(defun paste-for-osx (text &optional _push)
-  (let ((process-connection-type nil))
-    (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
-      (process-send-string proc text)
-      (process-send-eof proc))))
-
-(unless window-system
-  (setq interprogram-cut-function 'paste-for-osx))
+;; Copy to clipboard functions for terminal mode are macOS-specific; see
+;; macos.el (pbcopy-region, pbcopy-kill-ring, paste-for-osx).
 
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
@@ -1095,30 +1060,13 @@ entering its warning window.")
 `appt-time-msg-list', so `my-appt-mode-line-update' can tell which
 appointment -- if any -- just matured and was deleted by this check.")
 
-(defun play-mac-sound (sound-name)
-  "Play a macOS system sound asynchronously."
-  (let ((sound-path (format "/System/Library/Sounds/%s.aiff" sound-name)))
-    (if (file-exists-p sound-path)
-        (start-process "mac-sound" nil "afplay" sound-path)
-      (message "Sound file not found: %s" sound-path))))
-
-;; Replace the appointment tone with glass-bell
-(defun my-appt-glass-bell (orig-fun &rest args)
-  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-or silence it if every appointment due right now has been dismissed.
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check."
-  (setq my-appt--pre-check-due (my-appt-due-list))
-  (let* ((undismissed (seq-remove (lambda (entry)
-                                     (member (nth 3 entry) my-appt-dismissed-keys))
-                                   my-appt--pre-check-due))
-         (ring-bell-function (if undismissed
-                                 (lambda () (play-mac-sound "Glass"))
-                               #'ignore)))
-    (apply orig-fun args)))
-
-(advice-add 'appt-check :around #'my-appt-glass-bell)
+;; The appointment glass-bell sound (play-mac-sound, my-appt-glass-bell) is
+;; defined in macos.el, but wired up here rather than there: `appt-activate'
+;; above calls `appt-check' synchronously as part of activating, before
+;; `my-appt-due-list' is even defined, so the advice must not become active
+;; until after that point.
+(when (eq system-type 'darwin)
+  (advice-add 'appt-check :around #'my-appt-glass-bell))
 
 ;; TODO: should this move to modeline.el?
 
@@ -1342,9 +1290,12 @@ mode-line appointment countdown.")
 (use-package org-timegrid
   :ensure (:host github :repo "Gleek/org-timegrid")
   :commands (org-timegrid-week)
-  ;; Add the daily strip at the top of agendas.
+  ;; Add the daily strip at the top of agendas. Deferred to `org-agenda'
+  ;; loading (not `:init', which would run at startup) so that enabling the
+  ;; strip mode doesn't force org-agenda's own require chain eagerly.
   :init
-  (org-timegrid-agenda-mode 1)
+  (with-eval-after-load 'org-agenda
+    (org-timegrid-agenda-mode 1))
   (with-eval-after-load 'org-timegrid-agenda
     ;; The strip otherwise mirrors `org-starting-day', which for our default
     ;; Monday-anchored weekly agenda span is the preceding Monday, not
@@ -1537,7 +1488,7 @@ effect without a restart."
 
   (when (and (treesit-available-p)
              (not (treesit-language-available-p 'java)))
-    (ignore-errorse (treesit-install-language-grammar 'java))))
+    (ignore-errors (treesit-install-language-grammar 'java))))
 
 (setq major-mode-remap-alist
       '((java-mode . java-ts-mode)))
@@ -2122,7 +2073,6 @@ declaration if any such methods were found."
 ;;;; python
 
 ;; TODO turn on eglot integration later.
-
 
 ;;;; elisp
 
