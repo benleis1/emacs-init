@@ -585,14 +585,14 @@
 ;; put old version in .saves under .emacs.d and disable autosaves.
 
 ;; Define a directory for auto-save and backup files
-(defconst my-save-folder (locate-user-emacs-file ".saves"))
+(defconst my-save-folder (file-name-as-directory (locate-user-emacs-file ".saves")))
 
 ;; Ensure the directory exists
 (unless (file-exists-p my-save-folder)
   (make-directory my-save-folder t))
 
 (setq
-;; auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
+ auto-save-file-name-transforms `((".*" , my-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
  `(("." . ,my-save-folder))    ; don't litter my fs tree
@@ -601,8 +601,16 @@
  kept-old-versions 2
  version-control t)
 
+;; Lock files (.#filename) are a separate mechanism from auto-save/backup and
+;; by default always land next to the original file; redirect them into
+;; .saves too.
+(setq lock-file-name-transforms `((".*" , my-save-folder t)))
+
 ;; alternative strategy - just turn off auto-save.
-(setq auto-save-default nil)
+;;(setq auto-save-default nil)
+
+(setq auto-save-default t)
+
 
 ;;; Dired
 
