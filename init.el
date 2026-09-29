@@ -460,8 +460,7 @@
 (unless window-system
   (menu-bar-mode 0))
 
-;; turn off tool bar always
-(tool-bar-mode 0)
+;; Tool bar is already disabled via `default-frame-alist' in early-init.el.
 
 ;; Emacs works really hard to be incredibly compatible out-of-the-box
 ;; with a wide variety of languages. That comes at the cost of a
