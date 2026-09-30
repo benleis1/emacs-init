@@ -161,6 +161,11 @@
 (add-hook 'after-init-hook #'elpaca-process-queues)
 (elpaca `(,@elpaca-order))
 
+;; Use the version lock file if it exists.  To regenerate elpaca.lock after intentionally upgrading
+;; packages: (elpaca-write-lock-file (locate-user-emacs-file "elpaca.lock")).
+(when (file-exists-p (locate-user-emacs-file "elpaca.lock"))
+  (setq elpaca-lock-file (locate-user-emacs-file "elpaca.lock")))
+
 ;; use-package has been part of core emacs since version 29 so I assume its OK
 ;; to just require it.
 (require 'use-package)
@@ -668,7 +673,6 @@
 (global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
-;; TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
 ;; Copy to clipboard functions for terminal mode are macOS-specific; see
@@ -804,11 +808,6 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
 
 ;; render remote images
 (setq markdown-display-remote-images t)
-
-;; Make markdown coding faces inherit as need from from fixed pitch
-(my-ignore (custom-set-faces
- '(markdown-markup-face ((t (:inherit fixed-pitch))))
- '(markdown-code-face ((t (:inherit fixed-pitch))))))
 
 ;; When following a link whose target can't be found as-is, retry
 ;; with a ".md" extension appended (e.g. a link to "foo" or "foo.html"
@@ -1172,7 +1171,7 @@ Takes an optional, ignored argument so it tolerates being called as
 
 ;; How `my-meetings-file' actually gets populated is set up in local.el.
 ;; once excorporate is settled again it will be done there.
-(defconst my-meetings-file (file-name-concat my-org-root "meetings.org")
+(defconst my-meetings-file (file-name-concat my-org-root "calendar.org")
   "Org file holding external meetings from outlook in my case.
 Part of `org-agenda-files' so meetings show up in the agenda, the
 org-timegrid strip/week view, and via `org-agenda-to-appt' in the
@@ -1245,11 +1244,10 @@ mode-line appointment countdown.")
   :config
   (setq org-modern-table nil)
   ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
-  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts,
-  ;; unlike the other levels' triangles (Geometric Shapes block). Swap it for
-  ;; the universally-supported Arrows block instead.
+  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts, so
+  ;; reuse level 4.
   (setq org-modern-fold-stars
-        '(("▶" . "▼") ("▷" . "▽") ("→" . "↓") ("▹" . "▿") ("▸" . "▾"))))
+        '(("▶" . "▼") ("▷" . "▽") ("▹" . "▿") ("▹" . "▿") ("▸" . "▾"))))
 
 ;; Indent by heading depth
 (setq org-startup-indented t)
@@ -2148,7 +2146,6 @@ declaration if any such methods were found."
   'write-file)
 
 ;; Add zoom in/out to buffer menu
-;; TODO get the keybinding message straight?
 (define-key-after
   (lookup-key global-map [menu-bar buffer])
   [zoom-in]
