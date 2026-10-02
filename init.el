@@ -1024,13 +1024,19 @@ across light/dark theme switches instead of a fixed color like green.")
     (expt frac 2)))
 
 (defun my-appt-mode-line-color (intensity)
-  "Interpolate the glyph color for the given eased urgency INTENSITY."
+  "Interpolate the glyph color for the given eased urgency INTENSITY.
+Falls back to `my-appt-mode-line-color-near' unmixed if either endpoint
+color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
+the `default' face when called before any frame exists, as happens while
+a daemon is still starting up."
   (let ((from (color-name-to-rgb (or my-appt-mode-line-color-far
                                       (face-foreground 'default nil t))))
         (to (color-name-to-rgb my-appt-mode-line-color-near)))
-    (apply #'color-rgb-to-hex
-           (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
-                   '(2)))))
+    (if (and from to)
+        (apply #'color-rgb-to-hex
+               (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
+                       '(2)))
+      my-appt-mode-line-color-near)))
 
 (defun my-appt-due-list ()
   "Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
@@ -1049,7 +1055,11 @@ across checks."
 
 (defvar my-appt-dismissed-keys nil
   "Appointment KEYs (see `my-appt-due-list') dismissed from the mode line.
-An entry stays suppressed until it ages out of the warning window on its own.")
+An entry stays suppressed until it ages out of the warning window on its own.
+KEYs are (MINUTES-SINCE-MIDNIGHT . TITLE), with no date component, so this
+is reset daily by `my-appt-mode-line-update' -- see `my-appt-dismissed-day'
+-- otherwise a recurring meeting dismissed today would stay permanently
+suppressed on every later day it recurs at the same time.")
 
 (defvar my-appt-overdue-list nil
   "List of (TITLE . KEY) for appointments whose time has passed.
@@ -1057,6 +1067,9 @@ An entry stays suppressed until it ages out of the warning window on its own.")
 is reached, so this is the only record of it left; it is shown as \"Due\"
 in the mode line until dismissed or superseded by another appointment
 entering its warning window.")
+
+(defvar my-appt-dismissed-day nil
+  "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
 (defvar my-appt--pre-check-due nil
   "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
@@ -1080,13 +1093,18 @@ appointment -- if any -- just matured and was deleted by this check.")
 
 (defun my-appt-mode-line-dismiss (_event)
   "Dismiss the appointment(s) currently shown in the mode line, whether
-still counting down or already overdue.
-Each stays dismissed until it ages out of the warning window on its own."
+still counting down or already overdue, logging clocked time for each
+newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
+Each stays dismissed until it ages out of the warning window on its own;
+the dismissed-keys check also keeps a repeat dismiss click from logging
+the same appointment twice."
   (interactive "e")
-  (dolist (entry (my-appt-due-list))
-    (push (nth 3 entry) my-appt-dismissed-keys))
-  (dolist (entry my-appt-overdue-list)
-    (push (cdr entry) my-appt-dismissed-keys))
+  (let* ((due-keys (mapcar (lambda (entry) (nth 3 entry)) (my-appt-due-list)))
+         (overdue-keys (mapcar #'cdr my-appt-overdue-list))
+         (new-keys (seq-remove (lambda (key) (member key my-appt-dismissed-keys))
+                                (append due-keys overdue-keys))))
+    (my-meeting-log-record-dismissed-appointments new-keys)
+    (setq my-appt-dismissed-keys (append new-keys my-appt-dismissed-keys)))
   (setq my-appt-overdue-list nil)
   (my-appt-mode-line-update)
   (force-mode-line-update t))
@@ -1103,6 +1121,11 @@ Each stays dismissed until it ages out of the warning window on its own."
 a lingering \"Due\" glyph for an appointment whose time has passed.
 Takes an optional, ignored argument so it tolerates being called as
 :after advice on `appt-check', which itself takes an optional FORCE arg."
+  (let ((today (time-to-days nil)))
+    (unless (equal today my-appt-dismissed-day)
+      (setq my-appt-dismissed-keys nil
+            my-appt-overdue-list nil
+            my-appt-dismissed-day today)))
   (let* ((raw-post (my-appt-due-list))
          (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
                            raw-post)))
@@ -1179,6 +1202,106 @@ mode-line appointment countdown.")
 
 (with-eval-after-load 'org
   (add-to-list 'org-agenda-files my-meetings-file))
+
+;; `my-meetings-file' is transient, my-meeting-log-file is not and is the
+;; permanent logs of meetings which is used for reporting etc.
+(defconst my-meeting-log-file (file-name-concat my-org-root "meeting-log.org")
+  "Org file logging clocked time for dismissed calendar appointments.
+Unlike `my-meetings-file', this file is never overwritten so entries
+logged here persist. See `my-meeting-log-record-dismissed-appointments'.")
+
+(defconst my-meeting-log-excluded-title-regexp "\\`Declined: "
+  "Regexp matching `my-meetings-file' headings to exclude from clocked
+meeting-log entries -- e.g. meetings the Outlook sync marks as
+declined, which the user never actually attended.")
+
+(defun my-meeting-log--parse-calendar-entries (&optional buffer)
+  "Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
+non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
+BUFFER (default the current buffer), which is expected to hold
+`my-meetings-file''s layout: a heading followed by a timestamp."
+  (with-current-buffer (or buffer (current-buffer))
+    (delq nil
+          (org-map-entries
+           (lambda ()
+             (let* ((heading (org-trim
+                               (replace-regexp-in-string
+                                org-link-bracket-re "\\2"
+                                (org-get-heading t t t t))))
+                    (ts (save-excursion
+                          (end-of-line)
+                          (skip-chars-forward " \t\n")
+                          (org-element-timestamp-parser))))
+               (when (and ts (org-timestamp-has-time-p ts)
+                          (not (string-match-p my-meeting-log-excluded-title-regexp heading)))
+                 (list (+ (* 60 (org-element-property :hour-start ts))
+                          (org-element-property :minute-start ts))
+                       heading
+                       (org-timestamp-to-time ts)
+                       (org-timestamp-to-time ts t)))))))))
+
+(defun my-meeting-log--match-entry (start-minutes title entries)
+  "Return the entry in ENTRIES (as from `my-meeting-log--parse-calendar-entries')
+at START-MINUTES whose heading matches TITLE, or nil. Titles are matched
+exactly first, then as a substring either way, since the appointment
+text org hands to `appt-add' may be a prefix/suffix of the full heading."
+  (seq-find (lambda (entry)
+              (and (= (nth 0 entry) start-minutes)
+                   (let ((heading (nth 1 entry)))
+                     (or (string-equal heading title)
+                         (string-match-p (regexp-quote title) heading)
+                         (string-match-p (regexp-quote heading) title)))))
+            entries))
+
+(defun my-meeting-log--append-clock (title start-time end-time)
+  "Append a clocked heading for TITLE to `my-meeting-log-file', clocked
+from START-TIME to END-TIME, then refresh its clock-summary dynamic
+block and save."
+  ;; `org-clock-into-drawer' and `org-duration-from-minutes' have no
+  ;; autoload cookie, so org-clock.el/org-duration.el must be required
+  ;; explicitly -- plain `(require 'org)' at the top of this file doesn't
+  ;; pull them in, and org-agenda/org-clock stay deferred until now.
+  (require 'org-clock)
+  (require 'org-duration)
+  (with-current-buffer (find-file-noselect my-meeting-log-file)
+    (save-excursion
+      (goto-char (if (re-search-forward "^\\* Clock Summary" nil t)
+                     (match-beginning 0)
+                   (point-max)))
+      (let* ((drawer (org-clock-into-drawer))
+             (minutes (max 0 (round (/ (float-time (time-subtract end-time start-time)) 60))))
+             (clock-line (format "CLOCK: %s--%s =>  %s\n"
+                                  (format-time-string (org-time-stamp-format t t) start-time)
+                                  (format-time-string (org-time-stamp-format t t) end-time)
+                                  (org-duration-from-minutes minutes))))
+        (insert (format "* %s\n%s\n%s\n"
+                         title
+                         (format-time-string (org-time-stamp-format t) start-time)
+                         (if (stringp drawer)
+                             (format ":%s:\n%s:END:" drawer clock-line)
+                           clock-line)))))
+    (org-update-all-dblocks)
+    (save-buffer)))
+
+(defun my-meeting-log-record-dismissed-appointments (keys)
+  "Log clocked time for each dismissed appointment in KEYS, a list of
+\(START-MINUTES . TITLE) conses (see `my-appt-due-list' above).
+Looks up each appointment's scheduled start/end in `my-meetings-file'
+and records that range as a CLOCK entry in `my-meeting-log-file'. A
+lookup miss or write failure is reported to *Messages* and otherwise
+ignored -- this must never block dismissing the mode-line notice."
+  (let* ((today (time-to-days nil))
+         (all-entries (my-meeting-log--parse-calendar-entries (find-file-noselect my-meetings-file)))
+	 ;; filter to today first.
+         (entries (seq-filter (lambda (entry) (= (time-to-days (nth 2 entry)) today))
+                               all-entries)))
+    (dolist (key keys)
+      (condition-case err
+          (let ((entry (my-meeting-log--match-entry (car key) (cdr key) entries)))
+            (if entry
+                (my-meeting-log--append-clock (cdr key) (nth 2 entry) (nth 3 entry))
+              (message "my-meeting-log: no calendar.org match for %S" (cdr key))))
+        (error (message "my-meeting-log: couldn't log %S: %s" (cdr key) (error-message-string err)))))))
 
 ;; mouse support
 ;; This is fairly expensive so we defer it until org is actually loaded
