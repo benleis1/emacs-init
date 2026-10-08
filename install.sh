@@ -7,7 +7,7 @@ dest="$HOME/.emacs.d"
 echo "Linking the config files into $dest"
 mkdir -p "$dest"
 
-for f in early-init.el init.el macos.el modeline.el tab-config.el dape-java.el; do
+for f in early-init.el init.el macos.el linux.el modeline.el tab-config.el dape-java.el; do
   ln -sfn "$src/$f" "$dest/$f"
 done
 
@@ -29,4 +29,6 @@ if ! font_installed; then
   echo "WARNING: 'DejaVuSansM Nerd Font' not found. early-init.el requires it;" >&2
   echo "         without it Emacs falls back to a terminal frame instead of a GUI one." >&2
   echo "         macOS: brew install --cask font-dejavu-sans-mono-nerd-font" >&2
+  echo "         Linux: download DejaVuSansMono.zip from github.com/ryanoasis/nerd-fonts/releases," >&2
+  echo "                unzip into ~/.local/share/fonts, then run fc-cache -f" >&2
 fi

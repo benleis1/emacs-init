@@ -191,7 +191,7 @@
 
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
 ;; `my-default-fixed-pitch-font' is defined in early-init.el.
-(defvar my-default-variable-pitch-font "Helvetica"
+(defvar my-default-variable-pitch-font (if (eq system-type 'gnu/linux) "Sans" "Helvetica")
   "Default variable-pitch font family.")
 
 ;; I like using a 1.3 scaled version of the system UI font for the tabs.
@@ -432,11 +432,13 @@
 (use-package nano-like-modus-theme
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 
-;; macOS-specific config (homebrew exec-path, ns-auto-titlebar, pbcopy/paste,
-;; appt glass-bell sound) lives in macos.el. Loaded here, after elpaca/
-;; use-package are ready.
-(when (eq system-type 'darwin)
-  (load (locate-user-emacs-file "macos.el")))
+;; OS-specific config lives in macos.el (homebrew exec-path, ns-auto-titlebar,
+;; pbcopy/paste, appt sound) and linux.el (wl-copy clipboard, appt sound).
+;; Loaded here, after elpaca/use-package are ready.
+(cond ((eq system-type 'darwin)
+       (load (locate-user-emacs-file "macos.el")))
+      ((eq system-type 'gnu/linux)
+       (load (locate-user-emacs-file "linux.el"))))
 
 ;; No elpaca-wait needed here: the active theme is set explicitly via
 ;; `load-theme' above, not by custom.el. custom-enabled-themes only ends up
@@ -678,8 +680,8 @@
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
-;; Copy to clipboard functions for terminal mode are macOS-specific; see
-;; macos.el (pbcopy-region, pbcopy-kill-ring, paste-for-osx).
+;; Copy to clipboard functions for terminal mode are OS-specific; see
+;; macos.el (pbcopy-*) and linux.el (my-wl-copy).
 
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
@@ -1086,12 +1088,37 @@ requiring a manual dismiss. Reset daily alongside `my-appt-dismissed-keys'.")
 `appt-time-msg-list', so `my-appt-mode-line-update' can tell which
 appointment -- if any -- just matured and was deleted by this check.")
 
-;; The appointment glass-bell sound (play-mac-sound, my-appt-glass-bell) is
-;; defined in macos.el, but wired up here rather than there: `appt-activate'
-;; above calls `appt-check' synchronously as part of activating, before
-;; `my-appt-due-list' is even defined, so the advice must not become active
-;; until after that point.
-(when (eq system-type 'darwin)
+(defun my-appt-glass-bell (orig-fun &rest args)
+  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
+but only when an appointment is newly entering its warning window this
+check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
+`my-appt-beeped-keys'. This keeps the sound from firing again on every
+subsequent `appt-check' cycle for the same still-pending appointment,
+which would otherwise repeat for as long as it stays undismissed (e.g.
+while away from the frame with nobody around to dismiss it).
+Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
+runs, so `my-appt-mode-line-update' can detect appointments that matured
+during this check."
+  (setq my-appt--pre-check-due (my-appt-due-list))
+  (let* ((newly-due (seq-remove (lambda (entry)
+                                   (let ((key (nth 3 entry)))
+                                     (or (member key my-appt-dismissed-keys)
+                                         (member key my-appt-beeped-keys))))
+                                 my-appt--pre-check-due))
+         (ring-bell-function (if newly-due
+                                 #'my-play-appt-sound
+                               #'ignore)))
+    (when newly-due
+      (setq my-appt-beeped-keys
+            (append (mapcar (lambda (entry) (nth 3 entry)) newly-due)
+                    my-appt-beeped-keys)))
+    (apply orig-fun args)))
+
+;; `appt-activate' above calls `appt-check' synchronously as part of activating,
+;; before `my-appt-due-list' is even defined, so this advice must not become
+;; active until after that point. `my-play-appt-sound' is defined in
+;; macos.el / linux.el.
+(when (fboundp 'my-play-appt-sound)
   (advice-add 'appt-check :around #'my-appt-glass-bell))
 
 ;; TODO: should this move to modeline.el?

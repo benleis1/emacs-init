@@ -43,12 +43,7 @@
 (unless window-system
   (setq interprogram-cut-function 'paste-for-osx))
 
-;; Appointment glass-bell sound. `advice-add' onto `appt-check' happens in
-;; init.el instead of here (see the appt section there): `appt-activate'
-;; calls `appt-check' synchronously as part of activating, before
-;; `my-appt-due-list' below it is even defined, so the advice must not
-;; become active until after that point -- `with-eval-after-load' on the
-;; `appt' feature would fire too early, mid-way through `appt-activate'.
+;; Appointment alert sound; the advice that uses it lives in init.el.
 (defun play-mac-sound (sound-name)
   "Play a macOS system sound asynchronously."
   (let ((sound-path (format "/System/Library/Sounds/%s.aiff" sound-name)))
@@ -56,29 +51,6 @@
         (start-process "mac-sound" nil "afplay" sound-path)
       (message "Sound file not found: %s" sound-path))))
 
-;; Replace the appointment tone with glass-bell
-(defun my-appt-glass-bell (orig-fun &rest args)
-  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-but only when an appointment is newly entering its warning window this
-check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
-`my-appt-beeped-keys'. This keeps the sound from firing again on every
-subsequent `appt-check' cycle for the same still-pending appointment,
-which would otherwise repeat for as long as it stays undismissed (e.g.
-while away from the frame with nobody around to dismiss it).
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check."
-  (setq my-appt--pre-check-due (my-appt-due-list))
-  (let* ((newly-due (seq-remove (lambda (entry)
-                                   (let ((key (nth 3 entry)))
-                                     (or (member key my-appt-dismissed-keys)
-                                         (member key my-appt-beeped-keys))))
-                                 my-appt--pre-check-due))
-         (ring-bell-function (if newly-due
-                                 (lambda () (play-mac-sound "Glass"))
-                               #'ignore)))
-    (when newly-due
-      (setq my-appt-beeped-keys
-            (append (mapcar (lambda (entry) (nth 3 entry)) newly-due)
-                    my-appt-beeped-keys)))
-    (apply orig-fun args)))
+;; Appointment alert sound, called by `my-appt-glass-bell' in init.el.
+(defun my-play-appt-sound ()
+  (play-mac-sound "Glass"))
