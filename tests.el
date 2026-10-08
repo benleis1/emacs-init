@@ -60,3 +60,96 @@ everything on disk, then only time a second, now genuinely warm, load."
                          (string-to-number (match-string 1 output)))))
       (should elapsed)
       (should (< elapsed 2.5)))))
+
+;; CI runs an older Emacs than the one used day to day, so a call to an
+;; Emacs 31-only function that isn't guarded only blows up there. Statically
+;; scan the config files for these symbols instead of relying on the running
+;; Emacs. A use counts as guarded when it sits in the body of a `when'/`if'
+;; (then branch)/`and' whose test requires Emacs >= 31 or `fboundp's/`boundp's
+;; the symbol. Add symbols here as new Emacs 31 features are adopted.
+(defconst my/emacs31-only-symbols
+  '(;; Modes
+    mouse-shift-adjust-mode find-function-mode prettify-special-glyphs-mode
+    delete-selection-local-mode center-line-mode delete-trailing-whitespace-mode
+    system-taskbar-mode icalendar-mode conf-npmrc-mode mhtml-ts-mode
+    go-work-ts-mode
+    ;; Commands
+    copy-theme-options unix-word-rubout unix-filename-rubout unfill-paragraph
+    fill-paragraph-semlf fill-region-as-paragraph-semlf
+    shell-command-do-open native-compile-directory
+    ;; Functions
+    garbage-collect-heapsize char-displayable-on-frame-p frame-initial-p
+    set-local plusp minusp oddp evenp drop-while take-while
+    hash-table-contains-p color-blend dom-inner-text truncate-string-pixelwise
+    remove-display-text-property completion-table-with-metadata
+    multiple-command-partition-arguments ensure-proper-list
+    buffer-local-toplevel-value set-buffer-local-toplevel-value
+    ;; Macros
+    static-when static-unless setopt-local incf decf with-work-buffer cond*)
+  "Symbols that only exist in Emacs 31 and later (from etc/NEWS of Emacs 31).
+Deliberately omits generic names like `all' and `any' that would false-positive.")
+
+(defun my/emacs31-guard-p (test sym)
+  "Return non-nil if TEST guarantees Emacs 31+ or that SYM is defined."
+  (cond
+   ((not (consp test)) nil)
+   ((and (memq (car test) '(>= > <= <))
+         (eq (cadr test) 'emacs-major-version)
+         (integerp (nth 2 test)))
+    (pcase (car test)
+      ('>= (>= (nth 2 test) 31))
+      ('> (>= (nth 2 test) 30))
+      (_ nil)))
+   ((and (memq (car test) '(fboundp boundp))
+         (equal (cadr test) `(quote ,sym)))
+    t)
+   ((eq (car test) 'and)
+    (seq-some (lambda (x) (my/emacs31-guard-p x sym)) (cdr test)))
+   (t nil)))
+
+(defun my/find-unguarded-symbol (form sym &optional guarded)
+  "Return non-nil if FORM uses SYM outside a guard (GUARDED non-nil if inside one)."
+  (cond
+   ((eq form sym) (not guarded))
+   ((not (consp form)) nil)
+   ((not (proper-list-p form))
+    (or (my/find-unguarded-symbol (car form) sym guarded)
+        (my/find-unguarded-symbol (cdr form) sym guarded)))
+   ((and (eq (car form) 'quote) (eq (cadr form) sym)) (not guarded))
+   ((and (memq (car form) '(when if and)) (cdr form))
+    (let* ((test (cadr form))
+           (inner (or guarded (my/emacs31-guard-p test sym)))
+           (rest (cddr form)))
+      (or (and (not inner) (my/find-unguarded-symbol test sym guarded))
+          (and (eq (car form) 'if) rest
+               (or (my/find-unguarded-symbol (car rest) sym inner)
+                   (seq-some (lambda (x) (my/find-unguarded-symbol x sym guarded))
+                             (cdr rest))))
+          (and (not (eq (car form) 'if))
+               (seq-some (lambda (x) (my/find-unguarded-symbol x sym inner))
+                         rest)))))
+   (t (seq-some (lambda (x) (my/find-unguarded-symbol x sym guarded)) form))))
+
+(defun my/read-all-forms (file)
+  "Return the list of top-level forms in FILE."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (emacs-lisp-mode)
+    (let (forms)
+      (goto-char (point-min))
+      (condition-case nil
+          (while t (push (read (current-buffer)) forms))
+        (end-of-file nil))
+      (nreverse forms))))
+
+(ert-deftest my/test-no-unguarded-emacs31-functions ()
+  "Test that Emacs 31-only symbols are only used behind a version/fboundp guard."
+  (let (offenders)
+    (dolist (file (directory-files user-emacs-directory t "\\.el\\'"))
+      (unless (string-match-p "tests?\\.el\\'" file)
+        (dolist (form (my/read-all-forms file))
+          (dolist (sym my/emacs31-only-symbols)
+            (when (my/find-unguarded-symbol form sym)
+              (push (format "%s: %s" (file-name-nondirectory file) sym)
+                    offenders))))))
+    (should (null offenders))))

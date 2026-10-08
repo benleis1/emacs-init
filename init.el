@@ -486,7 +486,7 @@
 
   (context-menu-mode)
   ;; mouse-shift mode to allow shift-left click regions when  its available.
-  (when (<= emacs-major-version 28)
+  (when (>= emacs-major-version 31)
     (mouse-shift-adjust-mode))
 
   ;; Add dividers on the right and bottom
