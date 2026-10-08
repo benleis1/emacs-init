@@ -89,7 +89,7 @@ icon set can never break the mode-line."
 ;; no enlarging, no line-height juggling.
 
 (defface my-modeline-file-icon-face
-  '((t :foreground "white" :background "gray60"))
+  '((t :foreground "white" :background "gray60" :family "DejaVuSansM Nerd Font Propo" ))
   "Background face for the powerline-style file-type badge. Its
 `:background' is kept in sync with the active modus theme's `cursor'
 palette color by `my-modeline--sync-file-icon-face' whenever `modus-themes'
@@ -142,7 +142,8 @@ match the badge it renders inside of."
                                (file-name-nondirectory buffer-file-name)
                                :face 'my-modeline-file-icon-face)
     (my-modeline--icon-safe #'nerd-icons-icon-for-mode major-mode
-                             :face 'my-modeline-file-icon-face)))
+                            :face 'my-modeline-file-icon-face
+			    )))
 
 (defun my-modeline--file-type-divider ()
   "A solid right-pointing divider glyph, on `my-modeline-file-icon-divider-face',

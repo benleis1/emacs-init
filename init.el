@@ -485,7 +485,9 @@
     (on-demand-scroll-bar-mode 1))
 
   (context-menu-mode)
-  (mouse-shift-adjust-mode)
+  ;; mouse-shift mode to allow shift-left click regions when  its available.
+  (when (<= emacs-major-version 28)
+    (mouse-shift-adjust-mode))
 
   ;; Add dividers on the right and bottom
   (setq window-divider-default-places t)
@@ -1071,6 +1073,13 @@ entering its warning window.")
 (defvar my-appt-dismissed-day nil
   "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
+(defvar my-appt-beeped-keys nil
+  "Appointment KEYs (see `my-appt-due-list') already announced with the glass
+bell sound. Unlike `my-appt-dismissed-keys', this is set automatically --
+the first `appt-check' cycle in which a key enters its warning window adds
+it here, so later cycles stay silent for that same occurrence without
+requiring a manual dismiss. Reset daily alongside `my-appt-dismissed-keys'.")
+
 (defvar my-appt--pre-check-due nil
   "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
 `appt-time-msg-list', so `my-appt-mode-line-update' can tell which
@@ -1125,6 +1134,7 @@ Takes an optional, ignored argument so it tolerates being called as
     (unless (equal today my-appt-dismissed-day)
       (setq my-appt-dismissed-keys nil
             my-appt-overdue-list nil
+            my-appt-beeped-keys nil
             my-appt-dismissed-day today)))
   (let* ((raw-post (my-appt-due-list))
          (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
@@ -1183,8 +1193,8 @@ Takes an optional, ignored argument so it tolerates being called as
 ;;; org-mode
 ;; My typical usage of Org includes a main work tracking file, org-agenda,
 ;; integration with my exchange calendar and simple daily journal for which I
-;; have a capture template to add standup entries
-
+;; have a capture template to add standup entries. Most of my notes still live
+;; in markdown so that I can easily share them with colleagues.
 
 ;; Define an org root directory
 
@@ -1375,8 +1385,7 @@ ignored -- this must never block dismissing the mode-line notice."
 ;; Indent by heading depth
 (setq org-startup-indented t)
 
-;; Setup capture templates
-;; currently only have one for standup summaries
+;; Setup the standup summary capture template
 (defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename")
 (setq org-capture-templates
   '(    ;; ... other templates
@@ -1392,16 +1401,6 @@ ignored -- this must never block dismissing the mode-line notice."
 ;; Show up to 4 levels of org headings in the imenu and imenu-list
 ;; This is set due to how expensive building the org imenu tree is.
 (setq org-imenu-depth 4)
-
-;; Older unused code to prettify check boxes to use Unicode characters.
-;; Currently superseded by org-modern
-(my-ignore
-(add-hook 'org-mode-hook (lambda ()
- "Beautify Org Checkbox Symbol"
- (push '("[ ]" .  "☐") prettify-symbols-alist)
- (push '("[X]" . "☑" ) prettify-symbols-alist)
- (push '("[-]" . "❍" ) prettify-symbols-alist)
- (prettify-symbols-mode))))
 
 ;; I'm using org-pretty-table rather than org-modern's support for now
 ;; because it works better
@@ -1460,10 +1459,6 @@ ignored -- this must never block dismissing the mode-line notice."
 
 ;;;; Project.el settings.
 
-;; I prefer to have project-switch-project to just change the project for the next project
-;; command. bear in mind, project mostly uses the current directory of the buffer to
-;; determine the project
-(setq project-switch-commands 'project-any-command)
 ;; Set project boundary at the first build.gradle found as well
 (setopt project-vc-extra-root-markers '("build.gradle" "pom.xml"))
 
@@ -2719,5 +2714,6 @@ tag, followed by the normal editable field."
 
 ;; Make sure every package above has finished installing/activating before
 ;; init is considered done, rather than leaving elpaca's queue to finish in
-;; the background after the first frame appears.
+;; the background after the first frame appears. This makes the behavior
+;; deterministic after init completes.
 (elpaca-wait)
