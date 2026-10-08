@@ -88,7 +88,7 @@
 ;;
 ;; ## Prerequisites
 ;;   Things you'll want in place before this config will load and work cleanly:
-;;   - MacOS. There's direct use of pbcopy and other OS specific integration.
+;;   - MacOS or ubuntu have been tested so far. MacOS is my primary environment.
 ;;   - Emacs 30 or later (31 preferred).
 ;;   - git on PATH -- elpaca (the package manager) clones both its own
 ;;     repo and every package's repo, including a handful pulled straight

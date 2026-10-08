@@ -88,13 +88,16 @@ emacs='emacsclient -t -s default --alternate-editor=`
 
 ## Prerequisites
   Things you'll want in place before this config will load and work cleanly:
-  - MacOS. There's direct use of pbcopy and other OS specific integration.
+  - MacOS or ubuntu have been tested so far. MacOS is my primary environment.
   - Emacs 30 or later (31 preferred).
   - git on PATH -- elpaca (the package manager) clones both its own
     repo and every package's repo, including a handful pulled straight
     from GitHub rather than MELPA.
-  - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
-    mode-line and dired icons to render correctly.
+  - DejaVu Sans Mono Nerd Font installed (required). It's the startup font
+    set in early-init.el, and a missing font makes Emacs fall back to a
+    terminal frame instead of a GUI one. It also supplies the mode-line and
+    dired icons. To use another font, change `my-default-fixed-pitch-font'
+    in early-init.el.
   - aspell installed (falls back to ispell if not found) for flyspell.
   - A Java installation reachable via `my-java-home` (defaults to a jenv
     path) plus jdtls on PATH if you want eglot's Java support.
@@ -153,10 +156,15 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - [my-appt-mode-line-intensity](#my-appt-mode-line-intensity)
   - [my-appt-mode-line-color](#my-appt-mode-line-color)
   - [my-appt-due-list](#my-appt-due-list)
+  - [my-appt-glass-bell](#my-appt-glass-bell)
   - [my-appt-mode-line-open-agenda](#my-appt-mode-line-open-agenda)
   - [my-appt-mode-line-dismiss](#my-appt-mode-line-dismiss)
   - [my-appt-mode-line-update](#my-appt-mode-line-update)
 - [org-mode](#org-mode)
+  - [my-meeting-log--parse-calendar-entries](#my-meeting-log--parse-calendar-entries)
+  - [my-meeting-log--match-entry](#my-meeting-log--match-entry)
+  - [my-meeting-log--append-clock](#my-meeting-log--append-clock)
+  - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
 - [Programming modes](#programming-modes)
   - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
@@ -263,6 +271,13 @@ have changed across elpaca releases.
 (elpaca `(,@elpaca-order))
 ```
 
+Use the version lock file if it exists.  To regenerate elpaca.lock after intentionally upgrading
+packages: (elpaca-write-lock-file (locate-user-emacs-file "elpaca.lock")).
+```
+(when (file-exists-p (locate-user-emacs-file "elpaca.lock"))
+  (setq elpaca-lock-file (locate-user-emacs-file "elpaca.lock")))
+```
+
 use-package has been part of core emacs since version 29 so I assume its OK
 to just require it.
 ```
@@ -290,10 +305,9 @@ This needs to be done prior to theme setup.
 Note: font sets are to some extent os dependent
 
 Mixed-pitch mode. I use this in markdown and org modes currently.
+`my-default-fixed-pitch-font' is defined in early-init.el.
 ```
-(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
-  "Default fixed-pitch font family.")
-(defvar my-default-variable-pitch-font "Helvetica"
+(defvar my-default-variable-pitch-font (if (eq system-type 'gnu/linux) "Sans" "Helvetica")
   "Default variable-pitch font family.")
 ```
 
@@ -485,7 +499,6 @@ Specific folio theme overrides
       `((bg-margins ,margin-gray-bg)))
 ```
 
-
 Give nano-like its own fixed/variable-pitch fonts (relies on
 `modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and
 `variable-pitch'). Revert to the unspecified/default family otherwise.
@@ -567,22 +580,20 @@ Currently trying out the folio theme as my main theme.
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 ```
 
-macOS-specific config (homebrew exec-path, ns-auto-titlebar, pbcopy/paste,
-appt glass-bell sound) lives in macos.el. Loaded here, after elpaca/
-use-package are ready, and before the `elpaca-wait' below -- that wait
-covers ns-auto-titlebar (declared inside macos.el) as well as the theme
-packages above, so macos.el must be loaded before it runs.
+OS-specific config lives in macos.el (homebrew exec-path, ns-auto-titlebar,
+pbcopy/paste, appt sound) and linux.el (wl-copy clipboard, appt sound).
+Loaded here, after elpaca/use-package are ready.
 ```
-(when (eq system-type 'darwin)
-  (load (locate-user-emacs-file "macos.el")))
-```
-
-Make sure the theme and titlebar packages above are fully installed and
-activated before custom.el (which enables the folio theme by name) loads.
-```
-(elpaca-wait)
+(cond ((eq system-type 'darwin)
+       (load (locate-user-emacs-file "macos.el")))
+      ((eq system-type 'gnu/linux)
+       (load (locate-user-emacs-file "linux.el"))))
 ```
 
+No elpaca-wait needed here: the active theme is set explicitly via
+`load-theme' above, not by custom.el. custom-enabled-themes only ends up
+in custom.el if you use "Save Theme Settings" in `M-x customize-themes';
+as long as that's avoided, custom.el never races the theme package install.
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 All customizations are stored on the side in custom.el
 ```
@@ -617,10 +628,7 @@ turn off menu mode in text mode to save space
   (menu-bar-mode 0))
 ```
 
-turn off tool bar always
-```
-(tool-bar-mode 0)
-```
+Tool bar is already disabled via `default-frame-alist' in early-init.el.
 
 Emacs works really hard to be incredibly compatible out-of-the-box
 with a wide variety of languages. That comes at the cost of a
@@ -643,7 +651,9 @@ Add a faint window divider
     (on-demand-scroll-bar-mode 1))
 
   (context-menu-mode)
-  (mouse-shift-adjust-mode)
+  ;; mouse-shift mode to allow shift-left click regions when  its available.
+  (when (>= emacs-major-version 31)
+    (mouse-shift-adjust-mode))
 
   ;; Add dividers on the right and bottom
   (setq window-divider-default-places t)
@@ -781,7 +791,7 @@ put old version in .saves under .emacs.d and disable autosaves.
 
 Define a directory for auto-save and backup files
 ```
-(defconst my-save-folder (locate-user-emacs-file ".saves"))
+(defconst my-save-folder (file-name-as-directory (locate-user-emacs-file ".saves")))
 ```
 
 Ensure the directory exists
@@ -790,7 +800,7 @@ Ensure the directory exists
   (make-directory my-save-folder t))
 
 (setq
-;; auto-save-file-name-transforms `((".*" , my-auto-save-folder t))
+ auto-save-file-name-transforms `((".*" , my-save-folder t))
  backup-by-copying t      ; don't clobber symlinks
  backup-directory-alist
  `(("." . ,my-save-folder))    ; don't litter my fs tree
@@ -800,10 +810,20 @@ Ensure the directory exists
  version-control t)
 ```
 
+Lock files (.#filename) are a separate mechanism from auto-save/backup and
+by default always land next to the original file; redirect them into
+.saves too.
+```
+(setq lock-file-name-transforms `((".*" , my-save-folder t)))
+```
+
 alternative strategy - just turn off auto-save.
-```
 (setq auto-save-default nil)
+
 ```
+(setq auto-save-default t)
+```
+
 
 # Dired
 
@@ -882,13 +902,12 @@ Control + a number key which are closer than the function keys.
 ```
 
 I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
-TODO should I just bind cmd - to the meta key and give up up cmd-c and cmd-v?
 ```
 (global-set-key (kbd "s-x") 'execute-extended-command)
 ```
 
-Copy to clipboard functions for terminal mode are macOS-specific; see
-macos.el (pbcopy-region, pbcopy-kill-ring, paste-for-osx).
+Copy to clipboard functions for terminal mode are OS-specific; see
+macos.el (pbcopy-*) and linux.el (my-wl-copy).
 
 Don't lose a paste from outside emacs because you killed a line
 in preparation before pasting.
@@ -1067,13 +1086,6 @@ sessions that never touch a VC-tracked buffer.
 render remote images
 ```
 (setq markdown-display-remote-images t)
-```
-
-Make markdown coding faces inherit as need from from fixed pitch
-```
-(my-ignore (custom-set-faces
- '(markdown-markup-face ((t (:inherit fixed-pitch))))
- '(markdown-code-face ((t (:inherit fixed-pitch))))))
 ```
 
 ## my-markdown-translate-filename-add-md-extension
@@ -1360,16 +1372,26 @@ across light/dark theme switches instead of a fixed color like green.")
 
 ## my-appt-mode-line-color
 >Interpolate the glyph color for the given eased urgency INTENSITY.
+Falls back to `my-appt-mode-line-color-near' unmixed if either endpoint
+color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
+the `default' face when called before any frame exists, as happens while
+a daemon is still starting up.
 
 ```
 (defun my-appt-mode-line-color (intensity)
-  "Interpolate the glyph color for the given eased urgency INTENSITY."
+  "Interpolate the glyph color for the given eased urgency INTENSITY.
+Falls back to `my-appt-mode-line-color-near' unmixed if either endpoint
+color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
+the `default' face when called before any frame exists, as happens while
+a daemon is still starting up."
   (let ((from (color-name-to-rgb (or my-appt-mode-line-color-far
                                       (face-foreground 'default nil t))))
         (to (color-name-to-rgb my-appt-mode-line-color-near)))
-    (apply #'color-rgb-to-hex
-           (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
-                   '(2)))))
+    (if (and from to)
+        (apply #'color-rgb-to-hex
+               (append (cl-mapcar (lambda (a b) (+ a (* intensity (- b a)))) from to)
+                       '(2)))
+      my-appt-mode-line-color-near)))
 ```
 
 ## my-appt-due-list
@@ -1396,7 +1418,11 @@ across checks."
 
 (defvar my-appt-dismissed-keys nil
   "Appointment KEYs (see `my-appt-due-list') dismissed from the mode line.
-An entry stays suppressed until it ages out of the warning window on its own.")
+An entry stays suppressed until it ages out of the warning window on its own.
+KEYs are (MINUTES-SINCE-MIDNIGHT . TITLE), with no date component, so this
+is reset daily by `my-appt-mode-line-update' -- see `my-appt-dismissed-day'
+-- otherwise a recurring meeting dismissed today would stay permanently
+suppressed on every later day it recurs at the same time.")
 
 (defvar my-appt-overdue-list nil
   "List of (TITLE . KEY) for appointments whose time has passed.
@@ -1405,19 +1431,68 @@ is reached, so this is the only record of it left; it is shown as \"Due\"
 in the mode line until dismissed or superseded by another appointment
 entering its warning window.")
 
+(defvar my-appt-dismissed-day nil
+  "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
+
+(defvar my-appt-beeped-keys nil
+  "Appointment KEYs (see `my-appt-due-list') already announced with the glass
+bell sound. Unlike `my-appt-dismissed-keys', this is set automatically --
+the first `appt-check' cycle in which a key enters its warning window adds
+it here, so later cycles stay silent for that same occurrence without
+requiring a manual dismiss. Reset daily alongside `my-appt-dismissed-keys'.")
+
 (defvar my-appt--pre-check-due nil
   "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
 `appt-time-msg-list', so `my-appt-mode-line-update' can tell which
 appointment -- if any -- just matured and was deleted by this check.")
 ```
 
-The appointment glass-bell sound (play-mac-sound, my-appt-glass-bell) is
-defined in macos.el, but wired up here rather than there: `appt-activate'
-above calls `appt-check' synchronously as part of activating, before
-`my-appt-due-list' is even defined, so the advice must not become active
-until after that point.
+## my-appt-glass-bell
+>Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
+but only when an appointment is newly entering its warning window this
+check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
+`my-appt-beeped-keys'. This keeps the sound from firing again on every
+subsequent `appt-check' cycle for the same still-pending appointment,
+which would otherwise repeat for as long as it stays undismissed (e.g.
+while away from the frame with nobody around to dismiss it).
+Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
+runs, so `my-appt-mode-line-update' can detect appointments that matured
+during this check.
+
 ```
-(when (eq system-type 'darwin)
+(defun my-appt-glass-bell (orig-fun &rest args)
+  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
+but only when an appointment is newly entering its warning window this
+check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
+`my-appt-beeped-keys'. This keeps the sound from firing again on every
+subsequent `appt-check' cycle for the same still-pending appointment,
+which would otherwise repeat for as long as it stays undismissed (e.g.
+while away from the frame with nobody around to dismiss it).
+Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
+runs, so `my-appt-mode-line-update' can detect appointments that matured
+during this check."
+  (setq my-appt--pre-check-due (my-appt-due-list))
+  (let* ((newly-due (seq-remove (lambda (entry)
+                                   (let ((key (nth 3 entry)))
+                                     (or (member key my-appt-dismissed-keys)
+                                         (member key my-appt-beeped-keys))))
+                                 my-appt--pre-check-due))
+         (ring-bell-function (if newly-due
+                                 #'my-play-appt-sound
+                               #'ignore)))
+    (when newly-due
+      (setq my-appt-beeped-keys
+            (append (mapcar (lambda (entry) (nth 3 entry)) newly-due)
+                    my-appt-beeped-keys)))
+    (apply orig-fun args)))
+```
+
+`appt-activate' above calls `appt-check' synchronously as part of activating,
+before `my-appt-due-list' is even defined, so this advice must not become
+active until after that point. `my-play-appt-sound' is defined in
+macos.el / linux.el.
+```
+(when (fboundp 'my-play-appt-sound)
   (advice-add 'appt-check :around #'my-appt-glass-bell))
 ```
 
@@ -1435,19 +1510,27 @@ TODO: should this move to modeline.el?
 
 ## my-appt-mode-line-dismiss
 >Dismiss the appointment(s) currently shown in the mode line, whether
-still counting down or already overdue.
-Each stays dismissed until it ages out of the warning window on its own.
+still counting down or already overdue, logging clocked time for each
+newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
+Each stays dismissed until it ages out of the warning window on its own;
+the dismissed-keys check also keeps a repeat dismiss click from logging
+the same appointment twice.
 
 ```
 (defun my-appt-mode-line-dismiss (_event)
   "Dismiss the appointment(s) currently shown in the mode line, whether
-still counting down or already overdue.
-Each stays dismissed until it ages out of the warning window on its own."
+still counting down or already overdue, logging clocked time for each
+newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
+Each stays dismissed until it ages out of the warning window on its own;
+the dismissed-keys check also keeps a repeat dismiss click from logging
+the same appointment twice."
   (interactive "e")
-  (dolist (entry (my-appt-due-list))
-    (push (nth 3 entry) my-appt-dismissed-keys))
-  (dolist (entry my-appt-overdue-list)
-    (push (cdr entry) my-appt-dismissed-keys))
+  (let* ((due-keys (mapcar (lambda (entry) (nth 3 entry)) (my-appt-due-list)))
+         (overdue-keys (mapcar #'cdr my-appt-overdue-list))
+         (new-keys (seq-remove (lambda (key) (member key my-appt-dismissed-keys))
+                                (append due-keys overdue-keys))))
+    (my-meeting-log-record-dismissed-appointments new-keys)
+    (setq my-appt-dismissed-keys (append new-keys my-appt-dismissed-keys)))
   (setq my-appt-overdue-list nil)
   (my-appt-mode-line-update)
   (force-mode-line-update t))
@@ -1472,6 +1555,12 @@ Takes an optional, ignored argument so it tolerates being called as
 a lingering \"Due\" glyph for an appointment whose time has passed.
 Takes an optional, ignored argument so it tolerates being called as
 :after advice on `appt-check', which itself takes an optional FORCE arg."
+  (let ((today (time-to-days nil)))
+    (unless (equal today my-appt-dismissed-day)
+      (setq my-appt-dismissed-keys nil
+            my-appt-overdue-list nil
+            my-appt-beeped-keys nil
+            my-appt-dismissed-day today)))
   (let* ((raw-post (my-appt-due-list))
          (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
                            raw-post)))
@@ -1530,8 +1619,8 @@ Takes an optional, ignored argument so it tolerates being called as
 # org-mode
 My typical usage of Org includes a main work tracking file, org-agenda,
 integration with my exchange calendar and simple daily journal for which I
-have a capture template to add standup entries
-
+have a capture template to add standup entries. Most of my notes still live
+in markdown so that I can easily share them with colleagues.
 
 Define an org root directory
 
@@ -1544,7 +1633,7 @@ Define an org root directory
 How `my-meetings-file' actually gets populated is set up in local.el.
 once excorporate is settled again it will be done there.
 ```
-(defconst my-meetings-file (file-name-concat my-org-root "meetings.org")
+(defconst my-meetings-file (file-name-concat my-org-root "calendar.org")
   "Org file holding external meetings from outlook in my case.
 Part of `org-agenda-files' so meetings show up in the agenda, the
 org-timegrid strip/week view, and via `org-agenda-to-appt' in the
@@ -1552,6 +1641,141 @@ mode-line appointment countdown.")
 
 (with-eval-after-load 'org
   (add-to-list 'org-agenda-files my-meetings-file))
+```
+
+`my-meetings-file' is transient, my-meeting-log-file is not and is the
+permanent logs of meetings which is used for reporting etc.
+```
+(defconst my-meeting-log-file (file-name-concat my-org-root "meeting-log.org")
+  "Org file logging clocked time for dismissed calendar appointments.
+Unlike `my-meetings-file', this file is never overwritten so entries
+logged here persist. See `my-meeting-log-record-dismissed-appointments'.")
+
+(defconst my-meeting-log-excluded-title-regexp "\\`Declined: "
+  "Regexp matching `my-meetings-file' headings to exclude from clocked
+meeting-log entries -- e.g. meetings the Outlook sync marks as
+declined, which the user never actually attended.")
+```
+
+## my-meeting-log--parse-calendar-entries
+>Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
+non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
+BUFFER (default the current buffer), which is expected to hold
+`my-meetings-file''s layout: a heading followed by a timestamp.
+
+```
+(defun my-meeting-log--parse-calendar-entries (&optional buffer)
+  "Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
+non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
+BUFFER (default the current buffer), which is expected to hold
+`my-meetings-file''s layout: a heading followed by a timestamp."
+  (with-current-buffer (or buffer (current-buffer))
+    (delq nil
+          (org-map-entries
+           (lambda ()
+             (let* ((heading (org-trim
+                               (replace-regexp-in-string
+                                org-link-bracket-re "\\2"
+                                (org-get-heading t t t t))))
+                    (ts (save-excursion
+                          (end-of-line)
+                          (skip-chars-forward " \t\n")
+                          (org-element-timestamp-parser))))
+               (when (and ts (org-timestamp-has-time-p ts)
+                          (not (string-match-p my-meeting-log-excluded-title-regexp heading)))
+                 (list (+ (* 60 (org-element-property :hour-start ts))
+                          (org-element-property :minute-start ts))
+                       heading
+                       (org-timestamp-to-time ts)
+                       (org-timestamp-to-time ts t)))))))))
+```
+
+## my-meeting-log--match-entry
+>Return the entry in ENTRIES (as from `my-meeting-log--parse-calendar-entries')
+at START-MINUTES whose heading matches TITLE, or nil. Titles are matched
+exactly first, then as a substring either way, since the appointment
+text org hands to `appt-add' may be a prefix/suffix of the full heading.
+
+```
+(defun my-meeting-log--match-entry (start-minutes title entries)
+  "Return the entry in ENTRIES (as from `my-meeting-log--parse-calendar-entries')
+at START-MINUTES whose heading matches TITLE, or nil. Titles are matched
+exactly first, then as a substring either way, since the appointment
+text org hands to `appt-add' may be a prefix/suffix of the full heading."
+  (seq-find (lambda (entry)
+              (and (= (nth 0 entry) start-minutes)
+                   (let ((heading (nth 1 entry)))
+                     (or (string-equal heading title)
+                         (string-match-p (regexp-quote title) heading)
+                         (string-match-p (regexp-quote heading) title)))))
+            entries))
+```
+
+## my-meeting-log--append-clock
+>Append a clocked heading for TITLE to `my-meeting-log-file', clocked
+from START-TIME to END-TIME, then refresh its clock-summary dynamic
+block and save.
+
+```
+(defun my-meeting-log--append-clock (title start-time end-time)
+  "Append a clocked heading for TITLE to `my-meeting-log-file', clocked
+from START-TIME to END-TIME, then refresh its clock-summary dynamic
+block and save."
+  ;; `org-clock-into-drawer' and `org-duration-from-minutes' have no
+  ;; autoload cookie, so org-clock.el/org-duration.el must be required
+  ;; explicitly -- plain `(require 'org)' at the top of this file doesn't
+  ;; pull them in, and org-agenda/org-clock stay deferred until now.
+  (require 'org-clock)
+  (require 'org-duration)
+  (with-current-buffer (find-file-noselect my-meeting-log-file)
+    (save-excursion
+      (goto-char (if (re-search-forward "^\\* Clock Summary" nil t)
+                     (match-beginning 0)
+                   (point-max)))
+      (let* ((drawer (org-clock-into-drawer))
+             (minutes (max 0 (round (/ (float-time (time-subtract end-time start-time)) 60))))
+             (clock-line (format "CLOCK: %s--%s =>  %s\n"
+                                  (format-time-string (org-time-stamp-format t t) start-time)
+                                  (format-time-string (org-time-stamp-format t t) end-time)
+                                  (org-duration-from-minutes minutes))))
+        (insert (format "* %s\n%s\n%s\n"
+                         title
+                         (format-time-string (org-time-stamp-format t) start-time)
+                         (if (stringp drawer)
+                             (format ":%s:\n%s:END:" drawer clock-line)
+                           clock-line)))))
+    (org-update-all-dblocks)
+    (save-buffer)))
+```
+
+## my-meeting-log-record-dismissed-appointments
+>Log clocked time for each dismissed appointment in KEYS, a list of
+(START-MINUTES . TITLE) conses (see `my-appt-due-list' above).
+Looks up each appointment's scheduled start/end in `my-meetings-file'
+and records that range as a CLOCK entry in `my-meeting-log-file'. A
+lookup miss or write failure is reported to *Messages* and otherwise
+ignored -- this must never block dismissing the mode-line notice.
+
+```
+(defun my-meeting-log-record-dismissed-appointments (keys)
+  "Log clocked time for each dismissed appointment in KEYS, a list of
+\(START-MINUTES . TITLE) conses (see `my-appt-due-list' above).
+Looks up each appointment's scheduled start/end in `my-meetings-file'
+and records that range as a CLOCK entry in `my-meeting-log-file'. A
+lookup miss or write failure is reported to *Messages* and otherwise
+ignored -- this must never block dismissing the mode-line notice."
+  (let* ((today (time-to-days nil))
+         (all-entries (my-meeting-log--parse-calendar-entries (find-file-noselect my-meetings-file)))
+	 ;; filter to today first.
+         (entries (seq-filter (lambda (entry) (= (time-to-days (nth 2 entry)) today))
+                               all-entries)))
+    (dolist (key keys)
+      (condition-case err
+          (let ((entry (my-meeting-log--match-entry (car key) (cdr key) entries)))
+            (if entry
+                (my-meeting-log--append-clock (cdr key) (nth 2 entry) (nth 3 entry))
+              (message "my-meeting-log: no calendar.org match for %S" (cdr key))))
+        (error (message "my-meeting-log: couldn't log %S: %s" (cdr key) (error-message-string err)))))))
 ```
 
 mouse support
@@ -1638,11 +1862,10 @@ disable table formatting in favor of org-pretty-table because of header renderin
   :config
   (setq org-modern-table nil)
   ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
-  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts,
-  ;; unlike the other levels' triangles (Geometric Shapes block). Swap it for
-  ;; the universally-supported Arrows block instead.
+  ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts, so
+  ;; reuse level 4.
   (setq org-modern-fold-stars
-        '(("▶" . "▼") ("▷" . "▽") ("→" . "↓") ("▹" . "▿") ("▸" . "▾"))))
+        '(("▶" . "▼") ("▷" . "▽") ("▹" . "▿") ("▹" . "▿") ("▸" . "▾"))))
 ```
 
 Indent by heading depth
@@ -1650,8 +1873,7 @@ Indent by heading depth
 (setq org-startup-indented t)
 ```
 
-Setup capture templates
-currently only have one for standup summaries
+Setup the standup summary capture template
 ```
 (defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename")
 (setq org-capture-templates
@@ -1670,18 +1892,6 @@ Show up to 4 levels of org headings in the imenu and imenu-list
 This is set due to how expensive building the org imenu tree is.
 ```
 (setq org-imenu-depth 4)
-```
-
-Older unused code to prettify check boxes to use Unicode characters.
-Currently superseded by org-modern
-```
-(my-ignore
-(add-hook 'org-mode-hook (lambda ()
- "Beautify Org Checkbox Symbol"
- (push '("[ ]" .  "☐") prettify-symbols-alist)
- (push '("[X]" . "☑" ) prettify-symbols-alist)
- (push '("[-]" . "❍" ) prettify-symbols-alist)
- (prettify-symbols-mode))))
 ```
 
 I'm using org-pretty-table rather than org-modern's support for now
@@ -1754,12 +1964,6 @@ Set display line number mode on
 
 ## Project.el settings.
 
-I prefer to have project-switch-project to just change the project for the next project
-command. bear in mind, project mostly uses the current directory of the buffer to
-determine the project
-```
-(setq project-switch-commands 'project-any-command)
-```
 Set project boundary at the first build.gradle found as well
 ```
 (setopt project-vc-extra-root-markers '("build.gradle" "pom.xml"))
@@ -2676,18 +2880,13 @@ Note: C-\ is bound to smart toggle.
 	imenu-auto-rescan t))
 ```
 
-ilist-plus :config below requires 'imenu-list synchronously, so imenu-list's
-elpaca install/build must be finished first, not just queued.
-```
-(elpaca-wait)
-```
-
 Load all of my custom imenu extensions.
 ```
 (use-package ilist-plus
   ;; For local test/dev when turned on.
   ;; :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
+  :after imenu-list
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
@@ -2697,12 +2896,9 @@ Load all of my custom imenu extensions.
 
 Now that modeline.el (loaded above) has defined the richer dedicated-window
 keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-self-contained fallback after imenu loads. Make sure ilist-plus itself is
-fully activated first since the hook below calls its functions directly.
+self-contained fallback.
 ```
-(elpaca-wait)
-
-(with-eval-after-load 'imenu-list
+(with-eval-after-load 'ilist-plus
   (setq imenu-list-mode-line-format
 	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
 ```
@@ -2724,7 +2920,6 @@ Note: lookup-key is the way to find existing entry names
 ```
 
 Add zoom in/out to buffer menu
-TODO get the keybinding message straight?
 ```
 (define-key-after
   (lookup-key global-map [menu-bar buffer])
@@ -3255,7 +3450,8 @@ off.
 
 Make sure every package above has finished installing/activating before
 init is considered done, rather than leaving elpaca's queue to finish in
-the background after the first frame appears.
+the background after the first frame appears. This makes the behavior
+deterministic after init completes.
 ```
 (elpaca-wait)
 ```
