@@ -93,8 +93,11 @@
 ;;   - git on PATH -- elpaca (the package manager) clones both its own
 ;;     repo and every package's repo, including a handful pulled straight
 ;;     from GitHub rather than MELPA.
-;;   - A Nerd Font installed (I use DejaVu Sans Mono Nerd Font) for the
-;;     mode-line and dired icons to render correctly.
+;;   - DejaVu Sans Mono Nerd Font installed (required). It's the startup font
+;;     set in early-init.el, and a missing font makes Emacs fall back to a
+;;     terminal frame instead of a GUI one. It also supplies the mode-line and
+;;     dired icons. To use another font, change `my-default-fixed-pitch-font'
+;;     in early-init.el.
 ;;   - aspell installed (falls back to ispell if not found) for flyspell.
 ;;   - A Java installation reachable via `my-java-home` (defaults to a jenv
 ;;     path) plus jdtls on PATH if you want eglot's Java support.
@@ -187,8 +190,7 @@
 ;; Note: font sets are to some extent os dependent
 
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
-(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
-  "Default fixed-pitch font family.")
+;; `my-default-fixed-pitch-font' is defined in early-init.el.
 (defvar my-default-variable-pitch-font "Helvetica"
   "Default variable-pitch font family.")
 
@@ -359,7 +361,6 @@
 
 (setq modus-vivendi-embers-palette-overrides
       `((bg-margins ,margin-gray-bg)))
-
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
 ;; `modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and

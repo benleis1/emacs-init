@@ -41,7 +41,16 @@
 ;; after. `frame-inhibit-implied-resize' below covers the remaining cases
 ;; where init.el still changes fonts after startup (e.g. the nano-like
 ;; theme's family swap on theme change).
-(push '(font . "DejaVuSansM Nerd Font-16") default-frame-alist)
+;; This is also the single definition of the fixed-pitch family used by
+;; init.el. The font must exist: a missing font here makes Emacs abort the
+;; GUI frame and fall back to a terminal frame, and it can't be probed
+;; from early-init (`find-font' returns nil before the first GUI frame).
+(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
+  "Default fixed-pitch font family.")
+(defvar my-default-font-size 16
+  "Startup font size in points.")
+(push `(font . ,(format "%s-%d" my-default-fixed-pitch-font my-default-font-size))
+      default-frame-alist)
 (setq frame-inhibit-implied-resize t)
 
 ;; Font-cache compaction runs after every GC and gets noticeably slower
