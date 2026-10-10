@@ -58,4 +58,7 @@
 ;; mode-line and dired) are in play. Skip it.
 (setq inhibit-compacting-font-caches t)
 
+;; Turn off the file path in the  title bar
+(setq frame-title-format nil)
+
 ;;; early-init.el ends here
