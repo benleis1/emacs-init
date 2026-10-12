@@ -18,8 +18,12 @@ Options:
 Environment:
   EMACS_DIR       Same as --dir (the command-line option takes precedence)
 
+Installs:
+  DejaVuSansM Nerd Font   required by early-init.el for a GUI frame; installed
+                          via Homebrew (macOS) or a download from the
+                          nerd-fonts releases (Linux) if missing
+
 Checks (warnings only, nothing is installed for you):
-  DejaVuSansM Nerd Font   required by early-init.el for a GUI frame
   aspell                  spell checking (falls back to ispell)
   pg_format (pgformatter) SQL formatting commands
 EOF
@@ -63,7 +67,7 @@ for f in early-init.el init.el macos.el linux.el modeline.el tab-config.el dape-
   ln -sfn "$src/$f" "$dest/$f"
 done
 
-for f in funnel4.png desktop2.png close.png; do
+for f in funnel4.png funnel4-dark.png desktop2.png close.png close-dark.png; do
   cp "$src/$f" "$dest/"
 done
 
@@ -77,12 +81,32 @@ font_installed() {
   fi
 }
 
+install_font() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    command -v brew >/dev/null 2>&1 || return 1
+    brew install --cask font-dejavu-sans-mono-nerd-font
+  else
+    command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1 || return 1
+    local fontdir="$HOME/.local/share/fonts" tmp
+    tmp="$(mktemp -d)"
+    mkdir -p "$fontdir"
+    curl -fsSL -o "$tmp/DejaVuSansMono.zip" \
+      https://github.com/ryanoasis/nerd-fonts/releases/latest/download/DejaVuSansMono.zip &&
+      unzip -qo "$tmp/DejaVuSansMono.zip" '*.ttf' -d "$fontdir" || { rm -rf "$tmp"; return 1; }
+    rm -rf "$tmp"
+    ! command -v fc-cache >/dev/null 2>&1 || fc-cache -f "$fontdir"
+  fi
+}
+
 if ! font_installed; then
-  echo "WARNING: 'DejaVuSansM Nerd Font' not found. early-init.el requires it;" >&2
-  echo "         without it Emacs falls back to a terminal frame instead of a GUI one." >&2
-  echo "         macOS: brew install --cask font-dejavu-sans-mono-nerd-font" >&2
-  echo "         Linux: download DejaVuSansMono.zip from github.com/ryanoasis/nerd-fonts/releases," >&2
-  echo "                unzip into ~/.local/share/fonts, then run fc-cache -f" >&2
+  echo "Installing 'DejaVuSansM Nerd Font'"
+  if ! install_font || ! font_installed; then
+    echo "WARNING: could not install 'DejaVuSansM Nerd Font'. early-init.el requires it;" >&2
+    echo "         without it Emacs falls back to a terminal frame instead of a GUI one." >&2
+    echo "         macOS: brew install --cask font-dejavu-sans-mono-nerd-font" >&2
+    echo "         Linux: download DejaVuSansMono.zip from github.com/ryanoasis/nerd-fonts/releases," >&2
+    echo "                unzip into ~/.local/share/fonts, then run fc-cache -f" >&2
+  fi
 fi
 
 if ! command -v aspell >/dev/null 2>&1; then

@@ -112,6 +112,10 @@
 ;; - Ediff
 ;; - Python (partly)
 ;; - SQL
+;;
+;; ## Installation
+;; I have an optional `install.sh` script that will do basic symlinking of the lisp
+;; files into the emacs.d directory and other prerequisite checking.
 
 ;;; Code:
 
@@ -360,6 +364,9 @@
 	))
 
 (setq modus-vivendi-embers-palette-overrides
+      `((bg-margins ,margin-gray-bg)))
+
+(setq modus-vivendi-matrix-palette-overrides
       `((bg-margins ,margin-gray-bg)))
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
@@ -2755,6 +2762,13 @@ tag, followed by the normal editable field."
   :init
   (setq gcmh-high-cons-threshold (* 32 1024 1024))
   (gcmh-mode 1))
+
+;; TEMPTEMP playing around with zone although its unlikely to stick.
+(use-package zone
+  :ensure nil ; Built-in package
+  :config
+  (setq zone-idle 600) ; Time in seconds (10 minutes)
+  (zone-when-idle 600))
 
 ;; Make sure every package above has finished installing/activating before
 ;; init is considered done, rather than leaving elpaca's queue to finish in

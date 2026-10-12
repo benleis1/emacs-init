@@ -128,10 +128,10 @@ semantic palette mappings."
      (fg-heading-8 fg-dim)
 
      ;; Links
-     (fg-link                 azure)
-     (underline-link          azure)
-     (fg-link-symbolic        violet)
-     (underline-link-symbolic violet)
+     (fg-link                 violet)
+     (underline-link          violet)
+     (fg-link-symbolic        azure)
+     (underline-link-symbolic azure)
      (fg-link-visited         fern)
      (underline-link-visited  fern)
 

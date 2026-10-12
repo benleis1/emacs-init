@@ -65,21 +65,29 @@
 (defconst tab2-directory
   (file-name-directory (or load-file-name buffer-file-name)))
 
-(defconst tab2-close-image
-  (expand-file-name "close.png" tab2-directory))
+(defun tab2-dark-background-p (face)
+  "Non-nil when the background of FACE is dark."
+  (let ((rgb (color-values (let ((bg (face-background face nil t)))
+			     (if (stringp bg) bg "white")))))
+    (< (/ (apply #'+ rgb) 3.0) (/ 65535 2.0))))
 
-;; Current modern style button I'm using
-(setq tab-line-close-button
-  (propertize " x "
-              'display `(image :type png
-                               :file ,tab2-close-image
-			       :height (0.9 . em)
-			       :face shadow
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-line-tab-close-map
-              'mouse-face 'tab-line-close-highlight
-              'help-echo "Click to close tab"))
+(defun tab2-update-close-button ()
+  "Set `tab-line-close-button' using the icon matching the current theme."
+  (setq tab-line-close-button
+	(propertize " x "
+		    'display `(image :type png
+				     :file ,(expand-file-name
+					     (if (tab2-dark-background-p 'tab-line-tab-current) "close-dark.png" "close.png")
+					     tab2-directory)
+				     :height (0.9 . em)
+				     :face shadow
+				     :margin (2 . 0)
+				     :ascent center)
+		    'keymap tab-line-tab-close-map
+		    'mouse-face 'tab-line-close-highlight
+		    'help-echo "Click to close tab")))
+
+(tab2-update-close-button)
 
 (setq tab-line-left-button
   (propertize " <"
@@ -837,7 +845,9 @@ at the mouse-down event to the position at mouse-up event."
 (defun tab2-add-on-filter-button (tabs)
   (let* ((group-view (window-parameter nil 'tab-line-groups))
 	 (viewp (window-parameter nil 'tab-line-views))
-	 (icon-file (if viewp "desktop2.png" "funnel4.png"))
+	 (icon-file (cond (viewp "desktop2.png")
+			  ((tab2-dark-background-p 'tab-line) "funnel4-dark.png")
+			  (t "funnel4.png")))
 	 (icon-color (modus-themes-get-color-value 'bg-tab-bar t))
 	 (icon-name (format "%s%s" tab2-load-dir icon-file)))
 
@@ -861,6 +871,7 @@ at the mouse-down event to the position at mouse-up event."
 
 ;; Update the current tabline. Used during theme load.
 (defun tab2-force-update (theme)
+  (tab2-update-close-button)
   (tab-line-force-update nil))
 
 ;; Add a hook to enable themes that will force an update so we pickup the icon background color
