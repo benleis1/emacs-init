@@ -113,6 +113,10 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - Python (partly)
 - SQL
 
+## Installation
+I have an optional `install.sh` script that will do basic symlinking of the lisp
+files into the emacs.d directory and other prerequisite checking.
+
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
@@ -122,6 +126,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
   - [Portability](#portability)
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
+  - [Installation](#installation)
 - [Code:](#code)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
@@ -163,6 +168,7 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - [org-mode](#org-mode)
   - [my-meeting-log--parse-calendar-entries](#my-meeting-log--parse-calendar-entries)
   - [my-meeting-log--match-entry](#my-meeting-log--match-entry)
+  - [my-meeting-log--ensure-week-summary](#my-meeting-log--ensure-week-summary)
   - [my-meeting-log--append-clock](#my-meeting-log--append-clock)
   - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
@@ -496,6 +502,9 @@ Specific folio theme overrides
 	))
 
 (setq modus-vivendi-embers-palette-overrides
+      `((bg-margins ,margin-gray-bg)))
+
+(setq modus-vivendi-matrix-palette-overrides
       `((bg-margins ,margin-gray-bg)))
 ```
 
@@ -906,8 +915,12 @@ I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 (global-set-key (kbd "s-x") 'execute-extended-command)
 ```
 
-Copy to clipboard functions for terminal mode are OS-specific; see
-macos.el (pbcopy-*) and linux.el (my-wl-copy).
+TEMPTEMP - for paneru I need to cede the command key - move to macos
+```
+(when (eq system-type 'darwin)
+  (setq frame-resize-pixelwise t)
+  (setq mac-command-modifier 'none))
+```
 
 Don't lose a paste from outside emacs because you killed a line
 in preparation before pasting.
@@ -1711,16 +1724,40 @@ text org hands to `appt-add' may be a prefix/suffix of the full heading."
             entries))
 ```
 
+## my-meeting-log--ensure-week-summary
+>Ensure the current buffer ends with a clock-summary section for WEEK
+(an ISO "YYYY-Www" string), inserting one at `point-max' if absent.
+The clocktable uses a fixed `:block' rather than `thisweek' so each
+week's summary keeps reporting that week after the week rolls over.
+
+```
+(defun my-meeting-log--ensure-week-summary (week)
+  "Ensure the current buffer ends with a clock-summary section for WEEK
+\(an ISO \"YYYY-Www\" string), inserting one at `point-max' if absent.
+The clocktable uses a fixed `:block' rather than `thisweek' so each
+week's summary keeps reporting that week after the week rolls over."
+  (let ((heading (format "* Clock Summary %s" week)))
+    (unless (save-excursion
+              (goto-char (point-min))
+              (re-search-forward (concat "^" (regexp-quote heading) "$") nil t))
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (insert (format "%s\n#+BEGIN: clocktable :scope file :block %s\n#+END:\n"
+                      heading week)))))
+```
+
 ## my-meeting-log--append-clock
 >Append a clocked heading for TITLE to `my-meeting-log-file', clocked
 from START-TIME to END-TIME, then refresh its clock-summary dynamic
-block and save.
+blocks and save. A new per-week clock-summary section is added the first
+time a given ISO week is logged.
 
 ```
 (defun my-meeting-log--append-clock (title start-time end-time)
   "Append a clocked heading for TITLE to `my-meeting-log-file', clocked
 from START-TIME to END-TIME, then refresh its clock-summary dynamic
-block and save."
+blocks and save. A new per-week clock-summary section is added the first
+time a given ISO week is logged."
   ;; `org-clock-into-drawer' and `org-duration-from-minutes' have no
   ;; autoload cookie, so org-clock.el/org-duration.el must be required
   ;; explicitly -- plain `(require 'org)' at the top of this file doesn't
@@ -1729,9 +1766,8 @@ block and save."
   (require 'org-duration)
   (with-current-buffer (find-file-noselect my-meeting-log-file)
     (save-excursion
-      (goto-char (if (re-search-forward "^\\* Clock Summary" nil t)
-                     (match-beginning 0)
-                   (point-max)))
+      (my-meeting-log--ensure-week-summary (format-time-string "%G-W%V" start-time))
+      (goto-char (point-max))
       (let* ((drawer (org-clock-into-drawer))
              (minutes (max 0 (round (/ (float-time (time-subtract end-time start-time)) 60))))
              (clock-line (format "CLOCK: %s--%s =>  %s\n"
@@ -3446,6 +3482,15 @@ off.
   :init
   (setq gcmh-high-cons-threshold (* 32 1024 1024))
   (gcmh-mode 1))
+```
+
+TEMPTEMP playing around with zone although its unlikely to stick.
+```
+(use-package zone
+  :ensure nil ; Built-in package
+  :config
+  (setq zone-idle 600) ; Time in seconds (10 minutes)
+  (zone-when-idle 600))
 ```
 
 Make sure every package above has finished installing/activating before
