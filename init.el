@@ -2042,6 +2042,15 @@ each project gets its own persistent jdtls workspace."
 				    (list :classFileContentsSupport t)
 				    )))))))
 
+;;;; eglot for Python
+
+;; Eglot's default `eglot-server-programs' already knows the common Python
+;; servers (pylsp, pyright, jedi, ruff, ty) and uses the first one found on
+;; PATH. Install one (e.g. `pip install python-lsp-server' or `pyright') and
+;; start eglot automatically for python buffers.
+(add-hook 'python-mode-hook #'eglot-ensure)
+(add-hook 'python-ts-mode-hook #'eglot-ensure)
+
 ;;;; DAPE debugging
 
 ;; Use dape after eglot is loaded
@@ -2334,10 +2343,6 @@ declaration if any such methods were found."
    (warning ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-warning)
    (note    ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-info)))
 
-;;;; python
-
-;; TODO turn on eglot integration later.
-
 ;;;; elisp
 
 ;; Group `use-package` declarations under their own imenu heading.
@@ -2496,7 +2501,8 @@ declaration if any such methods were found."
 ;;; ediff
 
 ;; Setup a command line switch gemacs -diff file1 file2
-;; TODO: this doesn't work with emacsclient only gemacs
+;; for emacsclient a different strategy is needed
+;; a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
 (defun command-line-diff (_switch)
   (let ((file1 (pop command-line-args-left))
         (file2 (pop command-line-args-left)))
