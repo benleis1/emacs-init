@@ -95,6 +95,25 @@
   "Dape configs and support for debugging/testing Java via jdtls."
   :group 'dape)
 
+(defconst dape-java--junit-search-command "vscode.java.test.findTestTypesAndMethods"
+  "Command to ask jdtls for the JUnit classes/methods in a file.
+The older `vscode.java.test.search.codelens' was removed in
+vscode-java-test 0.31.0 no bundle worth installing still has it")
+
+;; eglot and dape are loaded lazily; declared only to quiet the byte-compiler.
+(defvar dape-configs)
+(declare-function eglot-current-server "eglot")
+(declare-function eglot-server-capable "eglot")
+(declare-function eglot-execute-command "eglot")
+(declare-function eglot-path-to-uri "eglot")
+(declare-function eglot--async-request "eglot")
+(declare-function eglot--pos-to-lsp-position "eglot")
+(declare-function dape-cwd "dape")
+(declare-function dape-buffer-default "dape")
+(declare-function dape-config-get "dape")
+(declare-function dape--repl-insert "dape")
+(declare-function dape--repl-insert-error "dape")
+
 (defun dape-java-jdtls-support-p ()
   "Return non-nil if the current buffer's jdtls bundles the java-test
 plugin and the needed functions."
@@ -161,11 +180,6 @@ plugin and the needed functions."
 	(message "eglot is not running in this buffer"))
   )
 
-
-(defconst dape-java--junit-search-command "vscode.java.test.findTestTypesAndMethods"
-  "Command to ask jdtls for the JUnit classes/methods in a file.
-The older `vscode.java.test.search.codelens' was removed in
-vscode-java-test 0.31.0 no bundle worth installing still has it")
 
 (defun dape-java--junit-flatten-items (items)
   "Flatten the ITEMS tree (classes with method/nested-class :children)

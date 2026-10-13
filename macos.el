@@ -2,6 +2,8 @@
 ;; macOS-specific configuration, loaded only when `system-type' is `darwin'.
 ;; See init.el for the load point and rationale on ordering.
 
+(eval-when-compile (require 'use-package))
+
 ;; GUI Emacs on macOS is launched by launchd, not a login shell, so it only
 ;; gets a minimal PATH/exec-path -- Homebrew-installed tools like aspell,
 ;; jdtls and pgformatter aren't visible to `executable-find' without this.

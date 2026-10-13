@@ -36,7 +36,19 @@
 (defvar eglot-menu)
 (defvar eglot-server-menu)
 
+;; Same story for the other lazily-loaded libraries referenced below.
+(defvar flymake-mode-line-counters)
+(defvar text-scale-mode-amount)
+(declare-function eglot-current-server "eglot")
+(declare-function eglot-project-nickname "eglot")
+(declare-function jsonrpc-continuation-count "jsonrpc")
+(declare-function jsonrpc-last-error "jsonrpc")
+
 ;;; Customization
+
+(defgroup my-modeline nil
+  "Native mode-line built from stock Emacs mode-line machinery."
+  :group 'mode-line)
 
 (defcustom my-modeline-icon t
   "Whether to show a file/major-mode icon in the buffer-info segment."

@@ -75,4 +75,7 @@
 (when (eq system-type 'darwin)
   (setq ns-use-proxy-icon nil))
 
+;; Guardrail for load to always use newer .el files over .elc ones.
+(setq load-prefer-newer t)
+
 ;;; early-init.el ends here

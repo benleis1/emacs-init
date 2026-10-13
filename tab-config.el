@@ -36,6 +36,13 @@
 ;;
 ;;; Code:
 
+(defgroup tab2 nil
+  "Overrides and extensions to `tab-line'."
+  :group 'tab-line)
+
+(declare-function project-buffers "project")
+(declare-function vc-git-state "vc-git")
+
 ;; Set tab-line always on except for the exclude modes list
 (setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode ))
 
@@ -391,7 +398,7 @@
 
 ;; Override original definition of tab-line-tab-context-menu
 ;; Bind custom actions into the context menu if we are not in group mode
-(define-advice tab-line-tab-context-menu (:override (&optional event))
+(define-advice tab-line-tab-context-menu (:override (&optional _event))
   "Pop up the context menu for a tab-line tab."
   (interactive "e")
 
@@ -470,7 +477,6 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 
   (let* ((posnp (event-start e))
 	 (tab (get-pos-property 1 'tab (car (posn-string posnp))))
-	 (buffer (tab2-get-buffer-from-tab tab))
 	 (close (unless (bufferp tab) (alist-get 'close tab))))
 
     ;; User the specified close function if specified or default to tab2-close-tab
@@ -557,11 +563,8 @@ at the mouse-down event to the position at mouse-up event."
                    (funcall tab-line-tab-name-function buffer tabs)
                  (cdr (assq 'name tab))))
          (face (if selected-p
- ;;                  (if (mode-line-window-selected-p)
-                       'tab-line-tab-current
-   ;;                  'tab-line-tab)
-                 'tab-line-tab-inactive))
-	 (group-view (window-parameter nil 'tab-line-groups)))
+                   'tab-line-tab-current
+                 'tab-line-tab-inactive)))
 
     ;; the face funcs are called even when the tab isn't a buffer
     ;; so we can't use buffer directly here
@@ -650,7 +653,7 @@ at the mouse-down event to the position at mouse-up event."
 	`(tab
 	  (name . ,formatted-name)
 	  (selected . ,(equal selected-view viewname))
-	  (close . ,(lambda (&optional b)
+	  (close . ,(lambda (&optional _buffer)
 		      (tab2-close-view-by-name viewname)))
 	  (select . ,(lambda ()
 		       (tab2-switch-view-by-name viewname)
@@ -870,7 +873,7 @@ at the mouse-down event to the position at mouse-up event."
       tabs)))
 
 ;; Update the current tabline. Used during theme load.
-(defun tab2-force-update (theme)
+(defun tab2-force-update (_theme)
   (tab2-update-close-button)
   (tab-line-force-update nil))
 
@@ -940,9 +943,7 @@ at the mouse-down event to the position at mouse-up event."
 
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
-           (point (point))
-           (region-beg (if (use-region-p) (- (region-beginning) 1)))
-           (region-end (if (use-region-p) (region-end))))
+           (point (point)))
       (add-face-text-property (- point 1) point 'quick-command-cursor-face t text)
       (with-current-buffer current-buffer
         (setq-local header-line-format text))
@@ -1003,7 +1004,7 @@ at the mouse-down event to the position at mouse-up event."
 
                 ;; Execute key sequence in command buffer
                 (set-window-buffer current-window command-buffer t)
-                (condition-case error
+                (condition-case nil
                     (execute-kbd-macro (kbd key))
                   ((beginning-of-buffer end-of-buffer text-read-only)))
                 ;; Make sure to not go into prompt area
