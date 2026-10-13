@@ -25,6 +25,18 @@
           (lambda ()
             (setq file-name-handler-alist my--file-name-handler-alist-backup)))
 
+;; `emacs --profile-init' profiles startup with the built-in profiler and shows the reports once
+;; elpaca has finished init. It starts here to capture as much of startup as possible. The no-op
+;; switch handler keeps emacs from complaining about an unknown option. The variables set here are
+;; defined, and `my-profile-init-finish' lives, in the Profiling section of init.el.
+(when (member "--profile-init" command-line-args)
+  (add-to-list 'command-switch-alist '("--profile-init" . ignore))
+  (require 'profiler)
+  (profiler-start 'cpu+mem)
+  (setq my-profiler-running t
+        my-profile-init-p t)
+  (add-hook 'elpaca-after-init-hook #'my-profile-init-finish))
+
 ;; Packages are managed by elpaca (see init.el) now, not package.el. Emacs
 ;; normally auto-activates package.el (and its previously-installed
 ;; ~/.emacs.d/elpa packages) before init.el is even loaded; left on, that

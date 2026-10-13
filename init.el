@@ -119,6 +119,78 @@
 
 ;;; Code:
 
+;;; Profiling
+;; Everything for profiling startup lives here, ahead of the rest of the file, because the
+;; `my-profile-mark' calls before each later section need these definitions.
+;;
+;; `my-toggle-profiler' (adapted from Doom Emacs): the first call starts sampling CPU and memory,
+;; the second shows the report and stops.
+;;
+;; `emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
+;; `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
+;; this file and the use-package report.
+(defvar my-profile-init-p nil
+  "Non-nil when emacs was started with --profile-init.")
+(defvar my-profiler-running nil
+  "Non-nil while the profiler started by `my-toggle-profiler' is sampling.")
+(defvar my-profile-marks nil
+  "Reverse list of (NAME TIME PACKAGE-COUNT) recorded by `my-profile-mark'.")
+
+;; Per package timing. This has to be on before use-package is loaded and any declaration is read.
+(when my-profile-init-p (setq use-package-compute-statistics t))
+
+(defun my-toggle-profiler ()
+  "Toggle the Emacs profiler.  Run it again to see the profiling report."
+  (interactive)
+  (if my-profiler-running
+      (progn (profiler-report) (profiler-stop))
+    (profiler-start 'cpu+mem))
+  (setq my-profiler-running (not my-profiler-running)))
+
+(defun my-profile-mark (name)
+  "Record that the init section NAME starts now, if --profile-init was given."
+  (when my-profile-init-p
+    (push (list name (float-time)
+                (if (boundp 'use-package-statistics) (hash-table-count use-package-statistics) 0))
+          my-profile-marks)))
+
+;; The wall column is the time between consecutive marks, so a section containing an `elpaca-wait'
+;; absorbs the processing of every use-package queued before it. The use-package column sums the
+;; time use-package measured for the packages declared in the section. Its :use-package-secs
+;; already includes the nested :init and :config times.
+(defun my-profile-report-phases ()
+  "Show per-section init timing recorded by `my-profile-mark' in *init-phases*."
+  (let ((marks (cons (list "startup before init.el" (float-time before-init-time) 0)
+                     (reverse my-profile-marks)))
+        (pkg-secs nil)
+        (buf (get-buffer-create "*init-phases*")))
+    (when (boundp 'use-package-statistics)
+      (maphash (lambda (_name stats)
+                 (push (float-time (gethash :use-package-secs stats '(0 0 0 0))) pkg-secs))
+               use-package-statistics)
+      (setq pkg-secs (nreverse pkg-secs)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "%-42s %10s %17s\n" "Section" "wall (ms)" "use-package (ms)"))
+        (cl-loop for (mark next) on marks while next
+                 do (insert (format "%-42s %10.0f %17.0f\n" (nth 0 mark)
+                                    (* 1000 (- (nth 1 next) (nth 1 mark)))
+                                    (* 1000 (apply #'+ (seq-subseq pkg-secs (nth 2 mark)
+                                                                   (nth 2 next)))))))
+        (insert (format "\nTotal wall: %.0f ms\n"
+                        (* 1000 (- (nth 1 (car my-profile-marks)) (nth 1 (car marks))))))
+        (special-mode)))
+    (pop-to-buffer buf)))
+
+(defun my-profile-init-finish ()
+  "Show the init section timings, use-package report and profiler report."
+  (my-profile-mark "init done")
+  (my-profile-report-phases)
+  (use-package-report)
+  (my-toggle-profiler))
+
+(my-profile-mark "Package setup")
 ;;; Package setup
 
 ;; Define an ignore macro that doesn't even evaluate the argument. This is useful for
@@ -182,13 +254,16 @@
 (elpaca elpaca-use-package
   (elpaca-use-package-mode)
   (setq use-package-always-ensure t))
+(my-profile-mark "elpaca-wait 1 (elpaca-use-package)")
 (elpaca-wait)
+(my-profile-mark "Package setup (after elpaca-wait 1)")
 
 ;; early on setup follow-symlinks to true for loaded files
 (setq vc-follow-symlinks t)
 
 ;;; Customizations
 
+(my-profile-mark "Font setup")
 ;;; Font setup
 ;; This needs to be done prior to theme setup.
 ;; Note: font sets are to some extent os dependent
@@ -232,6 +307,7 @@
   :hook ((org-mode . mixed-pitch-mode)
 	 (markdown-mode . mixed-pitch-mode)))
 
+(my-profile-mark "modus theme configuration")
 ;;; modus theme configuration.
 
 ;;
@@ -457,6 +533,7 @@
 (when (file-exists-p custom-file)
   (load custom-file))
 
+(my-profile-mark "Basic Appearance and startup")
 ;;; Basic Appearance and startup
 ;; A set of configurations related to display style that are not covered by themes or faces.
 
@@ -597,6 +674,7 @@
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
 
+(my-profile-mark "backup and autosave")
 ;;; backup and autosave.
 ;; put old version in .saves under .emacs.d and disable autosaves.
 
@@ -628,6 +706,15 @@
 (setq auto-save-default t)
 
 
+;; Zone / screensaver is whimsical but its built-in and lightweight,
+(when window-system
+  (use-package zone
+    :ensure nil ; Built-in package
+    :config
+    (setq zone-idle 600) ; Time in seconds (10 minutes)
+    (zone-when-idle 600)))
+
+(my-profile-mark "Dired")
 ;;; Dired
 
 ;; nerd icons setup.
@@ -653,6 +740,7 @@
 ;; allow find-alternate-file i.e. open and kill dired
 (put 'dired-find-alternate-file 'disabled nil)
 
+(my-profile-mark "modeline")
 ;;; modeline
 ;; Native mode-line/header-line implementation, replacing doom-modeline (see
 ;; modeline.el for the full rationale).
@@ -661,13 +749,16 @@
 ;; even in terminal mode although they are a bit too small there.
 ;; modeline.el calls nerd-icons functions at load time, so make sure it's
 ;; fully activated first.
+(my-profile-mark "elpaca-wait 2 (everything up to modeline)")
 (elpaca-wait)
+(my-profile-mark "modeline (after elpaca-wait 2)")
 (load (locate-user-emacs-file "modeline.el"))
 (my-modeline-mode 1)
 
 ;; Load all of my custom tab-line config.
 (load  (locate-user-emacs-file "tab-config.el"))
 
+(my-profile-mark "Global key bindings")
 ;;; Global key bindings
 ;; After some analysis I have altered a couple of top level chords below.
 ;; my preference is for short key strokes and to usually bind other global things to
@@ -687,15 +778,11 @@
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 (global-set-key (kbd "s-x") 'execute-extended-command)
 
-;; TEMPTEMP - for paneru I need to cede the command key - move to macos
-(when (eq system-type 'darwin)
-  (setq frame-resize-pixelwise t)
-  (setq mac-command-modifier 'none))
-
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
 (setq save-interprogram-paste-before-kill t)
 
+(my-profile-mark "flyspell config")
 ;;; flyspell config
 ;; currently not bound to a key
 
@@ -782,6 +869,7 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
 ;; Enable which key
 (which-key-mode)
 
+(my-profile-mark "diff-hl")
 ;;; diff-hl
 ;; Defer turning diff-hl on until the first version-controlled file is
 ;; opened, rather than always paying its load cost at startup even on
@@ -804,6 +892,7 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
     (set-face-attribute 'diff-hl-change nil :background changed-color)
     (set-face-attribute 'diff-hl-delete nil :background changed-color)))
 
+(my-profile-mark "markdown mode")
 ;;; markdown mode
 
 (use-package markdown-mode
@@ -981,6 +1070,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (add-hook 'markdown-mode-hook
           (lambda () (add-hook 'completion-at-point-functions #'my-markdown-tags-capf nil t)))
 
+(my-profile-mark "Appt setup")
 ;;; Appt setup
 
 ;; Set warning time in minutes before the event
@@ -1227,6 +1317,7 @@ Takes an optional, ignored argument so it tolerates being called as
 
 (advice-add 'appt-check :after #'my-appt-mode-line-update)
 
+(my-profile-mark "org-mode")
 ;;; org-mode
 ;; My typical usage of Org includes a main work tracking file, org-agenda,
 ;; integration with my exchange calendar and simple daily journal for which I
@@ -1478,6 +1569,7 @@ ignored -- this must never block dismissing the mode-line notice."
     (advice-add 'org-timegrid-agenda--display-day :override
                 (lambda () (calendar-absolute-from-gregorian (calendar-current-date))))))
 
+(my-profile-mark "Programming modes")
 ;;; Programming modes
 
 ;; magit - git porcelain installation.
@@ -2256,6 +2348,7 @@ declaration if any such methods were found."
             (setq-local imenu-create-index-function 'ilist-plus-elisp-index)))
 
 
+(my-profile-mark "SQL")
 ;;; SQL
 ;; clutch - database access
 (use-package clutch
@@ -2270,6 +2363,7 @@ declaration if any such methods were found."
                 sqlformat-args '("-s2" "-g")))
 
 
+(my-profile-mark "imenu-list")
 ;;; imenu-list
 ;; Note: C-\ is bound to smart toggle.
 (use-package imenu-list
@@ -2336,6 +2430,7 @@ declaration if any such methods were found."
   '("Next Buffer" . next-buffer)
   'zoom-out)
 
+(my-profile-mark "Excorporate setup")
 ;;; Excorporate setup.
 ;; I've modified this quite a bit to directly generate org files.
 
@@ -2397,6 +2492,7 @@ declaration if any such methods were found."
 ;; Disable until oauth2 is settled again.
 (my-ignore (advice-add 'org-agenda :before #'my-agenda-update-diary))
 
+(my-profile-mark "ediff")
 ;;; ediff
 
 ;; Setup a command line switch gemacs -diff file1 file2
@@ -2540,6 +2636,7 @@ declaration if any such methods were found."
 
 (my-ignore (add-hook 'post-gc-hook #'gc-notification))
 
+(my-profile-mark "Completion frameworks")
 ;;; Completion frameworks.
 
 ;; marginalia + vertico + orderless for completions. I'm still deciding about Corfu.
@@ -2582,6 +2679,7 @@ declaration if any such methods were found."
   (global-corfu-mode)
   ))
 
+(my-profile-mark "Font name completion for customize buffers")
 ;;; Font name completion for customize buffers
 ;; This was added to base emacs in version 31 and I will remove it soon.
 
@@ -2678,6 +2776,7 @@ tag, followed by the normal editable field."
   (when (and spec (not (plist-member spec :value-create)))
     (nconc spec (list :value-create #'my-face-family-value-create))))
 
+(my-profile-mark "Snippets")
 ;;; Snippets
 ;; This is currently used in org and markdown mode but I only have it on by
 ;; default for markdown.
@@ -2692,6 +2791,7 @@ tag, followed by the normal editable field."
   :ensure t
   :defer t)
 
+(my-profile-mark "Wikimode")
 ;;; Wikimode
 (use-package wikimode
   :ensure (:host github :repo "benleis1/wikimode")
@@ -2700,6 +2800,7 @@ tag, followed by the normal editable field."
   :commands (wikimode-toggle wikimode-project-tags)
   :defer t)
 
+(my-profile-mark "Consult navigation package")
 ;;;  Consult navigation package
 (use-package consult
   :ensure t
@@ -2727,10 +2828,12 @@ tag, followed by the normal editable field."
                    #'completion--in-region)
 		 args))))
 
+(my-profile-mark "Local.el loading")
 ;;; Local.el loading
 (when (file-exists-p (locate-user-emacs-file "local.el"))
   (load-file (locate-user-emacs-file "local.el")))
 
+(my-profile-mark "temptemp - try out new builtin completion")
 ;;; temptemp - try out new builtin completion.
 
 (when (> emacs-major-version 30)
@@ -2752,6 +2855,7 @@ tag, followed by the normal editable field."
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
 
+(my-profile-mark "GC tuning")
 ;;; GC tuning
 ;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
 ;; collect when Emacs goes idle, instead of paying GC pauses during normal
@@ -2763,15 +2867,9 @@ tag, followed by the normal editable field."
   (setq gcmh-high-cons-threshold (* 32 1024 1024))
   (gcmh-mode 1))
 
-;; TEMPTEMP playing around with zone although its unlikely to stick.
-(use-package zone
-  :ensure nil ; Built-in package
-  :config
-  (setq zone-idle 600) ; Time in seconds (10 minutes)
-  (zone-when-idle 600))
-
 ;; Make sure every package above has finished installing/activating before
 ;; init is considered done, rather than leaving elpaca's queue to finish in
 ;; the background after the first frame appears. This makes the behavior
 ;; deterministic after init completes.
+(my-profile-mark "elpaca-wait 3 (rest of init)")
 (elpaca-wait)
