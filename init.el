@@ -320,10 +320,30 @@
 (defvar margin-gray-bg "gray20")
 (defvar margin-light-gray-bg "gray95")
 
+;; Margin color by background: dark -> gray, light -> tan.
+;; A theme's `theme-properties' only exist once it has loaded, so on its
+;; first load fall back to the modus naming convention (vivendi = dark).
+(defun my-theme-margin-color (theme)
+  (if (or (modus-themes--background-p theme 'dark)
+          (string-match-p "vivendi" (symbol-name theme)))
+      margin-gray-bg
+    margin-tan-bg))
+
 ;; Disable all previously loaded themes before loading another one.
 (advice-add 'load-theme :before
-            (lambda (&rest _varargs)
-              (mapc #'disable-theme custom-enabled-themes)))
+            (lambda (theme &rest _varargs)
+              (mapc #'disable-theme custom-enabled-themes)
+              (setf (alist-get 'bg-margins modus-themes-common-palette-overrides)
+                    (list (my-theme-margin-color theme)))))
+
+;; Once the theme has loaded its real `:background-mode' is known. If the
+;; name-based guess above picked the wrong margin color, fix it and reload.
+(add-hook 'enable-theme-functions
+          (lambda (theme)
+            (when (and (get theme 'theme-properties)
+                       (not (equal (car (alist-get 'bg-margins modus-themes-common-palette-overrides))
+                                   (my-theme-margin-color theme))))
+              (load-theme theme t))))
 
 ;; These mostly global level changes make switching around easier between themes
 ;; They preserve the tabbing styling I use and mute the colors a bit.
@@ -430,20 +450,13 @@
 	))
 
 (setq modus-vivendi-palette-overrides
-      `((bg-margins ,margin-gray-bg)
-	(bg-mode-line-emphasis "gray50")
+      `((bg-mode-line-emphasis "gray50")
 	(fg-hl-imenu magenta-cooler)
 	))
 
 (setq nano-like-palette-overrides
       `((bg-margins "gray95")
 	))
-
-(setq modus-vivendi-embers-palette-overrides
-      `((bg-margins ,margin-gray-bg)))
-
-(setq modus-vivendi-matrix-palette-overrides
-      `((bg-margins ,margin-gray-bg)))
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
 ;; `modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and
@@ -883,14 +896,22 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
 
 (add-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
 
+(defun my-diff-hl-update-faces (&rest _)
+  "Give the diff-hl fringe faces the current theme's changed-fringe color."
+  (when (facep 'diff-hl-insert)
+    (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
+      (dolist (face '(diff-hl-insert diff-hl-change diff-hl-delete))
+        (set-face-attribute face nil :background changed-color)))))
+
+;; diff-hl is deferred, so this does nothing until it loads; its :config applies
+;; the current theme and the hook keeps it current across theme switches.
+(add-hook 'enable-theme-functions #'my-diff-hl-update-faces)
+
 (use-package diff-hl
   :ensure t
   :defer t
   :config
-  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
-    (set-face-attribute 'diff-hl-insert nil :background changed-color)
-    (set-face-attribute 'diff-hl-change nil :background changed-color)
-    (set-face-attribute 'diff-hl-delete nil :background changed-color)))
+  (my-diff-hl-update-faces))
 
 (my-profile-mark "markdown mode")
 ;;; markdown mode
@@ -1118,11 +1139,16 @@ across light/dark theme switches instead of a fixed color like green.")
 (defvar my-appt-mode-line-color-near (modus-themes-get-color-value 'date-deadline t)
   "Glyph color when an appointment is due now.")
 
+(add-hook 'enable-theme-functions
+          (lambda (_theme)
+            (setq my-appt-mode-line-color-near
+                  (modus-themes-get-color-value 'date-deadline t))))
+
 (defvar my-appt-mode-line-bold-intensity 0.6
   "Intensity (0..1) above which the mode-line glyph is shown bold.")
 
 (defun my-appt-mode-line-intensity (min-to-app warn-time)
-  "Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME."
+  "Return an eased urgency in [0,1] for MIN-TO-APP minutes left of WARN-TIME."
   (let* ((warn-time (max warn-time 1))
          (frac (- 1.0 (/ (float (min min-to-app warn-time)) warn-time))))
     (expt frac 2)))
@@ -1143,7 +1169,7 @@ a daemon is still starting up."
       my-appt-mode-line-color-near)))
 
 (defun my-appt-due-list ()
-  "Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+  "Return (MINUTES TITLE WARN-TIME KEY) for appointments due a mode-line warning.
 KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
 every call -- so dismissal can identify a given appointment occurrence
 across checks."
@@ -1741,19 +1767,15 @@ effect without a restart."
 (add-hook 'java-mode-hook 'setup-common-java)
 (add-hook 'java-ts-mode-hook 'setup-common-java)
 
-;; The Java tree-sitter grammar isn't bundled with Emacs. It has to be
-;; built once via `treesit-install-language-grammar'. Register the repo so a
-;; fresh checkout of this config fetches it automatically instead of
-;; requiring a manual step.
+;; The Java tree-sitter grammar isn't bundled with Emacs. Run
+;; `M-x treesit-install-language-grammar RET java' once (needs a C compiler)
+;; and restart; until then Java buffers stay in `java-mode'. It isn't built
+;; automatically at startup because a failed build would block every launch.
 (with-eval-after-load 'treesit
   (add-to-list 'treesit-language-source-alist
-               '(java "https://github.com/tree-sitter/tree-sitter-java"))
+               '(java "https://github.com/tree-sitter/tree-sitter-java")))
 
-  (when (and (treesit-available-p)
-             (not (treesit-language-available-p 'java)))
-    (ignore-errors (treesit-install-language-grammar 'java))))
-
-(when (treesit-language-available-p 'java)
+(when (and (treesit-available-p) (treesit-language-available-p 'java))
   (setq major-mode-remap-alist
 	'((java-mode . java-ts-mode))))
 
@@ -1841,7 +1863,7 @@ false positives, never worth a `display-warning'.")
                        :warning)))))))
 
 ;; Context menu additions for eglot/dape
-(defun my-eglot-dape-context-menu (menu click)
+(defun my-eglot-dape-context-menu (menu _click)
   "Augment context menu with Eglot (LSP) and Dape (Debug) commands."
   (when (derived-mode-p 'prog-mode)
     ;; --- EGLOT (LSP) SECTIONS ---
@@ -2127,11 +2149,13 @@ each project gets its own persistent jdtls workspace."
     '((t :inherit success))
     "Face for the clickable dape-runnable margin arrows.")
 
-  (defvar-local my-junit-test-gutter-overlays nil
-    "Overlays placed by `my-junit-test-gutter-refresh'.")
+  ;; `defvar-local' inside `with-eval-after-load' trips a byte-compiler warning.
+  (with-no-warnings
+    (defvar-local my-junit-test-gutter-overlays nil
+      "Overlays placed by `my-junit-test-gutter-refresh'.")
 
-  (defvar-local my-class-run-gutter-overlays nil
-    "Overlays placed by `my-class-run-gutter-refresh'.")
+    (defvar-local my-class-run-gutter-overlays nil
+      "Overlays placed by `my-class-run-gutter-refresh'."))
 
   (defun my-junit-test-gutter-clear ()
     "Remove all test-gutter overlays from the current buffer."
@@ -2255,28 +2279,29 @@ retrying with the same gradually increasing, never-ending backoff as
              delay nil #'my-dape--junit-gutter-refresh-when-ready buf
              (min (* delay dape-java-junit-backoff-factor) dape-java-junit-backoff-max-delay)))))))
 
-  (define-minor-mode my-dape-run-gutter-mode
-    "Show clickable green arrows in the left margin next to every
+  (with-no-warnings
+    (define-minor-mode my-dape-run-gutter-mode
+      "Show clickable green arrows in the left margin next to every
 jdtls-discovered runnable JUnit test method, and at the test class's
 declaration if any such methods were found."
-    :lighter nil
-    :keymap (let ((m (make-sparse-keymap)))
-              (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
-              m)
-    (if my-dape-run-gutter-mode
-        (progn
-          (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
-          (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
-          ;; The mode turns on right at `eglot-managed-mode-hook' time --
-          ;; i.e. exactly when a freshly-connected jdtls is most likely still
-          ;; busy importing the project and in no position to usefully answer a
-          ;; per-file test query yet. So queue delayed gutter refreshes on a
-          ;; timer with the backoff behavior.
-          (run-with-timer 1.0 nil #'my-dape--junit-gutter-refresh-when-ready (current-buffer)))
-      (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
-      (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
-      (my-junit-test-gutter-clear)
-      (my-class-run-gutter-clear)))
+      :lighter nil
+      :keymap (let ((m (make-sparse-keymap)))
+                (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
+                m)
+      (if my-dape-run-gutter-mode
+          (progn
+            (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
+            (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
+            ;; The mode turns on right at `eglot-managed-mode-hook' time --
+            ;; i.e. exactly when a freshly-connected jdtls is most likely still
+            ;; busy importing the project and in no position to usefully answer a
+            ;; per-file test query yet. So queue delayed gutter refreshes on a
+            ;; timer with the backoff behavior.
+            (run-with-timer 1.0 nil #'my-dape--junit-gutter-refresh-when-ready (current-buffer)))
+        (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
+        (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
+        (my-junit-test-gutter-clear)
+        (my-class-run-gutter-clear))))
 
   (add-hook 'eglot-managed-mode-hook
             (lambda ()
@@ -2595,7 +2620,7 @@ declaration if any such methods were found."
   ;; than a fixed list of hooks) keeps the overlay in sync across startup,
   ;; ?-toggled help text, and every diff-position change, without needing to
   ;; enumerate every command that can move ediff-current-difference.
-  (defvar-local my-ediff-nav-overlay nil)
+  (with-no-warnings (defvar-local my-ediff-nav-overlay nil))
 
   (defun my-ediff-nav-button (label command help)
     (propertize label

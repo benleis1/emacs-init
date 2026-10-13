@@ -70,7 +70,9 @@
 ;; mode-line and dired) are in play. Skip it.
 (setq inhibit-compacting-font-caches t)
 
-;; Turn off the file path in the  title bar
+;; Turn off the file path in the  title bar and the proxy icon
 (setq frame-title-format nil)
+(when (eq system-type 'darwin)
+  (setq ns-use-proxy-icon nil))
 
 ;;; early-init.el ends here
