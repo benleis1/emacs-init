@@ -1,12 +1,9 @@
 
 ```
-```
  oooooooooooo
  `888'     `8
   888         ooo. .oo.  .oo.    .oooo.    .ooooo.   .oooo.o
   888oooo8    `888P"Y88bP"Y88b  `P  )88b  d88' `"Y8 d88(  "8
-```
-```
   888    "     888   888   888   .oP"888  888       `"Y88b.
   888       o  888   888   888  d8(  888  888   .o8 o.  )88b
  o888ooooood8 o888o o888o o888o `Y888""8o `Y8bod8P' 8""888P'
@@ -124,7 +121,42 @@ files into the emacs.d directory and other prerequisite checking.
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
-- [launcher for terminal emacs alias](#launcher-for-terminal-emacs-alias)
+- [Commentary:](#commentary)
+  - [Philosophy](#philosophy)
+  - [Portability](#portability)
+  - [Prerequisites](#prerequisites)
+  - [Major areas configured](#major-areas-configured)
+  - [Installation](#installation)
+- [Code:](#code)
+- [Profiling](#profiling)
+  - [my-toggle-profiler](#my-toggle-profiler)
+  - [my-profile-mark](#my-profile-mark)
+  - [my-profile-report-phases](#my-profile-report-phases)
+  - [my-profile-init-finish](#my-profile-init-finish)
+- [Package setup](#package-setup)
+- [Customizations](#customizations)
+- [Font setup](#font-setup)
+- [modus theme configuration.](#modus-theme-configuration)
+  - [my-theme-margin-color](#my-theme-margin-color)
+  - [my-reload-fonts](#my-reload-fonts)
+- [Basic Appearance and startup](#basic-appearance-and-startup)
+  - [my-before-save-hook](#my-before-save-hook)
+  - [my-skip-large-files-stale-p](#my-skip-large-files-stale-p)
+- [backup and autosave.](#backup-and-autosave)
+- [Dired](#dired)
+- [modeline](#modeline)
+- [Global key bindings](#global-key-bindings)
+- [flyspell config](#flyspell-config)
+  - [my-flyspell-prog-mode](#my-flyspell-prog-mode)
+  - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
+  - [flyspell-toggle](#flyspell-toggle)
+  - [my-flyspell-defer-enable](#my-flyspell-defer-enable)
+  - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
+- [diff-hl](#diff-hl)
+  - [my-diff-hl-update-faces](#my-diff-hl-update-faces)
+- [markdown mode](#markdown-mode)
+  - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
+  - [insert-date](#insert-date)
   - [my-markdown-liquid-post-url-at-point](#my-markdown-liquid-post-url-at-point)
   - [my-markdown-follow-liquid-post-url](#my-markdown-follow-liquid-post-url)
   - [my-markdown-imenu-dot-glyph](#my-markdown-imenu-dot-glyph)
@@ -132,6 +164,7 @@ files into the emacs.d directory and other prerequisite checking.
   - [my-markdown-frontmatter-bounds](#my-markdown-frontmatter-bounds)
   - [my-markdown-tags-line-value-start](#my-markdown-tags-line-value-start)
   - [my-markdown-tags-capf](#my-markdown-tags-capf)
+- [Appt setup](#appt-setup)
   - [my-appt-mode-line-intensity](#my-appt-mode-line-intensity)
   - [my-appt-mode-line-color](#my-appt-mode-line-color)
   - [my-appt-due-list](#my-appt-due-list)
@@ -139,33 +172,49 @@ files into the emacs.d directory and other prerequisite checking.
   - [my-appt-mode-line-open-agenda](#my-appt-mode-line-open-agenda)
   - [my-appt-mode-line-dismiss](#my-appt-mode-line-dismiss)
   - [my-appt-mode-line-update](#my-appt-mode-line-update)
+- [org-mode](#org-mode)
   - [my-meeting-log--parse-calendar-entries](#my-meeting-log--parse-calendar-entries)
   - [my-meeting-log--match-entry](#my-meeting-log--match-entry)
   - [my-meeting-log--ensure-week-summary](#my-meeting-log--ensure-week-summary)
   - [my-meeting-log--append-clock](#my-meeting-log--append-clock)
   - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
+- [Programming modes](#programming-modes)
   - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
-  - [treesit-fold-range-java-imports](#treesit-fold-range-java-imports)
-  - [treesit-fold-close-java-imports](#treesit-fold-close-java-imports)
-  - [treesit-fold-summary-java](#treesit-fold-summary-java)
-  - [context-menu-fold-line](#context-menu-fold-line)
-  - [my-java-home-set](#my-java-home-set)
-  - [setup-common-java](#setup-common-java)
-  - [my-eglot-dape-context-menu](#my-eglot-dape-context-menu)
-  - [my-jsonrpc-elide-text-document](#my-jsonrpc-elide-text-document)
-  - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
-  - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
-  - [my-jsonrpc-skip-message-p](#my-jsonrpc-skip-message-p)
-  - [my-jdt-uri-handler](#my-jdt-uri-handler)
-  - [my-jdtls-cache-dir](#my-jdtls-cache-dir)
-  - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
-  - [my-get-test-annotations](#my-get-test-annotations)
-  - [flymake-buffer-quit](#flymake-buffer-quit)
+  - [Project.el settings.](#projectel-settings)
+    - [treesit-fold-range-java-imports](#treesit-fold-range-java-imports)
+  - [treesit-fold - useful for folding things like imports in java](#treesit-fold---useful-for-folding-things-like-imports-in-java)
+    - [treesit-fold-close-java-imports](#treesit-fold-close-java-imports)
+    - [treesit-fold-summary-java](#treesit-fold-summary-java)
+    - [context-menu-fold-line](#context-menu-fold-line)
+  - [Java](#java)
+    - [my-java-home-set](#my-java-home-set)
+    - [setup-common-java](#setup-common-java)
+  - [eglot](#eglot)
+    - [my-eglot-dape-context-menu](#my-eglot-dape-context-menu)
+    - [my-jsonrpc-elide-text-document](#my-jsonrpc-elide-text-document)
+    - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
+    - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
+    - [my-jsonrpc-skip-message-p](#my-jsonrpc-skip-message-p)
+    - [my-jdt-uri-handler](#my-jdt-uri-handler)
+    - [my-jdtls-cache-dir](#my-jdtls-cache-dir)
+    - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
+  - [eglot for Python](#eglot-for-python)
+  - [DAPE debugging](#dape-debugging)
+    - [my-get-test-annotations](#my-get-test-annotations)
+  - [flymake](#flymake)
+    - [flymake-buffer-quit](#flymake-buffer-quit)
+  - [elisp](#elisp)
+- [SQL](#sql)
+- [imenu-list](#imenu-list)
+- [Excorporate setup.](#excorporate-setup)
   - [my-diary-cleanup](#my-diary-cleanup)
   - [my-agenda-update-diary](#my-agenda-update-diary)
+- [ediff](#ediff)
   - [command-line-diff](#command-line-diff)
   - [gc-notification](#gc-notification)
+- [Completion frameworks.](#completion-frameworks)
+- [Font name completion for customize buffers](#font-name-completion-for-customize-buffers)
   - [font-family-widget-p](#font-family-widget-p)
   - [complete-font-name](#complete-font-name)
   - [add-complete-font-name](#add-complete-font-name)
@@ -173,6 +222,12 @@ files into the emacs.d directory and other prerequisite checking.
   - [my-widget-find-ancestor](#my-widget-find-ancestor)
   - [my-customize-face-set-font](#my-customize-face-set-font)
   - [my-face-family-value-create](#my-face-family-value-create)
+- [Snippets](#snippets)
+- [Wikimode](#wikimode)
+- [Consult navigation package](#consult-navigation-package)
+- [Local.el loading](#localel-loading)
+- [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
+- [GC tuning](#gc-tuning)
 
 <!-- markdown-toc end -->
 
@@ -425,16 +480,36 @@ to  use i.e with the  ` back tick operator.
 (defvar margin-light-gray-bg "gray95")
 ```
 
+## my-theme-margin-color
+Margin color by background: dark -> gray, light -> tan.
+A theme's `theme-properties' only exist once it has loaded, so on its
+first load fall back to the modus naming convention (vivendi = dark).
+```
+(defun my-theme-margin-color (theme)
+  (if (or (modus-themes--background-p theme 'dark)
+          (string-match-p "vivendi" (symbol-name theme)))
+      margin-gray-bg
+    margin-tan-bg))
+```
+
 Disable all previously loaded themes before loading another one.
 ```
 (advice-add 'load-theme :before
             (lambda (theme &rest _varargs)
               (mapc #'disable-theme custom-enabled-themes)
-              ;; Margin color by background: dark -> gray, light -> tan.
               (setf (alist-get 'bg-margins modus-themes-common-palette-overrides)
-                    (list (if (modus-themes--background-p theme 'dark)
-                              margin-gray-bg
-                            margin-tan-bg)))))
+                    (list (my-theme-margin-color theme)))))
+```
+
+Once the theme has loaded its real `:background-mode' is known. If the
+name-based guess above picked the wrong margin color, fix it and reload.
+```
+(add-hook 'enable-theme-functions
+          (lambda (theme)
+            (when (and (get theme 'theme-properties)
+                       (not (equal (car (alist-get 'bg-margins modus-themes-common-palette-overrides))
+                                   (my-theme-margin-color theme))))
+              (load-theme theme t))))
 ```
 
 These mostly global level changes make switching around easier between themes
@@ -1132,15 +1207,30 @@ sessions that never touch a VC-tracked buffer.
     (diff-hl-flydiff-mode 1)))
 
 (add-hook 'find-file-hook #'my-diff-hl-enable-if-vc)
+```
+
+## my-diff-hl-update-faces
+>Give the diff-hl fringe faces the current theme's changed-fringe color.
+
+```
+(defun my-diff-hl-update-faces (&rest _)
+  "Give the diff-hl fringe faces the current theme's changed-fringe color."
+  (when (facep 'diff-hl-insert)
+    (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
+      (dolist (face '(diff-hl-insert diff-hl-change diff-hl-delete))
+        (set-face-attribute face nil :background changed-color)))))
+```
+
+diff-hl is deferred, so this does nothing until it loads; its :config applies
+the current theme and the hook keeps it current across theme switches.
+```
+(add-hook 'enable-theme-functions #'my-diff-hl-update-faces)
 
 (use-package diff-hl
   :ensure t
   :defer t
   :config
-  (let ((changed-color (modus-themes-get-color-value 'bg-changed-fringe t)))
-    (set-face-attribute 'diff-hl-insert nil :background changed-color)
-    (set-face-attribute 'diff-hl-change nil :background changed-color)
-    (set-face-attribute 'diff-hl-delete nil :background changed-color)))
+  (my-diff-hl-update-faces))
 
 (my-profile-mark "markdown mode")
 ```
@@ -1202,9 +1292,7 @@ insert a date function for use in the markdown snippets.
   "{% post_url[[:space:]]*\\([^ ]*\\)[[:space:]]*%}"
   "Matches a Jekyll {% post_url NAME %} liquid tag; group 1 is NAME.")
 ```
-```
 
-```
 ## my-markdown-liquid-post-url-at-point
 >Return NAME if point is on a link/tag whose destination is {% post_url NAME %}.
 
@@ -1215,12 +1303,6 @@ to support `[text](url "title")` syntax. That mangles a liquid tag like
 "{% post_url NAME %}" down to just "{%" before we'd ever see it via
 markdown-link-url. Detect the tag directly from
 the raw buffer text instead and otherwise defer to the original function.
-```
-
-## my-markdown-liquid-post-url-at-point
-
->Return NAME if point is on a link/tag whose destination is {% post_url NAME %}.
-```
 ```
 (defun my-markdown-liquid-post-url-at-point ()
   "Return NAME if point is on a link/tag whose destination is {% post_url NAME %}."
@@ -1246,12 +1328,7 @@ the raw buffer text instead and otherwise defer to the original function.
 
 ## my-markdown-follow-liquid-post-url
 >Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN.
-```
 
-## my-markdown-follow-liquid-post-url
->Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN.
-
-```
 ```
 (defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
   "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
@@ -1296,10 +1373,6 @@ markdown-mode's own nested imenu index marks a heading's jump-to-self
 entry with a literal "." leaf but I prefer the larger dot glyph for
 readability.
 ```
-
-## my-markdown-imenu-dot-glyph
-```
-```
 (defun my-markdown-imenu-dot-glyph (index-alist)
   (dolist (entry index-alist index-alist)
     (when (equal (car entry) ".")
@@ -1309,10 +1382,6 @@ readability.
 ```
 
 ## my-markdown-imenu-create-nested-index
-```
-
-## my-markdown-imenu-create-nested-index
-```
 ```
 (defun my-markdown-imenu-create-nested-index ()
   (my-markdown-imenu-dot-glyph (markdown-imenu-create-nested-index)))
@@ -1328,12 +1397,6 @@ readability.
 Complete a frontmatter "tags:" value against every tag already used
 elsewhere in the project, via wikimode's project-wide tag scan
 (`wikimode-project-tags').
-```
-
-## my-markdown-frontmatter-bounds
-
->Return (START . END) of the current buffer's YAML frontmatter body, or nil.
-```
 ```
 (defun my-markdown-frontmatter-bounds ()
   "Return (START . END) of the current buffer's YAML frontmatter body, or nil."
@@ -1351,14 +1414,7 @@ elsewhere in the project, via wikimode's project-wide tag scan
 >If point's line is a frontmatter tags entry, return where its value starts.
 Matches either the inline form ("tags: [a, b]" or "tags: a, b") or a
 block-list item ("  - a") under a bare "tags:" header line above it.
-```
 
-## my-markdown-tags-line-value-start
->If point's line is a frontmatter tags entry, return where its value starts.
-Matches either the inline form ("tags: [a, b]" or "tags: a, b") or a
-block-list item ("  - a") under a bare "tags:" header line above it.
-
-```
 ```
 (defun my-markdown-tags-line-value-start ()
   "If point's line is a frontmatter tags entry, return where its value starts.
@@ -1380,12 +1436,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 
 ## my-markdown-tags-capf
 >`completion-at-point-functions' entry for markdown frontmatter tag values.
-```
 
-## my-markdown-tags-capf
->`completion-at-point-functions' entry for markdown frontmatter tag values.
-
-```
 ```
 (defun my-markdown-tags-capf ()
   "`completion-at-point-functions' entry for markdown frontmatter tag values."
@@ -1459,8 +1510,6 @@ Emacs's first idle moment instead of blocking startup.
 
 Replace the default "App't in N min." mode-line text with an alarm-clock glyph and a bare
 countdown; the full title(s) go on the help-echo tooltip The glyph's color is interpolated across
-```
-```
 the whole warning window, from `my-appt-mode-line-color-far' when it first appears down to
 `my-appt-mode-line-color-near' right as the appointment hits. The ramp is eased quadratically
 (not linear) so it stays calm for most of the window and then intensifies sharply near the end,
@@ -1476,21 +1525,21 @@ across light/dark theme switches instead of a fixed color like green.")
 (defvar my-appt-mode-line-color-near (modus-themes-get-color-value 'date-deadline t)
   "Glyph color when an appointment is due now.")
 
+(add-hook 'enable-theme-functions
+          (lambda (_theme)
+            (setq my-appt-mode-line-color-near
+                  (modus-themes-get-color-value 'date-deadline t))))
+
 (defvar my-appt-mode-line-bold-intensity 0.6
   "Intensity (0..1) above which the mode-line glyph is shown bold.")
 ```
 
 ## my-appt-mode-line-intensity
->Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME.
-```
+>Return an eased urgency in [0,1] for MIN-TO-APP minutes left of WARN-TIME.
 
-## my-appt-mode-line-intensity
->Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME.
-
-```
 ```
 (defun my-appt-mode-line-intensity (min-to-app warn-time)
-  "Return an eased urgency value in [0,1] for MIN-TO-APP minutes left out of WARN-TIME."
+  "Return an eased urgency in [0,1] for MIN-TO-APP minutes left of WARN-TIME."
   (let* ((warn-time (max warn-time 1))
          (frac (- 1.0 (/ (float (min min-to-app warn-time)) warn-time))))
     (expt frac 2)))
@@ -1502,16 +1551,7 @@ Falls back to `my-appt-mode-line-color-near' unmixed if either endpoint
 color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
 the `default' face when called before any frame exists, as happens while
 a daemon is still starting up.
-```
 
-## my-appt-mode-line-color
->Interpolate the glyph color for the given eased urgency INTENSITY.
-Falls back to `my-appt-mode-line-color-near' unmixed if either endpoint
-color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
-the `default' face when called before any frame exists, as happens while
-a daemon is still starting up.
-
-```
 ```
 (defun my-appt-mode-line-color (intensity)
   "Interpolate the glyph color for the given eased urgency INTENSITY.
@@ -1530,22 +1570,14 @@ a daemon is still starting up."
 ```
 
 ## my-appt-due-list
->Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
-KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
-every call -- so dismissal can identify a given appointment occurrence
-across checks.
-```
-
-## my-appt-due-list
->Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+>Return (MINUTES TITLE WARN-TIME KEY) for appointments due a mode-line warning.
 KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
 every call -- so dismissal can identify a given appointment occurrence
 across checks.
 
-```
 ```
 (defun my-appt-due-list ()
-  "Return a list of (MINUTES TITLE WARN-TIME KEY) for appointments due for a mode-line warning.
+  "Return (MINUTES TITLE WARN-TIME KEY) for appointments due a mode-line warning.
 KEY is a stable (TIME . TITLE) pair -- unlike MINUTES, which counts down on
 every call -- so dismissal can identify a given appointment occurrence
 across checks."
@@ -1601,21 +1633,7 @@ while away from the frame with nobody around to dismiss it).
 Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
 runs, so `my-appt-mode-line-update' can detect appointments that matured
 during this check.
-```
 
-## my-appt-glass-bell
->Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-but only when an appointment is newly entering its warning window this
-check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
-`my-appt-beeped-keys'. This keeps the sound from firing again on every
-subsequent `appt-check' cycle for the same still-pending appointment,
-which would otherwise repeat for as long as it stays undismissed (e.g.
-while away from the frame with nobody around to dismiss it).
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check.
-
-```
 ```
 (defun my-appt-glass-bell (orig-fun &rest args)
   "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
@@ -1657,12 +1675,7 @@ TODO: should this move to modeline.el?
 
 ## my-appt-mode-line-open-agenda
 >Open org-agenda from the appointment mode-line segment and select its window.
-```
 
-## my-appt-mode-line-open-agenda
->Open org-agenda from the appointment mode-line segment and select its window.
-
-```
 ```
 (defun my-appt-mode-line-open-agenda (_event)
   "Open org-agenda from the appointment mode-line segment and select its window."
@@ -1675,21 +1688,9 @@ TODO: should this move to modeline.el?
 still counting down or already overdue, logging clocked time for each
 newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
 Each stays dismissed until it ages out of the warning window on its own;
-```
-```
-the dismissed-keys check also keeps a repeat dismiss click from logging
-the same appointment twice.
-```
-
-## my-appt-mode-line-dismiss
->Dismiss the appointment(s) currently shown in the mode line, whether
-still counting down or already overdue, logging clocked time for each
-newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
-Each stays dismissed until it ages out of the warning window on its own;
 the dismissed-keys check also keeps a repeat dismiss click from logging
 the same appointment twice.
 
-```
 ```
 (defun my-appt-mode-line-dismiss (_event)
   "Dismiss the appointment(s) currently shown in the mode line, whether
@@ -1722,15 +1723,7 @@ the same appointment twice."
 a lingering "Due" glyph for an appointment whose time has passed.
 Takes an optional, ignored argument so it tolerates being called as
 :after advice on `appt-check', which itself takes an optional FORCE arg.
-```
 
-## my-appt-mode-line-update
->Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
-a lingering "Due" glyph for an appointment whose time has passed.
-Takes an optional, ignored argument so it tolerates being called as
-:after advice on `appt-check', which itself takes an optional FORCE arg.
-
-```
 ```
 (defun my-appt-mode-line-update (&optional _force)
   "Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
@@ -1845,15 +1838,7 @@ declined, which the user never actually attended.")
 non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
 BUFFER (default the current buffer), which is expected to hold
 `my-meetings-file''s layout: a heading followed by a timestamp.
-```
 
-## my-meeting-log--parse-calendar-entries
->Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
-non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
-BUFFER (default the current buffer), which is expected to hold
-`my-meetings-file''s layout: a heading followed by a timestamp.
-
-```
 ```
 (defun my-meeting-log--parse-calendar-entries (&optional buffer)
   "Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
@@ -1886,15 +1871,7 @@ BUFFER (default the current buffer), which is expected to hold
 at START-MINUTES whose heading matches TITLE, or nil. Titles are matched
 exactly first, then as a substring either way, since the appointment
 text org hands to `appt-add' may be a prefix/suffix of the full heading.
-```
 
-## my-meeting-log--match-entry
->Return the entry in ENTRIES (as from `my-meeting-log--parse-calendar-entries')
-at START-MINUTES whose heading matches TITLE, or nil. Titles are matched
-exactly first, then as a substring either way, since the appointment
-text org hands to `appt-add' may be a prefix/suffix of the full heading.
-
-```
 ```
 (defun my-meeting-log--match-entry (start-minutes title entries)
   "Return the entry in ENTRIES (as from `my-meeting-log--parse-calendar-entries')
@@ -1915,15 +1892,7 @@ text org hands to `appt-add' may be a prefix/suffix of the full heading."
 (an ISO "YYYY-Www" string), inserting one at `point-max' if absent.
 The clocktable uses a fixed `:block' rather than `thisweek' so each
 week's summary keeps reporting that week after the week rolls over.
-```
 
-## my-meeting-log--ensure-week-summary
->Ensure the current buffer ends with a clock-summary section for WEEK
-(an ISO "YYYY-Www" string), inserting one at `point-max' if absent.
-The clocktable uses a fixed `:block' rather than `thisweek' so each
-week's summary keeps reporting that week after the week rolls over.
-
-```
 ```
 (defun my-meeting-log--ensure-week-summary (week)
   "Ensure the current buffer ends with a clock-summary section for WEEK
@@ -1945,15 +1914,7 @@ week's summary keeps reporting that week after the week rolls over."
 from START-TIME to END-TIME, then refresh its clock-summary dynamic
 blocks and save. A new per-week clock-summary section is added the first
 time a given ISO week is logged.
-```
 
-## my-meeting-log--append-clock
->Append a clocked heading for TITLE to `my-meeting-log-file', clocked
-from START-TIME to END-TIME, then refresh its clock-summary dynamic
-blocks and save. A new per-week clock-summary section is added the first
-time a given ISO week is logged.
-
-```
 ```
 (defun my-meeting-log--append-clock (title start-time end-time)
   "Append a clocked heading for TITLE to `my-meeting-log-file', clocked
@@ -1993,17 +1954,7 @@ Looks up each appointment's scheduled start/end in `my-meetings-file'
 and records that range as a CLOCK entry in `my-meeting-log-file'. A
 lookup miss or write failure is reported to *Messages* and otherwise
 ignored -- this must never block dismissing the mode-line notice.
-```
 
-## my-meeting-log-record-dismissed-appointments
->Log clocked time for each dismissed appointment in KEYS, a list of
-(START-MINUTES . TITLE) conses (see `my-appt-due-list' above).
-Looks up each appointment's scheduled start/end in `my-meetings-file'
-and records that range as a CLOCK entry in `my-meeting-log-file'. A
-lookup miss or write failure is reported to *Messages* and otherwise
-ignored -- this must never block dismissing the mode-line notice.
-
-```
 ```
 (defun my-meeting-log-record-dismissed-appointments (keys)
   "Log clocked time for each dismissed appointment in KEYS, a list of
@@ -2069,10 +2020,6 @@ Meetings live in Org now (`my-meetings-file'), not the diary.
 face from character 2 onward, leaving the leading prefix (a space and the
 first digit of the padded time, from our " %-12t " prefix format)
 unfaced. Extend the face to cover the whole line.
-```
-
-## my-org-agenda-extend-current-time-face
-```
 ```
 (defun my-org-agenda-extend-current-time-face (list)
   (dolist (item list list)
@@ -2197,10 +2144,6 @@ For all programming modes - use line numbers in the margin, turn on column track
 and turnoff the fringe line overflow markers since the line numbers show the same
 thing and are much easier to see.
 ```
-
-## my-common-prog-mode-setup
-```
-```
 (defun my-common-prog-mode-setup ()
   (display-line-numbers-mode)
   (setq-local fringe-indicator-alist
@@ -2238,12 +2181,6 @@ folds one import. This walks forward across the run of consecutive
 import_declaration (and interleaved comment) siblings so that folding
 on any import line collapses that line and every import after it.
 ```
-
-## treesit-fold-range-java-imports
-
->Fold the contiguous run of Java import declarations starting at NODE.
-```
-```
 (defun treesit-fold-range-java-imports (node offset)
   "Fold the contiguous run of Java import declarations starting at NODE."
   (let ((last-node node)
@@ -2265,12 +2202,6 @@ on any import line collapses that line and every import after it.
 Automatically fold the import block when a Java buffer is opened, called
 from `setup-common-java' below.
 ```
-
-## treesit-fold-close-java-imports
-
->Fold the run of Java import declarations at the top of the buffer, if any.
-```
-```
 (defun treesit-fold-close-java-imports ()
   "Fold the run of Java import declarations at the top of the buffer, if any."
   (when (and (treesit-available-p) (treesit-parser-list) (treesit-fold-usable-mode-p))
@@ -2286,12 +2217,7 @@ from `setup-common-java' below.
 
 ### treesit-fold-summary-java
 >Summarize a folded Java DOC-STR by the tree-sitter node type it came from.
-```
 
-## treesit-fold-summary-java
->Summarize a folded Java DOC-STR by the tree-sitter node type it came from.
-
-```
 ```
 (defun treesit-fold-summary-java (doc-str)
   "Summarize a folded Java DOC-STR by the tree-sitter node type it came from."
@@ -2310,12 +2236,6 @@ lands on the line-number gutter. Clicks there are reported as ordinary
 text-area clicks whose X pixel offset is measured from the left edge of
 the text area (which includes the line-number glyphs), so a click is in
 the gutter when its X is less than the line-number display's pixel width.
-```
-
-## context-menu-fold-line
-
->Add a fold-line entry to MENU when CLICK lands on the line-number gutter.
-```
 ```
 (defun context-menu-fold-line (menu click)
   "Add a fold-line entry to MENU when CLICK lands on the line-number gutter."
@@ -2377,15 +2297,7 @@ set java home
 Re-applies JAVA_HOME and the jdtls settings derived from it --
 so customizing `my-java-home' (e.g. via M-x customize-variable) takes
 effect without a restart.
-```
 
-## my-java-home-set
->Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
-Re-applies JAVA_HOME and the jdtls settings derived from it --
-so customizing `my-java-home' (e.g. via M-x customize-variable) takes
-effect without a restart.
-
-```
 ```
 (defun my-java-home-set (symbol value)
   "Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
@@ -2414,10 +2326,6 @@ This is the single source of truth for that derivation -- see
 
 ### setup-common-java
 ```
-
-## setup-common-java
-```
-```
 (defun setup-common-java ()
   (setq c-basic-offset 4
         tab-width 4
@@ -2432,20 +2340,16 @@ This is the single source of truth for that derivation -- see
 (add-hook 'java-ts-mode-hook 'setup-common-java)
 ```
 
-The Java tree-sitter grammar isn't bundled with Emacs. It has to be
-built once via `treesit-install-language-grammar'. Register the repo so a
-fresh checkout of this config fetches it automatically instead of
-requiring a manual step.
+The Java tree-sitter grammar isn't bundled with Emacs. Run
+`M-x treesit-install-language-grammar RET java' once (needs a C compiler)
+and restart; until then Java buffers stay in `java-mode'. It isn't built
+automatically at startup because a failed build would block every launch.
 ```
 (with-eval-after-load 'treesit
   (add-to-list 'treesit-language-source-alist
-               '(java "https://github.com/tree-sitter/tree-sitter-java"))
+               '(java "https://github.com/tree-sitter/tree-sitter-java")))
 
-  (when (and (treesit-available-p)
-             (not (treesit-language-available-p 'java)))
-    (ignore-errors (treesit-install-language-grammar 'java))))
-
-(when (treesit-language-available-p 'java)
+(when (and (treesit-available-p) (treesit-language-available-p 'java))
   (setq major-mode-remap-alist
 	'((java-mode . java-ts-mode))))
 ```
@@ -2463,14 +2367,10 @@ and it cuts overhead to have a larger one
 (setq read-process-output-max (* 1024 1024))
 (setq eglot-report-progress 'messages) ;; progress updates in the message bar
 ```
-```
-```
 tree sitter is fine for faces and we don't need highlighting on the current line.
 ```
 (setq eglot-ignored-server-capabilities '(:semanticTokensProvider :documentHighlightProvider))
 (setq eglot-stay-out-of '(imenu)) ;; Use my version
-```
-```
 ```
 asynchronous connections to not freeze during initial handshake.
 ```
@@ -2558,13 +2458,7 @@ Report back warnings of interest after eglot loads
 
 Context menu additions for eglot/dape
 ```
-
-## my-eglot-dape-context-menu
-
->Augment context menu with Eglot (LSP) and Dape (Debug) commands.
-```
-```
-(defun my-eglot-dape-context-menu (menu click)
+(defun my-eglot-dape-context-menu (menu _click)
   "Augment context menu with Eglot (LSP) and Dape (Debug) commands."
   (when (derived-mode-p 'prog-mode)
     ;; --- EGLOT (LSP) SECTIONS ---
@@ -2602,18 +2496,7 @@ internal debug/warn events, never for real protocol messages, so
 there's normally nothing after it. Inject a summary of :message
 (method+params, or result/error) as :log-text when one isn't
 already present; the `full'/`lisp' branches prefer :json/
-```
-```
 :foreign-message over :log-text, so this only affects `short'.
-```
-
-## my-jsonrpc-elide-text-document
-
->Copy of PARAMS with params.textDocument.text elided.
-That field carries a whole file's contents (e.g. on
-textDocument/didOpen) and otherwise floods the short log format.
-uri/version and everything else in PARAMS are left untouched.
-```
 ```
 (defun my-jsonrpc-elide-text-document (params)
   "Copy of PARAMS with params.textDocument.text elided.
@@ -2633,14 +2516,7 @@ uri/version and everything else in PARAMS are left untouched."
 >Copy of PARAMS with a top-level :token field elided.
 $/progress notifications carry a fresh token on every call and
 otherwise flood the short log format with noise.
-```
 
-## my-jsonrpc-elide-token
->Copy of PARAMS with a top-level :token field elided.
-$/progress notifications carry a fresh token on every call and
-otherwise flood the short log format with noise.
-
-```
 ```
 (defun my-jsonrpc-elide-token (params)
   "Copy of PARAMS with a top-level :token field elided.
@@ -2653,12 +2529,7 @@ otherwise flood the short log format with noise."
 
 ### my-jsonrpc-log-text
 >One-line summary of my-jsonrpc MESSAGE, for `short' events format.
-```
 
-## my-jsonrpc-log-text
->One-line summary of my-jsonrpc MESSAGE, for `short' events format.
-
-```
 ```
 (defun my-jsonrpc-log-text (message)
   "One-line summary of my-jsonrpc MESSAGE, for `short' events format."
@@ -2684,15 +2555,7 @@ otherwise flood the short log format with noise."
 Suppresses $/progress begin/end notifications entirely -- `begin'
 just opens a task and `end' just closes it, neither carries
 anything as useful as the `report' messages in between.
-```
 
-## my-jsonrpc-skip-message-p
->Non-nil if MESSAGE shouldn't be logged at all.
-Suppresses $/progress begin/end notifications entirely -- `begin'
-just opens a task and `end' just closes it, neither carries
-anything as useful as the `report' messages in between.
-
-```
 ```
 (defun my-jsonrpc-skip-message-p (message)
   "Non-nil if MESSAGE shouldn't be logged at all.
@@ -2727,18 +2590,7 @@ class inside a jar (library code, JDK classes) rather than a project
 source file. There's no file on disk at that URI, so translate it
 into a locally cached decompiled source file fetched from the server
 via the `java/classFileContents' request, the first time it's seen.
-```
 
-## my-jdt-uri-handler
->Handle file operations on jdtls's `jdt://' URIs.
-
-jdtls returns these for definitions/references that resolve into a
-class inside a jar (library code, JDK classes) rather than a project
-source file. There's no file on disk at that URI, so translate it
-into a locally cached decompiled source file fetched from the server
-via the `java/classFileContents' request, the first time it's seen.
-
-```
 ```
 (defun my-jdt-uri-handler (operation &rest args)
   "Handle file operations on jdtls's `jdt://' URIs.
@@ -2787,15 +2639,7 @@ via the `java/classFileContents' request, the first time it's seen."
 `default-directory' if PROJECT is nil) -- the same path
 `eglot-server-programs' launches jdtls with, keyed by project root so
 each project gets its own persistent jdtls workspace.
-```
 
-## my-jdtls-cache-dir
->Return the jdtls `-data' workspace directory for PROJECT (or
-`default-directory' if PROJECT is nil) -- the same path
-`eglot-server-programs' launches jdtls with, keyed by project root so
-each project gets its own persistent jdtls workspace.
-
-```
 ```
 (defun my-jdtls-cache-dir (&optional project)
   "Return the jdtls `-data' workspace directory for PROJECT (or
@@ -2812,13 +2656,6 @@ each project gets its own persistent jdtls workspace."
 `-data' workspace, and reconnect.
 
 Clean function for the jdtls workspace.
-```
-
-## my-jdtls-clean-workspace
-
->Shut down the current buffer's jdtls connection, delete its cached
-`-data' workspace, and reconnect.
-```
 ```
 (defun my-jdtls-clean-workspace ()
   "Shut down the current buffer's jdtls connection, delete its cached
@@ -2970,11 +2807,13 @@ dape config to run, so the one binding can dispatch either arrow.
     '((t :inherit success))
     "Face for the clickable dape-runnable margin arrows.")
 
-  (defvar-local my-junit-test-gutter-overlays nil
-    "Overlays placed by `my-junit-test-gutter-refresh'.")
+  ;; `defvar-local' inside `with-eval-after-load' trips a byte-compiler warning.
+  (with-no-warnings
+    (defvar-local my-junit-test-gutter-overlays nil
+      "Overlays placed by `my-junit-test-gutter-refresh'.")
 
-  (defvar-local my-class-run-gutter-overlays nil
-    "Overlays placed by `my-class-run-gutter-refresh'.")
+    (defvar-local my-class-run-gutter-overlays nil
+      "Overlays placed by `my-class-run-gutter-refresh'."))
 
   (defun my-junit-test-gutter-clear ()
     "Remove all test-gutter overlays from the current buffer."
@@ -3098,28 +2937,29 @@ retrying with the same gradually increasing, never-ending backoff as
              delay nil #'my-dape--junit-gutter-refresh-when-ready buf
              (min (* delay dape-java-junit-backoff-factor) dape-java-junit-backoff-max-delay)))))))
 
-  (define-minor-mode my-dape-run-gutter-mode
-    "Show clickable green arrows in the left margin next to every
+  (with-no-warnings
+    (define-minor-mode my-dape-run-gutter-mode
+      "Show clickable green arrows in the left margin next to every
 jdtls-discovered runnable JUnit test method, and at the test class's
 declaration if any such methods were found."
-    :lighter nil
-    :keymap (let ((m (make-sparse-keymap)))
-              (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
-              m)
-    (if my-dape-run-gutter-mode
-        (progn
-          (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
-          (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
-          ;; The mode turns on right at `eglot-managed-mode-hook' time --
-          ;; i.e. exactly when a freshly-connected jdtls is most likely still
-          ;; busy importing the project and in no position to usefully answer a
-          ;; per-file test query yet. So queue delayed gutter refreshes on a
-          ;; timer with the backoff behavior.
-          (run-with-timer 1.0 nil #'my-dape--junit-gutter-refresh-when-ready (current-buffer)))
-      (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
-      (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
-      (my-junit-test-gutter-clear)
-      (my-class-run-gutter-clear)))
+      :lighter nil
+      :keymap (let ((m (make-sparse-keymap)))
+                (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
+                m)
+      (if my-dape-run-gutter-mode
+          (progn
+            (add-hook 'after-save-hook #'my-junit-test-gutter-refresh nil t)
+            (add-hook 'after-save-hook #'my-class-run-gutter-refresh nil t)
+            ;; The mode turns on right at `eglot-managed-mode-hook' time --
+            ;; i.e. exactly when a freshly-connected jdtls is most likely still
+            ;; busy importing the project and in no position to usefully answer a
+            ;; per-file test query yet. So queue delayed gutter refreshes on a
+            ;; timer with the backoff behavior.
+            (run-with-timer 1.0 nil #'my-dape--junit-gutter-refresh-when-ready (current-buffer)))
+        (remove-hook 'after-save-hook #'my-junit-test-gutter-refresh t)
+        (remove-hook 'after-save-hook #'my-class-run-gutter-refresh t)
+        (my-junit-test-gutter-clear)
+        (my-class-run-gutter-clear))))
 
   (add-hook 'eglot-managed-mode-hook
             (lambda ()
@@ -3132,12 +2972,6 @@ declaration if any such methods were found."
 >Get all @Test marker_annotation nodes inside methods of a class.
 
 In process - a treesitter mechanism to find test annotations instead.
-```
-
-## my-get-test-annotations
-
->Get all @Test marker_annotation nodes inside methods of a class.
-```
 ```
 (defun my-get-test-annotations ()
   "Get all @Test marker_annotation nodes inside methods of a class."
@@ -3174,12 +3008,6 @@ letting it split whatever window happens to be current.
 mouse.el), so clicking the flymake diagnostics window's mode-line
 just focuses it instead of closing it. Override that specifically
 for this mode.
-```
-
-## flymake-buffer-quit
-
->Close the flymake diagnostics window clicked on in its mode-line.
-```
 ```
 (defun flymake-buffer-quit (event)
   "Close the flymake diagnostics window clicked on in its mode-line."
@@ -3219,8 +3047,6 @@ within it, so it lines up with `my-dape-run-gutter-mode''s arrow.
 
 Group `use-package` declarations under their own imenu heading.
 Also extract all the ;;; sections.
-```
-```
 ```
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
@@ -3352,10 +3178,6 @@ Track whether we've turned excorporate on or not
 ## my-diary-cleanup
 setup a callback to cleanup the diary buffers for use below
 ```
-
-## my-diary-cleanup
-```
-```
 (defun my-diary-cleanup ()
   (when (get-buffer "diary")
     (kill-buffer "diary"))
@@ -3380,12 +3202,6 @@ args are unused
 excorporate uses the fsm (finite-state-machine) to do most operations aysnc
 Issues: the initial excorporate setup triggers a diary download without a callback to do cleanup
 The agenda itself loads the diary buffer - we should probably just leave it off the tab-line?
-```
-
-## my-agenda-update-diary
-
->call excorporate to update the diary for today
-```
 ```
 (defun my-agenda-update-diary (&optional _args)
   "call excorporate to update the diary for today"
@@ -3420,10 +3236,6 @@ Disable until oauth2 is settled again.
 Setup a command line switch gemacs -diff file1 file2
 for emacsclient a different strategy is needed
 a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
-```
-
-## command-line-diff
-```
 ```
 (defun command-line-diff (_switch)
   (let ((file1 (pop command-line-args-left))
@@ -3517,7 +3329,7 @@ a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
   ;; than a fixed list of hooks) keeps the overlay in sync across startup,
   ;; ?-toggled help text, and every diff-position change, without needing to
   ;; enumerate every command that can move ediff-current-difference.
-  (defvar-local my-ediff-nav-overlay nil)
+  (with-no-warnings (defvar-local my-ediff-nav-overlay nil))
 
   (defun my-ediff-nav-button (label command help)
     (propertize label
@@ -3562,10 +3374,6 @@ a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
 ## gc-notification
 Some GC analytics to see if tuning GC is interesting
 this is a bit intrusive so I'll turnoff most of the time
-```
-
-## gc-notification
-```
 ```
 (defun gc-notification ()
   (message "Garbage Collection occurred"))
@@ -3631,10 +3439,6 @@ return if the current position is a Font Family widget. Checks one
 character back too since widget-at looks at the char *after* point, which
 falls outside the field once you've typed up to its end.
 ```
-
-## font-family-widget-p
-```
-```
 (defun font-family-widget-p ()
   (let ((w (or (widget-at (point))
                (widget-at (max (point-min) (1- (point)))))))
@@ -3644,10 +3448,6 @@ falls outside the field once you've typed up to its end.
 ## complete-font-name
 Completion function for font names to be hooked to custom mode
 need to return a list (start end collection) if this matches or nil if not
-```
-
-## complete-font-name
-```
 ```
 (defun complete-font-name ()
   (when (font-family-widget-p)
@@ -3661,10 +3461,6 @@ completion-at-point-functions entirely and falls back to the `string'
 widget's own :complete, hard-coded to ispell-complete-word. Rebind both
 the GUI (<M-tab>) and terminal (M-TAB, i.e. ESC TAB) forms so either
 frame type reaches completion-at-point/complete-font-name.
-```
-
-## add-complete-font-name
-```
 ```
 (defun add-complete-font-name()
   (add-hook 'completion-at-point-functions #'complete-font-name nil t)
@@ -3688,14 +3484,6 @@ hood) rather than menu-set-font itself, since menu-set-font's job is to
 apply the chosen font as the new default frame font on all frames --
 x-select-font just returns the pick without touching any frame's font.
 ```
-
-## my-select-font
-
->Read a font from the user without changing any frame's font.
-Uses the native font dialog via `x-select-font' when available,
-falling back to `mouse-select-font'.
-```
-```
 (defun my-select-font ()
   "Read a font from the user without changing any frame's font.
 Uses the native font dialog via `x-select-font' when available,
@@ -3707,12 +3495,7 @@ falling back to `mouse-select-font'."
 
 ## my-widget-find-ancestor
 >Walk up WIDGET's :parent chain and return the nearest ancestor of TYPE.
-```
 
-## my-widget-find-ancestor
->Walk up WIDGET's :parent chain and return the nearest ancestor of TYPE.
-
-```
 ```
 (defun my-widget-find-ancestor (widget type)
   "Walk up WIDGET's :parent chain and return the nearest ancestor of TYPE."
@@ -3724,13 +3507,7 @@ falling back to `mouse-select-font'."
 ## my-customize-face-set-font
 >Pick a font with `my-select-font' and fill its family, height, weight,
 and slant into the enclosing custom-face-edit widget's attributes.
-```
 
-## my-customize-face-set-font
->Pick a font with `my-select-font' and fill its family, height, weight,
-and slant into the enclosing custom-face-edit widget's attributes.
-
-```
 ```
 (defun my-customize-face-set-font (button &rest _)
   "Pick a font with `my-select-font' and fill its family, height, weight,
@@ -3755,13 +3532,7 @@ and slant into the enclosing custom-face-edit widget's attributes."
 ## my-face-family-value-create
 >Render an inline "Set Font..." button right after the Font Family
 tag, followed by the normal editable field.
-```
 
-## my-face-family-value-create
->Render an inline "Set Font..." button right after the Font Family
-tag, followed by the normal editable field.
-
-```
 ```
 (defun my-face-family-value-create (widget)
   "Render an inline \"Set Font...\" button right after the Font Family
@@ -3903,9 +3674,6 @@ deterministic after init completes.
 ```
 (my-profile-mark "elpaca-wait 3 (rest of init)")
 (elpaca-wait)
-```
-
-> This file was auto-generated by elispdoc.el
 ```
 
 > This file was auto-generated by elispdoc.el
