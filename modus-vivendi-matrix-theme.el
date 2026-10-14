@@ -54,8 +54,11 @@ semantic palette mappings."
      (lime     "#b6ff5c")
      (moss     "#6aa84f")
      (violet   "#b48cff")
+     (dodger-blue1 "#1e90ff")
      (azure    "#6ea8ff")
      (aqua     "#7ff5d0")
+     (block-gray       "#3d433d")
+     (block-dark-green "#a9c250")
 
      ;; General mappings
      (cursor     green-intense)
@@ -116,28 +119,28 @@ semantic palette mappings."
      (bg-search-lazy    bg-green-subtle)
      (bg-search-replace bg-magenta-subtle)
 
-     ;; Headings: bright greens, with a couple of cool accents.
-     (fg-heading-0 green-intense)
-     (fg-heading-1 green)
-     (fg-heading-2 green-cooler)
-     (fg-heading-3 lime)
-     (fg-heading-4 violet)
-     (fg-heading-5 fern)
-     (fg-heading-6 azure)
-     (fg-heading-7 moss)
-     (fg-heading-8 fg-dim)
+     ;; Headings: all the same green as comments.
+     (fg-heading-0 comment)
+     (fg-heading-1 comment)
+     (fg-heading-2 comment)
+     (fg-heading-3 comment)
+     (fg-heading-4 comment)
+     (fg-heading-5 comment)
+     (fg-heading-6 comment)
+     (fg-heading-7 comment)
+     (fg-heading-8 comment)
 
      ;; Links
-     (fg-link                 violet)
-     (underline-link          violet)
-     (fg-link-symbolic        azure)
-     (underline-link-symbolic azure)
-     (fg-link-visited         fern)
-     (underline-link-visited  fern)
+     (fg-link                 indigo)
+     (underline-link          indigo)
+     (fg-link-symbolic        indigo)
+     (underline-link-symbolic indigo)
+     (fg-link-visited         indigo)
+     (underline-link-visited  indigo)
 
      ;; Prompts and prose
      (fg-prompt         green-intense)
-     (fg-prose-code     aqua)
+     (fg-prose-code     block-dark-green)
      (fg-prose-macro    violet)
      (fg-prose-verbatim lime)
 
@@ -166,9 +169,17 @@ palette) to override their value, the same way you would with e.g.
   :type '(repeat (list symbol (choice symbol string))))
 
 (defconst modus-vivendi-matrix-custom-faces
-  '(`(org-block ((,c :inherit modus-themes-fixed-pitch :background ,bg-prose-block-contents :foreground ,aqua :extend t)))
-    `(markdown-code-face ((,c :inherit modus-themes-fixed-pitch :background ,bg-prose-block-contents :foreground ,aqua :extend t)))
-    `(markdown-pre-face ((,c :inherit modus-themes-fixed-pitch :background ,bg-prose-block-contents :foreground ,aqua :extend t))))
+  '(`(org-block ((,c :inherit modus-themes-fixed-pitch :background ,block-gray :foreground ,block-dark-green :extend t)))
+    `(markdown-code-face ((,c :inherit modus-themes-fixed-pitch :background ,block-gray :foreground ,block-dark-green :extend t)))
+    `(markdown-pre-face ((,c :inherit modus-themes-fixed-pitch :background ,block-gray :foreground ,block-dark-green :extend t)))
+    `(markdown-header-face-1 ((,c :inherit modus-themes-heading-1 :foreground ,green-intense)))
+    `(markdown-header-face-2 ((,c :inherit modus-themes-heading-2 :foreground ,green-intense)))
+    `(markdown-header-face-3 ((,c :inherit modus-themes-heading-3 :foreground ,green-intense)))
+    `(markdown-header-face-4 ((,c :inherit modus-themes-heading-4 :foreground ,green-intense)))
+    `(markdown-header-face-5 ((,c :inherit modus-themes-heading-5 :foreground ,green-intense)))
+    `(markdown-header-face-6 ((,c :inherit modus-themes-heading-6 :foreground ,green-intense)))
+    `(markdown-link-face ((,c :background ,bg-link :foreground ,phosphor :underline ,phosphor)))
+    `(markdown-url-face ((,c :background ,bg-link :foreground ,phosphor))))
   "Face specs evaluated by `modus-themes-theme' with palette colors bound.")
 
 (modus-themes-theme
