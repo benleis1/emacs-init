@@ -129,7 +129,8 @@
 ;; `emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
 ;; `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
 ;; this file and the use-package report.
-;; install.sh symlinks macos.el, linux.el, modeline.el, tab-config.el and dape-java.el here.
+;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
+;; tab-config.el, dape-java.el, the local themes) here.
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
 (defvar my-profile-init-p nil
@@ -347,6 +348,17 @@
               (setf (alist-get 'bg-margins modus-themes-common-palette-overrides)
                     (list (my-theme-margin-color theme)))))
 
+;; Themes living next to this file are mine; skip the "Loading a theme can run
+;; Lisp code" prompt, whose per-edit hash check otherwise fires after every tweak.
+(defconst my-local-theme-dir
+  (expand-file-name "lisp" (file-name-directory (file-truename (or load-file-name buffer-file-name)))))
+
+(advice-add 'load-theme :filter-args
+            (lambda (args)
+              (if (file-exists-p (expand-file-name (format "%s-theme.el" (car args)) my-local-theme-dir))
+                  (list (car args) t (nth 2 args))
+                args)))
+
 ;; Once the theme has loaded its real `:background-mode' is known. If the
 ;; name-based guess above picked the wrong margin color, fix it and reload.
 (add-hook 'enable-theme-functions
@@ -469,6 +481,20 @@
       `((bg-margins "gray95")
 	))
 
+;; The common overrides above flatten headings to fg-main for every theme;
+;; for matrix, use fern.
+(setq modus-vivendi-matrix-palette-overrides
+      `((fg-heading-0 fern)
+	(fg-heading-1 fern)
+	(fg-heading-2 fern)
+	(fg-heading-3 fern)
+	(fg-heading-4 fern)
+	(fg-heading-5 fern)
+	(fg-heading-6 fern)
+	(fg-heading-7 fern)
+	(fg-heading-8 fern)
+	))
+
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on
 ;; `modus-themes-mixed-fonts', set above, actually using `fixed-pitch' and
 ;; `variable-pitch'). Revert to the unspecified/default family otherwise.
@@ -526,9 +552,9 @@
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 
 ;; Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
-;; lives alongside this file) discoverable by `load-theme'/`M-x customize-themes'
+;; lives in the lisp subdirectory) discoverable by `load-theme'/`M-x customize-themes'
 ;; without needing a package wrapper.
-(add-to-list 'custom-theme-load-path (file-name-directory (or load-file-name buffer-file-name)))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 
 ;; Currently trying out the folio theme as my main theme.
 (use-package folio-theme

@@ -68,10 +68,10 @@ for f in early-init.el init.el; do
   ln -sfn "$src/$f" "$dest/$f"
 done
 
-for f in macos.el linux.el modeline.el tab-config.el dape-java.el; do
-  ln -sfn "$src/$f" "$dest/lisp/$f"
+for f in "$src"/lisp/*.el; do
+  case "$f" in *-tests.el|*/tests.el|*-theme.el) continue ;; esac
+  ln -sfn "$f" "$dest/lisp/$(basename "$f")"
 done
-
 
 for f in funnel4.png funnel4-dark.png desktop2.png close.png close-dark.png; do
   cp "$src/$f" "$dest/"

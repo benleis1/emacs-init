@@ -146,7 +146,8 @@ Deliberately omits generic names like `all' and `any' that would false-positive.
 (ert-deftest my/test-no-unguarded-emacs31-functions ()
   "Test that Emacs 31-only symbols are only used behind a version/fboundp guard."
   (let (offenders)
-    (dolist (file (directory-files user-emacs-directory t "\\.el\\'"))
+    (dolist (file (append (directory-files user-emacs-directory t "\\.el\\'")
+                          (directory-files (expand-file-name "lisp" user-emacs-directory) t "\\.el\\'")))
       (unless (string-match-p "tests?\\.el\\'" file)
         (dolist (form (my/read-all-forms file))
           (dolist (sym my/emacs31-only-symbols)
