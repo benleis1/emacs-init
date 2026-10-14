@@ -2,17 +2,17 @@
 
 ;;; Commentary:
 
-;; A dark theme built on top of `modus-themes' where nearly everything is a
+;; A dark theme built on top of `modus-themes` where nearly everything is a
 ;; shade of green on a near-black green background.  Purple and
 ;; blue are used sparingly for emphasis (keybindings, constants, links,
 ;; a couple of headings).  Errors/warnings keep their modus red/yellow so
 ;; functional distinctions stay legible.  The palette is also fairly restrained
 ;; with its usage. For example all headings are the same color.
 ;;
-;; Customize `modus-vivendi-matrix-palette-overrides' to tweak further, the
+;; Customize `modus-vivendi-matrix-palette-overrides` to tweak further, the
 ;; same way you would with any other modus theme.
 ;;
-;; ![Palette](./palette.png)
+;; ![Palette](../palette.png)
 
 ;;; Code:
 
