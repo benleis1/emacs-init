@@ -65,7 +65,7 @@
 ;; use and leverages the hover help text to convey extra information like a full buffer file path.
 ;;
 ;; Sample screen:
-;; ![sample screen](./sample-screen.png)
+;; ![sample screen](./images/sample-screen.png)
 ;;
 ;; Normally I run a gui standalone emacs as well as an emacs server for terminal
 ;; mode editing My typical alias setup

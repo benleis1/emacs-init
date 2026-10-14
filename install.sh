@@ -74,7 +74,7 @@ for f in "$src"/lisp/*.el; do
 done
 
 for f in funnel4.png funnel4-dark.png desktop2.png close.png close-dark.png; do
-  cp "$src/$f" "$dest/lisp"
+  cp "$src/icons/$f" "$dest/lisp"
 done
 
 font_installed() {

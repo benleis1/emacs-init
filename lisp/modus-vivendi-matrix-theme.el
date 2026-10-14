@@ -12,7 +12,7 @@
 ;; Customize `modus-vivendi-matrix-palette-overrides` to tweak further, the
 ;; same way you would with any other modus theme.
 ;;
-;; ![Palette](../palette.png)
+;; ![Palette](../images/palette.png)
 
 ;;; Code:
 

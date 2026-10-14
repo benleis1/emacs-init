@@ -12,7 +12,7 @@ with its usage. For example all headings are the same color.
 Customize `modus-vivendi-matrix-palette-overrides` to tweak further, the
 same way you would with any other modus theme.
 
-![Palette](../palette.png)
+![Palette](../images/palette.png)
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->

@@ -66,19 +66,19 @@ This was a huge improvement. I could see the *full*  latest progress updates in 
 
 Now I went back to the mode-line again. The above experience had clued me into the fact that my own customizations of the mode line might be interfering with the default experience. I use `doom-modeline` and a lot of config code around it.  So I turned it off and confirmed - that there was some extremely useful segments for both the flymake compile information and eglot itself that I was missing.
 
-![modeline](./eglot.png "default modeline")
+![modeline](../images/eglot.png "default modeline")
 
 * Eglot depends on flymake for the buffer compile diagnostics
 * It has a main segment where it chains top line eglot actions including things like connecting to a server, organizing imports etc.
   
 So I went back to my mode line customizations for doom-modeline and added its built in segments for both missing pieces.  I chose a very small width set of texts because screen space is fairly cramped on the modeline when working with LSP already. I have a single one character icon for eglot's main context menu and a minimal count for flymake.
 
-![My modeline](./eglot2.png )
+![My modeline](../images/eglot2.png )
 * The red section is the current file with the project root highlighted in a slightly different shade of blue so I can confirm its correct.
 * The green section is the flymake info/error/warning block and clicking on it will open the dedicated `flymake-show-buffer-diagnostics` windows
 * the purple icon is the eglot main "button". When clicked on the following context menu pops up.
 
-![Example contextual menu](./eglot3.png)
+![Example contextual menu](../images/eglot3.png)
 
 A lesson out of all of this is I should probably spend some time - going back to the built in mode line at some point.
 
@@ -123,7 +123,7 @@ Jdtls unfortunately has a few files like `bin/main` and `bin/test` that it still
 # Cleaning my imenu-list indexer for java
 I depend on `imenu-list` for navigation in almost all buffers but it unfortunately has a relatively minimal integration with java-ts-mode currently. So I had written a custom index function in the past for lsp-mode to beef that up and add hierarchical listing by class and configurable sorting of functions.  I brought that over while fixing a small bug I found in my internal index structures and then decided to add a hotkey to change the sort this time.   This takes advantage of some general customization I do with it to use arrow icons, faces and auto collapse to a  given depth on first usage.
 
-![imenu-list](eglot-imenu.png)
+![imenu-list](../images/eglot-imenu.png)
 
 # Adding Treesit-fold
 Finally, I've gotten used to having my java imports folded in tools like intellij. So I'm trying out `treesit-fold` this time around. It unfortunately doesn't recognize import statements by default because they aren't a block in the treesitter AST but that's easy to fix via configuration.
