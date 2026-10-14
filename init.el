@@ -129,9 +129,11 @@
 ;; `emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
 ;; `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
 ;; this file and the use-package report.
+
 ;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
 ;; tab-config.el, dape-java.el, the local themes) here.
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 
 (defvar my-profile-init-p nil
   "Non-nil when emacs was started with --profile-init.")
@@ -479,20 +481,6 @@
 
 (setq nano-like-palette-overrides
       `((bg-margins "gray95")
-	))
-
-;; The common overrides above flatten headings to fg-main for every theme;
-;; for matrix, use fern.
-(setq modus-vivendi-matrix-palette-overrides
-      `((fg-heading-0 fern)
-	(fg-heading-1 fern)
-	(fg-heading-2 fern)
-	(fg-heading-3 fern)
-	(fg-heading-4 fern)
-	(fg-heading-5 fern)
-	(fg-heading-6 fern)
-	(fg-heading-7 fern)
-	(fg-heading-8 fern)
 	))
 
 ;; Give nano-like its own fixed/variable-pitch fonts (relies on

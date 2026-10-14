@@ -3,13 +3,16 @@
 ;;; Commentary:
 
 ;; A dark theme built on top of `modus-themes' where nearly everything is a
-;; shade of phosphor green on a near-black green background.  Purple and
+;; shade of green on a near-black green background.  Purple and
 ;; blue are used sparingly for emphasis (keybindings, constants, links,
 ;; a couple of headings).  Errors/warnings keep their modus red/yellow so
-;; functional distinctions stay legible.
+;; functional distinctions stay legible.  The palette is also fairly restrained
+;; with its usage. For example all headings are the same color.
 ;;
 ;; Customize `modus-vivendi-matrix-palette-overrides' to tweak further, the
 ;; same way you would with any other modus theme.
+;;
+;; ![Palette](./palette.png)
 
 ;;; Code:
 
@@ -30,35 +33,55 @@ semantic palette mappings."
 
 (defconst modus-vivendi-matrix-palette
   (append
-   '(;; Basic values: near-black green background, soft green foreground.
-     (bg-main     "#010a03")
-     (bg-dim      "#06150a")
-     (fg-main     "#00e03a")
-     (fg-dim      "#5f8f6a")
-     (fg-alt      "#7fd68f")
-     (bg-active   "#0f3a1a")
-     (bg-inactive "#082010")
-     (border      "#1d5a2b")
+   '(;; Named colors: every hex value lives here, and is referenced by
+     ;; name everywhere else.
+     ;; Backgrounds and borders, near-black to dark green.
+     (void         "#010a03")
+     (night-green  "#06150a")
+     (dark-forest  "#082010")
+     (shadow-green "#082712")
+     (bottle-green "#0c3a1a")
+     (deep-green   "#0f3a1a")
+     (emerald-deep "#0d4a1e")
+     (jungle       "#0f4a24")
+     (spruce       "#14391f")
+     (pine         "#1d5a2b")
+     (block-gray   "#3d433d")
 
      ;; Greens, dark to bright.
+     (sage          "#5f8f6a")
+     (moss          "#6aa84f")
+     (fern          "#2fa84f")
+     (green-faint   "#4fb868")
+     (celadon       "#7fd68f")
+     (neon-green    "#00e03a")
      (green         "#00ff41")
      (green-warmer  "#7dff3a")
      (green-cooler  "#00ff9c")
-     (green-faint   "#4fb868")
      (green-intense "#39ff14")
-
-     ;; Extra named colors.
-     (phosphor "#a6f5b4")
-     (fern     "#2fa84f")
-     (mint     "#8affc1")
-     (lime     "#b6ff5c")
-     (moss     "#6aa84f")
-     (violet   "#b48cff")
-     (dodger-blue1 "#1e90ff")
-     (azure    "#6ea8ff")
-     (aqua     "#7ff5d0")
-     (block-gray       "#3d433d")
+     (phosphor      "#a6f5b4")
+     (mint          "#8affc1")
+     (pale-mint     "#d6ffe0")
+     (lime          "#b6ff5c")
      (block-dark-green "#a9c250")
+     (aqua          "#7ff5d0")
+
+     ;; Purples and blues.
+     (violet       "#b48cff")
+     (dodger-blue  "#1e90ff")
+     (azure        "#6ea8ff")
+     (steel-blue   "#2a5fa8")
+     (ice-blue     "#e8f0ff")
+
+     ;; Basic values: near-black green background, soft green foreground.
+     (bg-main     void)
+     (bg-dim      night-green)
+     (fg-main     neon-green)
+     (fg-dim      sage)
+     (fg-alt      celadon)
+     (bg-active   deep-green)
+     (bg-inactive dark-forest)
+     (border      pine)
 
      ;; General mappings
      (cursor     green-intense)
@@ -99,36 +122,25 @@ semantic palette mappings."
      (fg-completion-match-3 lime)
 
      ;; Mode line
-     (bg-mode-line-active       "#0d4a1e")
-     (fg-mode-line-active       "#d6ffe0")
-     (border-mode-line-active   "#2fa84f")
-     (bg-mode-line-inactive     "#082010")
+     (bg-mode-line-active       emerald-deep)
+     (fg-mode-line-active       pale-mint)
+     (border-mode-line-active   fern)
+     (bg-mode-line-inactive     dark-forest)
      (fg-mode-line-inactive     fg-dim)
-     (border-mode-line-inactive "#14391f")
+     (border-mode-line-inactive spruce)
 
      ;; Region, current line, completion popup, paren match
-     (bg-region      "#0f4a24")
-     (fg-region      "#d6ffe0")
-     (bg-hl-line     "#082712")
-     (bg-completion  "#0c3a1a")
-     (bg-paren-match "#2a5fa8")
-     (fg-paren-match "#e8f0ff")
+     (bg-region      jungle)
+     (fg-region      pale-mint)
+     (bg-hl-line     shadow-green)
+     (bg-completion  bottle-green)
+     (bg-paren-match steel-blue)
+     (fg-paren-match ice-blue)
 
      ;; Search
      (bg-search-current bg-green-intense)
      (bg-search-lazy    bg-green-subtle)
      (bg-search-replace bg-magenta-subtle)
-
-     ;; Headings: all the same green as comments.
-     (fg-heading-0 comment)
-     (fg-heading-1 comment)
-     (fg-heading-2 comment)
-     (fg-heading-3 comment)
-     (fg-heading-4 comment)
-     (fg-heading-5 comment)
-     (fg-heading-6 comment)
-     (fg-heading-7 comment)
-     (fg-heading-8 comment)
 
      ;; Links
      (fg-link                 indigo)
@@ -160,8 +172,19 @@ with its entries overridden in place to favor Matrix-style greens.
 To customize the theme, use `modus-vivendi-matrix-palette-overrides'
 or `modus-vivendi-matrix-palette-user' instead.")
 
-(defcustom modus-vivendi-matrix-palette-overrides nil
+(defcustom modus-vivendi-matrix-palette-overrides
+  '((fg-heading-0 fern)
+    (fg-heading-1 fern)
+    (fg-heading-2 fern)
+    (fg-heading-3 fern)
+    (fg-heading-4 fern)
+    (fg-heading-5 fern)
+    (fg-heading-6 fern)
+    (fg-heading-7 fern)
+    (fg-heading-8 fern))
   "Overrides for `modus-vivendi-matrix-palette'.
+The default colors every heading level `fern'; this is done here rather
+than in the palette so it wins over `modus-themes-common-palette-overrides'.
 Mirror the elements of `modus-vivendi-matrix-palette' (or the base modus
 palette) to override their value, the same way you would with e.g.
 `modus-vivendi-palette-overrides'."
