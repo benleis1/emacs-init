@@ -113,9 +113,9 @@
 ;; - Python (partly)
 ;; - SQL
 ;;
-;; ## Installation
-;; I have an optional `install.sh` script that will do basic symlinking of the lisp
-;; files into the emacs.d directory and other prerequisite checking.
+;; ## Installation I have an optional `install.sh` script that will do basic symlinking of the lisp
+;; files into the emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to
+;; check on external dependencies once running.
 
 ;;; Code:
 
@@ -2919,6 +2919,96 @@ tag, followed by the normal editable field."
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
+
+(my-profile-mark "config diagnostics")
+;;; Config diagnostics
+(defun my-config-diagnostics ()
+  "Check the external dependencies this config relies on and show the status.
+Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
+  (interactive)
+  (let* ((exe (lambda (&rest names) (seq-some #'executable-find names)))
+         (jar-count (lambda (dir)
+                      (and (file-directory-p dir)
+                           (length (directory-files dir nil "\\.jar\\'")))))
+         (java-bin (and (boundp 'my-java-home)
+                        (expand-file-name "bin/java" my-java-home)))
+         (debug-plugin (and (boundp 'dape-java-ms-debug-plugin) dape-java-ms-debug-plugin))
+         (bundles-dir (and (boundp 'dape-java-test-bundles-dir) dape-java-test-bundles-dir))
+         ;; Each entry: (LABEL REQUIRED-P DETAIL-OR-NIL-IF-MISSING HINT)
+         (checks
+          (append
+           (list
+            (list "Emacs >= 30" t
+                  (and (>= emacs-major-version 30) emacs-version)
+                  "install Emacs 30 or later")
+            (list "git" t (funcall exe "git")
+                  "elpaca needs it to clone packages")
+            (list (format "Font %s" my-default-fixed-pitch-font) t
+                  (cond ((not (display-graphic-p)) "skipped (not a GUI frame)")
+                        ((find-font (font-spec :family my-default-fixed-pitch-font))
+                         "found"))
+                  "install the DejaVuSansM Nerd Font (see install.sh)")
+            (list "aspell / ispell" nil (funcall exe "aspell" "ispell")
+                  "flyspell needs one of them")
+            (list "pg_format" nil (funcall exe "pg_format")
+                  "SQL formatting needs pgformatter")
+            (list "jdtls" nil (funcall exe "jdtls")
+                  "eglot Java support needs jdtls on PATH")
+            (list (format "my-java-home (%s)" my-java-home) nil
+                  (and java-bin (file-executable-p java-bin) java-bin)
+                  "set `my-java-home' to a JDK directory")
+            (list "dape Java debug plugin jar" nil
+                  (and debug-plugin (file-exists-p debug-plugin) debug-plugin)
+                  (if debug-plugin
+                      "see `dape-java-ms-debug-plugin'"
+                    "dape-java not loaded yet; load dape and re-run"))
+            (list "dape JUnit test bundle jars" nil
+                  (let ((n (and bundles-dir (funcall jar-count bundles-dir))))
+                    (and n (> n 0) (format "%d jars in %s" n bundles-dir)))
+                  (if bundles-dir
+                      "run M-x dape-java-fetch-test-bundle"
+                    "dape-java not loaded yet; load dape and re-run"))
+            (list "unzip" nil (funcall exe "unzip")
+                  "dape-java-fetch-test-bundle needs it")
+            (list "tree-sitter Java grammar" nil
+                  (and (treesit-available-p) (treesit-language-available-p 'java)
+                       "installed")
+                  "run M-x treesit-install-language-grammar RET java")
+            (list "C compiler (for tree-sitter grammars)" nil
+                  (funcall exe "cc" "gcc" "clang")
+                  "needed to build tree-sitter grammars")
+            (list "Python language server" nil
+                  (funcall exe "pylsp" "pyright-langserver" "jedi-language-server"
+                           "ruff" "ty")
+                  "pip install python-lsp-server (or pyright)"))
+           (pcase system-type
+             ('darwin
+              (list (list "pbcopy" nil (funcall exe "pbcopy")
+                          "terminal clipboard support")
+                    (list "afplay" nil (funcall exe "afplay")
+                          "appointment sound")))
+             ('gnu/linux
+              (list (list "wl-copy" nil (funcall exe "wl-copy")
+                          "terminal clipboard support")
+                    (list "pw-play / paplay" nil (funcall exe "pw-play" "paplay")
+                          "appointment sound")))))))
+    (with-current-buffer (get-buffer-create "*my-config-diagnostics*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (propertize "Config diagnostics\n\n" 'face 'bold))
+        (dolist (check checks)
+          (pcase-let ((`(,label ,required ,found ,hint) check))
+            (insert (if found
+                        (propertize "[ OK    ]" 'face 'success)
+                      (if required
+                          (propertize "[MISSING]" 'face 'error)
+                        (propertize "[WARN   ]" 'face 'warning)))
+                    " " label
+                    (if found (format "  -> %s" found) (format "  (%s)" hint))
+                    "\n")))
+        (goto-char (point-min))
+        (special-mode))
+      (display-buffer (current-buffer)))))
 
 (my-profile-mark "GC tuning")
 ;;; GC tuning

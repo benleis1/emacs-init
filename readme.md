@@ -113,9 +113,9 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - Python (partly)
 - SQL
 
-## Installation
-I have an optional `install.sh` script that will do basic symlinking of the lisp
-files into the emacs.d directory and other prerequisite checking.
+## Installation I have an optional `install.sh` script that will do basic symlinking of the lisp
+files into the emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to
+check on external dependencies once running.
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
@@ -126,7 +126,7 @@ files into the emacs.d directory and other prerequisite checking.
   - [Portability](#portability)
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
-  - [Installation](#installation)
+  - [Installation I have an optional `install.sh` script that will do basic symlinking of the lisp](#installation-i-have-an-optional-installsh-script-that-will-do-basic-symlinking-of-the-lisp)
 - [Code:](#code)
 - [Profiling](#profiling)
   - [my-toggle-profiler](#my-toggle-profiler)
@@ -227,6 +227,8 @@ files into the emacs.d directory and other prerequisite checking.
 - [Consult navigation package](#consult-navigation-package)
 - [Local.el loading](#localel-loading)
 - [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
+  - [my-config-diagnostics](#my-config-diagnostics)
+- [Config diagnostics](#config-diagnostics)
 - [GC tuning](#gc-tuning)
 
 <!-- markdown-toc end -->
@@ -241,7 +243,13 @@ the second shows the report and stops.
 `emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
 `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
 this file and the use-package report.
+
+install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
+tab-config.el, dape-java.el, the local themes) here.
 ```
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
+
 (defvar my-profile-init-p nil
   "Non-nil when emacs was started with --profile-init.")
 (defvar my-profiler-running nil
@@ -399,6 +407,16 @@ use-package integration ready before any use-package form below runs.
 (elpaca elpaca-use-package
   (elpaca-use-package-mode)
   (setq use-package-always-ensure t))
+```
+The async native-comp child starts with -Q, so without this it expands
+use-package forms (e.g. in macos.el) into a bare `require' that runs before
+elpaca has activated the package. Mirror the setup above in the child.
+```
+(setq native-comp-async-env-modifier-form
+      '(progn (require 'elpaca)
+              (require 'elpaca-use-package)
+              (elpaca-use-package-mode)
+              (setq use-package-always-ensure t)))
 (my-profile-mark "elpaca-wait 1 (elpaca-use-package)")
 (elpaca-wait)
 (my-profile-mark "Package setup (after elpaca-wait 1)")
@@ -499,6 +517,19 @@ Disable all previously loaded themes before loading another one.
               (mapc #'disable-theme custom-enabled-themes)
               (setf (alist-get 'bg-margins modus-themes-common-palette-overrides)
                     (list (my-theme-margin-color theme)))))
+```
+
+Themes living next to this file are mine; skip the "Loading a theme can run
+Lisp code" prompt, whose per-edit hash check otherwise fires after every tweak.
+```
+(defconst my-local-theme-dir
+  (expand-file-name "lisp" (file-name-directory (file-truename (or load-file-name buffer-file-name)))))
+
+(advice-add 'load-theme :filter-args
+            (lambda (args)
+              (if (file-exists-p (expand-file-name (format "%s-theme.el" (car args)) my-local-theme-dir))
+                  (list (car args) t (nth 2 args))
+                args)))
 ```
 
 Once the theme has loaded its real `:background-mode' is known. If the
@@ -699,10 +730,10 @@ Add the font changes onto the enable theme hook
 ```
 
 Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
-lives alongside this file) discoverable by `load-theme'/`M-x customize-themes'
+lives in the lisp subdirectory) discoverable by `load-theme'/`M-x customize-themes'
 without needing a package wrapper.
 ```
-(add-to-list 'custom-theme-load-path (file-name-directory (or load-file-name buffer-file-name)))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 ```
 
 Currently trying out the folio theme as my main theme.
@@ -721,9 +752,9 @@ pbcopy/paste, appt sound) and linux.el (wl-copy clipboard, appt sound).
 Loaded here, after elpaca/use-package are ready.
 ```
 (cond ((eq system-type 'darwin)
-       (load (locate-user-emacs-file "macos.el")))
+       (load "macos"))
       ((eq system-type 'gnu/linux)
-       (load (locate-user-emacs-file "linux.el"))))
+       (load "linux")))
 ```
 
 No elpaca-wait needed here: the active theme is set explicitly via
@@ -761,7 +792,7 @@ break paragraphs on after 100 characters.
 
 turn off menu mode in text mode to save space
 ```
-(unless window-system
+(unless (display-graphic-p)
   (menu-bar-mode 0))
 ```
 
@@ -781,7 +812,7 @@ testing on-demand scroll bar
 Use the normal right click brings up a context menu
 Add a faint window divider
 ```
-(when window-system
+(when (display-graphic-p)
   (use-package on-demand-scroll-bar
     :ensure (:host github :repo "florommel/on-demand-scroll-bar")
     :config
@@ -891,7 +922,7 @@ Enable mouse in text mode
 Note: this removes iterm2 cut and paste integration so we add advice later on to call pbcopy
 after copying to the kill ring
 ```
-(unless window-system
+(unless (display-graphic-p)
   (require 'mouse)
   (xterm-mouse-mode t)
   (defun track-mouse (_e))) ;;check if stubbing this out is still needed in v31
@@ -965,7 +996,7 @@ alternative strategy - just turn off auto-save.
 
 Zone / screensaver is whimsical but its built-in and lightweight,
 ```
-(when window-system
+(when (display-graphic-p)
   (use-package zone
     :ensure nil ; Built-in package
     :config
@@ -991,7 +1022,7 @@ Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 ```
 (use-package nerd-icons-dired
   :defer t
-  :if window-system
+  :if (display-graphic-p)
   :ensure t
   :hook ((dired-mode . nerd-icons-dired-mode))
   )
@@ -1020,13 +1051,13 @@ fully activated first.
 (my-profile-mark "elpaca-wait 2 (everything up to modeline)")
 (elpaca-wait)
 (my-profile-mark "modeline (after elpaca-wait 2)")
-(load (locate-user-emacs-file "modeline.el"))
+(load "modeline")
 (my-modeline-mode 1)
 ```
 
 Load all of my custom tab-line config.
 ```
-(load  (locate-user-emacs-file "tab-config.el"))
+(load  "tab-config")
 
 (my-profile-mark "Global key bindings")
 ```
@@ -1749,11 +1780,11 @@ Takes an optional, ignored argument so it tolerates being called as
                    (not (seq-some (lambda (e) (equal (nth 3 e) key)) raw-post))
                    (not (rassoc key my-appt-overdue-list)))
           (push (cons (nth 1 entry) key) my-appt-overdue-list))))
-    ;; Drop overdue entries dismissed in the meantime, and let a newly active
-    ;; appointment supersede any lingering "Due" ones.
+    ;; Drop overdue entries dismissed in the meantime. Overdue entries are kept
+    ;; (not cleared) while another appointment is active so overlapping meetings
+    ;; still get logged on dismiss; the `cond' below shows the countdown first.
     (setq my-appt-overdue-list
           (seq-remove (lambda (e) (member (cdr e) my-appt-dismissed-keys)) my-appt-overdue-list))
-    (when due (setq my-appt-overdue-list nil))
     (setq appt-mode-string
           (cond
            (due
@@ -2784,6 +2815,7 @@ Visual debug toolbar (continue/step/restart/quit buttons) for dape.  Rendered
   (add-hook 'dape-update-ui-hook #'my-dape-toolbar-update-repl-header))
 ```
 
+
 Left-margin arrows next to every jdtls-discovered JUnit test method
 and, if any test methods were found in the buffer, at the test
 class's declaration too -- clickable to start the
@@ -2801,7 +2833,7 @@ dape config to run, so the one binding can dispatch either arrow.
 (with-eval-after-load 'dape
 
   ;; Load dape-java to setup plumbing.
-  (load-file (locate-user-emacs-file "dape-java.el"))
+  (load "dape-java")
 
   (defface my-dape-run-gutter-face
     '((t :inherit success))
@@ -3109,6 +3141,16 @@ self-contained fallback.
 (with-eval-after-load 'ilist-plus
   (setq imenu-list-mode-line-format
 	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
+```
+
+Don't save/restore frame colors; otherwise a restored desktop pins the colors
+from when it was saved and overrides the currently loaded theme. Applied on
+restore too, so already-saved desktop files are fixed as well.
+```
+(with-eval-after-load 'frameset
+  (dolist (param '(background-color foreground-color background-mode
+                   border-color cursor-color mouse-color))
+    (setf (alist-get param frameset-filter-alist) :never)))
 ```
 
 Setup file menu to include load/save desktop
@@ -3512,7 +3554,7 @@ and slant into the enclosing custom-face-edit widget's attributes.
 (defun my-customize-face-set-font (button &rest _)
   "Pick a font with `my-select-font' and fill its family, height, weight,
 and slant into the enclosing custom-face-edit widget's attributes."
-  (unless window-system
+  (unless (display-graphic-p)
     (user-error "Selecting a font requires a graphical frame"))
   (let ((edit-widget (my-widget-find-ancestor button 'custom-face-edit)))
     (unless edit-widget
@@ -3625,8 +3667,8 @@ No key binding for now.
 ```
 # Local.el loading
 ```
-(when (file-exists-p (locate-user-emacs-file "local.el"))
-  (load-file (locate-user-emacs-file "local.el")))
+(when (file-exists-p (locate-user-emacs-file "lisp/local.el"))
+  (load "local.el"))
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ```
@@ -3651,6 +3693,103 @@ No key binding for now.
     (with-eval-after-load 'org
       (add-to-list 'completion-preview-commands #'org-self-insert-command))
     (global-completion-preview-mode 1)))
+
+(my-profile-mark "config diagnostics")
+```
+
+## my-config-diagnostics
+
+>Check the external dependencies this config relies on and show the status.
+Each line is OK, MISSING (required) or WARN (optional feature unavailable).
+# Config diagnostics
+```
+(defun my-config-diagnostics ()
+  "Check the external dependencies this config relies on and show the status.
+Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
+  (interactive)
+  (let* ((exe (lambda (&rest names) (seq-some #'executable-find names)))
+         (jar-count (lambda (dir)
+                      (and (file-directory-p dir)
+                           (length (directory-files dir nil "\\.jar\\'")))))
+         (java-bin (and (boundp 'my-java-home)
+                        (expand-file-name "bin/java" my-java-home)))
+         (debug-plugin (and (boundp 'dape-java-ms-debug-plugin) dape-java-ms-debug-plugin))
+         (bundles-dir (and (boundp 'dape-java-test-bundles-dir) dape-java-test-bundles-dir))
+         ;; Each entry: (LABEL REQUIRED-P DETAIL-OR-NIL-IF-MISSING HINT)
+         (checks
+          (append
+           (list
+            (list "Emacs >= 30" t
+                  (and (>= emacs-major-version 30) emacs-version)
+                  "install Emacs 30 or later")
+            (list "git" t (funcall exe "git")
+                  "elpaca needs it to clone packages")
+            (list (format "Font %s" my-default-fixed-pitch-font) t
+                  (cond ((not (display-graphic-p)) "skipped (not a GUI frame)")
+                        ((find-font (font-spec :family my-default-fixed-pitch-font))
+                         "found"))
+                  "install the DejaVuSansM Nerd Font (see install.sh)")
+            (list "aspell / ispell" nil (funcall exe "aspell" "ispell")
+                  "flyspell needs one of them")
+            (list "pg_format" nil (funcall exe "pg_format")
+                  "SQL formatting needs pgformatter")
+            (list "jdtls" nil (funcall exe "jdtls")
+                  "eglot Java support needs jdtls on PATH")
+            (list (format "my-java-home (%s)" my-java-home) nil
+                  (and java-bin (file-executable-p java-bin) java-bin)
+                  "set `my-java-home' to a JDK directory")
+            (list "dape Java debug plugin jar" nil
+                  (and debug-plugin (file-exists-p debug-plugin) debug-plugin)
+                  (if debug-plugin
+                      "see `dape-java-ms-debug-plugin'"
+                    "dape-java not loaded yet; load dape and re-run"))
+            (list "dape JUnit test bundle jars" nil
+                  (let ((n (and bundles-dir (funcall jar-count bundles-dir))))
+                    (and n (> n 0) (format "%d jars in %s" n bundles-dir)))
+                  (if bundles-dir
+                      "run M-x dape-java-fetch-test-bundle"
+                    "dape-java not loaded yet; load dape and re-run"))
+            (list "unzip" nil (funcall exe "unzip")
+                  "dape-java-fetch-test-bundle needs it")
+            (list "tree-sitter Java grammar" nil
+                  (and (treesit-available-p) (treesit-language-available-p 'java)
+                       "installed")
+                  "run M-x treesit-install-language-grammar RET java")
+            (list "C compiler (for tree-sitter grammars)" nil
+                  (funcall exe "cc" "gcc" "clang")
+                  "needed to build tree-sitter grammars")
+            (list "Python language server" nil
+                  (funcall exe "pylsp" "pyright-langserver" "jedi-language-server"
+                           "ruff" "ty")
+                  "pip install python-lsp-server (or pyright)"))
+           (pcase system-type
+             ('darwin
+              (list (list "pbcopy" nil (funcall exe "pbcopy")
+                          "terminal clipboard support")
+                    (list "afplay" nil (funcall exe "afplay")
+                          "appointment sound")))
+             ('gnu/linux
+              (list (list "wl-copy" nil (funcall exe "wl-copy")
+                          "terminal clipboard support")
+                    (list "pw-play / paplay" nil (funcall exe "pw-play" "paplay")
+                          "appointment sound")))))))
+    (with-current-buffer (get-buffer-create "*my-config-diagnostics*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (propertize "Config diagnostics\n\n" 'face 'bold))
+        (dolist (check checks)
+          (pcase-let ((`(,label ,required ,found ,hint) check))
+            (insert (if found
+                        (propertize "[ OK    ]" 'face 'success)
+                      (if required
+                          (propertize "[MISSING]" 'face 'error)
+                        (propertize "[WARN   ]" 'face 'warning)))
+                    " " label
+                    (if found (format "  -> %s" found) (format "  (%s)" hint))
+                    "\n")))
+        (goto-char (point-min))
+        (special-mode))
+      (display-buffer (current-buffer)))))
 
 (my-profile-mark "GC tuning")
 ```
