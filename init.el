@@ -31,7 +31,7 @@
 ;; occasional menu rather than remembering key bindings for everything. So I've spent some time
 ;; trying to get emacs to work more consistently for these modes. For example with flyspell on you
 ;; can right click and get a context menu with the possible spellings like in most other
-;; applications.  Whereever possible I try to wire in useful help text to show when hovering. This
+;; applications.  Wherever possible I try to wire in useful help text to show when hovering. This
 ;; is most extensive in the modeline pieces.
 ;;
 ;; If possible I'll use built in functionality or packages that require minimal adaptation and just
@@ -119,6 +119,11 @@
 
 ;;; Code:
 
+;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
+;; tab-config.el, dape-java.el, the local themes) here.
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
+
 ;;; Profiling
 ;; Everything for profiling startup lives here, ahead of the rest of the file, because the
 ;; `my-profile-mark' calls before each later section need these definitions.
@@ -129,11 +134,6 @@
 ;; `emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
 ;; `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
 ;; this file and the use-package report.
-
-;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
-;; tab-config.el, dape-java.el, the local themes) here.
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 
 (defvar my-profile-init-p nil
   "Non-nil when emacs was started with --profile-init.")
