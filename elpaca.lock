@@ -227,10 +227,10 @@
 			     :protocol https :inherit t :depth treeless :ref
 			     "1205ac67b76b58e9eb53d2115b85775533653a80"))
  (on-demand-scroll-bar :source "elpaca-menu-lock-file" :recipe
-		       (:source nil :package "on-demand-scroll-bar" :id on-demand-scroll-bar :host
-				github :repo "florommel/on-demand-scroll-bar" :type git :protocol
-				https :inherit t :depth treeless :ref
-				"46df83135997b8957ea2a09d28d82ca6faccf984"))
+		       (:source "elpaca-menu-lock-file" :package "on-demand-scroll-bar" :id
+				on-demand-scroll-bar :host github :repo
+				"florommel/on-demand-scroll-bar" :type git :protocol https :inherit
+				t :depth treeless :ref "46df83135997b8957ea2a09d28d82ca6faccf984"))
  (orderless :source "elpaca-menu-lock-file" :recipe
 	    (:package "orderless" :repo "oantolin/orderless" :fetcher github :files
 		      ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo" "doc/dir" "doc/*.info"
@@ -270,6 +270,11 @@
 	       (:source "elpaca-menu-lock-file" :package "org-timegrid" :id org-timegrid :host
 			github :repo "Gleek/org-timegrid" :type git :protocol https :inherit t
 			:depth treeless :ref "c87123236578671022b72a09a964c3da33dd48f8"))
+ (pulsar :source "elpaca-menu-lock-file" :recipe
+	 (:package "pulsar" :repo ("https://github.com/protesilaos/pulsar" . "pulsar") :tar "1.4.1"
+		   :host gnu :files ("*" (:exclude ".git" "COPYING" "doclicense.texi")) :source
+		   "GNU ELPA" :id pulsar :type git :protocol https :inherit t :depth treeless :ref
+		   "83d53271a0ec2728ef36b45704d47bafd170e814"))
  (reformatter :source "elpaca-menu-lock-file" :recipe
 	      (:package "reformatter" :repo "purcell/emacs-reformatter" :fetcher github :files
 			("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo" "doc/dir" "doc/*.info"

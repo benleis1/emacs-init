@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;; -*- lexical-binding: t; byte-compile-warnings: (not free-vars unresolved); -*-
 ;; ```
 ;;  oooooooooooo
 ;;  `888'     `8
@@ -113,9 +113,11 @@
 ;; - Python (partly)
 ;; - SQL
 ;;
-;; ## Installation I have an optional `install.sh` script that will do basic symlinking of the lisp
-;; files into the emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to
-;; check on external dependencies once running.
+;; ## Installation
+
+;; I have an optional `install.sh` script that will do basic symlinking of the lisp files into the
+;; emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
+;; external dependencies once running.
 
 ;;; Code:
 
@@ -159,6 +161,8 @@
     (push (list name (float-time)
                 (if (boundp 'use-package-statistics) (hash-table-count use-package-statistics) 0))
           my-profile-marks)))
+
+(eval-when-compile (require 'cl-lib))
 
 ;; The wall column is the time between consecutive marks, so a section containing an `elpaca-wait'
 ;; absorbs the processing of every use-package queued before it. The use-package column sums the
@@ -752,6 +756,25 @@
     (setq zone-idle 600) ; Time in seconds (10 minutes)
     (zone-when-idle 600)))
 
+;; Brief pulse/highlight for various motions
+(use-package pulsar
+  :ensure t
+  :init
+  ;; Alias resolution walks the whole obarray each time `pulsar-mode' turns on in a buffer, which
+  ;; is costly at startup. Do it once after init instead.
+  (setq pulsar-resolve-pulse-function-aliases nil)
+  (add-hook 'elpaca-after-init-hook #'pulsar-resolve-function-aliases)
+  (pulsar-global-mode 1)
+  :config
+  (setq pulsar-delay .1)
+  (setq pulsar-iterations 15)
+  (setq pulsar-face 'pulsar-cyan)
+  (setq pulsar-region-face 'pulsar-yellow)
+  (setq pulsar-highlight-face 'pulsar-magenta)
+  ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
+  ;; generic for the pulsar-pulse-functions list
+  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t))
+
 (my-profile-mark "Dired")
 ;;; Dired
 
@@ -912,6 +935,7 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
 ;; Defer turning diff-hl on until the first version-controlled file is
 ;; opened, rather than always paying its load cost at startup even on
 ;; sessions that never touch a VC-tracked buffer.
+
 (defun my-diff-hl-enable-if-vc ()
   "Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited."
   (when (and buffer-file-name (vc-backend buffer-file-name))
@@ -2446,6 +2470,7 @@ declaration if any such methods were found."
 ;; Now that modeline.el (loaded above) has defined the richer dedicated-window
 ;; keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
 ;; self-contained fallback.
+
 (with-eval-after-load 'ilist-plus
   (setq imenu-list-mode-line-format
 	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
@@ -2496,6 +2521,7 @@ declaration if any such methods were found."
 
 (my-profile-mark "Excorporate setup")
 ;;; Excorporate setup.
+
 ;; I've modified this quite a bit to directly generate org files.
 
 (use-package excorporate
@@ -2843,6 +2869,7 @@ tag, followed by the normal editable field."
 
 (my-profile-mark "Snippets")
 ;;; Snippets
+
 ;; This is currently used in org and markdown mode but I only have it on by
 ;; default for markdown.
 (use-package yasnippet
@@ -2867,6 +2894,7 @@ tag, followed by the normal editable field."
 
 (my-profile-mark "Consult navigation package")
 ;;;  Consult navigation package
+
 (use-package consult
   :ensure t
   :config
@@ -2892,11 +2920,6 @@ tag, followed by the normal editable field."
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
-
-(my-profile-mark "Local.el loading")
-;;; Local.el loading
-(when (file-exists-p (locate-user-emacs-file "lisp/local.el"))
-  (load "local.el"))
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ;;; temptemp - try out new builtin completion.
@@ -3010,8 +3033,14 @@ Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
         (special-mode))
       (display-buffer (current-buffer)))))
 
+(my-profile-mark "Local.el loading")
+;;; Local.el loading
+(when (file-exists-p (locate-user-emacs-file "lisp/local.el"))
+  (load "local.el"))
+
 (my-profile-mark "GC tuning")
 ;;; GC tuning
+
 ;; Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
 ;; collect when Emacs goes idle, instead of paying GC pauses during normal
 ;; typing. Picks up where early-init.el's startup-only threshold bump leaves

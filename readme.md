@@ -31,7 +31,7 @@ Unlike many other users who have shared their config files, I like using the mou
 occasional menu rather than remembering key bindings for everything. So I've spent some time
 trying to get emacs to work more consistently for these modes. For example with flyspell on you
 can right click and get a context menu with the possible spellings like in most other
-applications.  Whereever possible I try to wire in useful help text to show when hovering. This
+applications.  Wherever possible I try to wire in useful help text to show when hovering. This
 is most extensive in the modeline pieces.
 
 If possible I'll use built in functionality or packages that require minimal adaptation and just
@@ -113,9 +113,11 @@ emacs='emacsclient -t -s default --alternate-editor=`
 - Python (partly)
 - SQL
 
-## Installation I have an optional `install.sh` script that will do basic symlinking of the lisp
-files into the emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to
-check on external dependencies once running.
+## Installation
+
+I have an optional `install.sh` script that will do basic symlinking of the lisp files into the
+emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
+external dependencies once running.
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
@@ -126,7 +128,7 @@ check on external dependencies once running.
   - [Portability](#portability)
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
-  - [Installation I have an optional `install.sh` script that will do basic symlinking of the lisp](#installation-i-have-an-optional-installsh-script-that-will-do-basic-symlinking-of-the-lisp)
+  - [Installation](#installation)
 - [Code:](#code)
 - [Profiling](#profiling)
   - [my-toggle-profiler](#my-toggle-profiler)
@@ -151,8 +153,8 @@ check on external dependencies once running.
   - [flyspell-on-for-buffer-type](#flyspell-on-for-buffer-type)
   - [flyspell-toggle](#flyspell-toggle)
   - [my-flyspell-defer-enable](#my-flyspell-defer-enable)
-  - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
 - [diff-hl](#diff-hl)
+  - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
   - [my-diff-hl-update-faces](#my-diff-hl-update-faces)
 - [markdown mode](#markdown-mode)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
@@ -225,13 +227,20 @@ check on external dependencies once running.
 - [Snippets](#snippets)
 - [Wikimode](#wikimode)
 - [Consult navigation package](#consult-navigation-package)
-- [Local.el loading](#localel-loading)
 - [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
   - [my-config-diagnostics](#my-config-diagnostics)
 - [Config diagnostics](#config-diagnostics)
+- [Local.el loading](#localel-loading)
 - [GC tuning](#gc-tuning)
 
 <!-- markdown-toc end -->
+
+install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
+tab-config.el, dape-java.el, the local themes) here.
+```
+(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
+```
 
 # Profiling
 Everything for profiling startup lives here, ahead of the rest of the file, because the
@@ -244,12 +253,7 @@ the second shows the report and stops.
 `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
 this file and the use-package report.
 
-install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
-tab-config.el, dape-java.el, the local themes) here.
 ```
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
-
 (defvar my-profile-init-p nil
   "Non-nil when emacs was started with --profile-init.")
 (defvar my-profiler-running nil
@@ -286,6 +290,8 @@ Per package timing. This has to be on before use-package is loaded and any decla
     (push (list name (float-time)
                 (if (boundp 'use-package-statistics) (hash-table-count use-package-statistics) 0))
           my-profile-marks)))
+
+(eval-when-compile (require 'cl-lib))
 ```
 
 ## my-profile-report-phases
@@ -1002,6 +1008,27 @@ Zone / screensaver is whimsical but its built-in and lightweight,
     :config
     (setq zone-idle 600) ; Time in seconds (10 minutes)
     (zone-when-idle 600)))
+```
+
+Brief pulse/highlight for various motions
+```
+(use-package pulsar
+  :ensure t
+  :init
+  ;; Alias resolution walks the whole obarray each time `pulsar-mode' turns on in a buffer, which
+  ;; is costly at startup. Do it once after init instead.
+  (setq pulsar-resolve-pulse-function-aliases nil)
+  (add-hook 'elpaca-after-init-hook #'pulsar-resolve-function-aliases)
+  (pulsar-global-mode 1)
+  :config
+  (setq pulsar-delay .1)
+  (setq pulsar-iterations 15)
+  (setq pulsar-face 'pulsar-cyan)
+  (setq pulsar-region-face 'pulsar-yellow)
+  (setq pulsar-highlight-face 'pulsar-magenta)
+  ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
+  ;; generic for the pulsar-pulse-functions list
+  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t))
 
 (my-profile-mark "Dired")
 ```
@@ -1221,14 +1248,14 @@ Enable which key
 
 (my-profile-mark "diff-hl")
 ```
-
-## my-diff-hl-enable-if-vc
-
->Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited.
 # diff-hl
 Defer turning diff-hl on until the first version-controlled file is
 opened, rather than always paying its load cost at startup even on
 sessions that never touch a VC-tracked buffer.
+
+## my-diff-hl-enable-if-vc
+>Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited.
+
 ```
 (defun my-diff-hl-enable-if-vc ()
   "Turn on `global-diff-hl-mode' the first time a VC-tracked file is visited."
@@ -3137,6 +3164,7 @@ Load all of my custom imenu extensions.
 Now that modeline.el (loaded above) has defined the richer dedicated-window
 keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
 self-contained fallback.
+
 ```
 (with-eval-after-load 'ilist-plus
   (setq imenu-list-mode-line-format
@@ -3197,6 +3225,7 @@ I haven't found a way to directly place after a separator
 (my-profile-mark "Excorporate setup")
 ```
 # Excorporate setup.
+
 I've modified this quite a bit to directly generate org files.
 
 ```
@@ -3606,6 +3635,7 @@ list object in place with nconc reaches both.
 (my-profile-mark "Snippets")
 ```
 # Snippets
+
 This is currently used in org and markdown mode but I only have it on by
 default for markdown.
 ```
@@ -3636,6 +3666,7 @@ No key binding for now.
 (my-profile-mark "Consult navigation package")
 ```
 #  Consult navigation package
+
 ```
 (use-package consult
   :ensure t
@@ -3662,13 +3693,6 @@ No key binding for now.
                      #'consult-completion-in-region
                    #'completion--in-region)
 		 args))))
-
-(my-profile-mark "Local.el loading")
-```
-# Local.el loading
-```
-(when (file-exists-p (locate-user-emacs-file "lisp/local.el"))
-  (load "local.el"))
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ```
@@ -3791,9 +3815,17 @@ Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
         (special-mode))
       (display-buffer (current-buffer)))))
 
+(my-profile-mark "Local.el loading")
+```
+# Local.el loading
+```
+(when (file-exists-p (locate-user-emacs-file "lisp/local.el"))
+  (load "local.el"))
+
 (my-profile-mark "GC tuning")
 ```
 # GC tuning
+
 Adaptive GC pacing: keep `gc-cons-threshold' high while editing and only
 collect when Emacs goes idle, instead of paying GC pauses during normal
 typing. Picks up where early-init.el's startup-only threshold bump leaves
