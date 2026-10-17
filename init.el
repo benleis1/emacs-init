@@ -64,8 +64,13 @@
 ;; Likewise, I currently have a very minimal custom mode line that only features segments I actually
 ;; use and leverages the hover help text to convey extra information like a full buffer file path.
 ;;
-;; Sample screen:
+;; Sample screens:
 ;; ![sample screen](./images/sample-screen.png)
+;;> basic u/x
+;;
+;; ![sample lsp screen](./images/lsp.png)
+;;> eglot programming u/x
+
 ;;
 ;; Normally I run a gui standalone emacs as well as an emacs server for terminal
 ;; mode editing My typical alias setup
@@ -631,6 +636,16 @@
 
 (my-ignore (setq scroll-conservatively 10))
 ;; don't allow overscrolling.
+
+;; Smooth pixel-based scrolling so tall images in markdown don't make
+;; page up/down jump.
+(when (display-graphic-p)
+  (pixel-scroll-precision-mode 1)
+  (setq pixel-scroll-precision-interpolate-page t)
+  (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
+  (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
+  (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
+  (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up))
 
 ;; Use winner mode by default for managing window configurations
 ;; particularly useful when popping up a 2nd or 3rd window and
