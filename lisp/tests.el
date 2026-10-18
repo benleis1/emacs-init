@@ -22,11 +22,21 @@
     treesit-fold sqlformat excorporate yasnippet consult-yasnippet wikimode)
   "Features that must stay unloaded after a bare `init.el' load.")
 
+;; Runs in a fresh Emacs rather than this one: the features it checks can be
+;; loaded by other tests (org-agenda by the meeting-log tests) or as a side
+;; effect of a failure elsewhere (ERT opens a failed test's source file, which
+;; fires `find-file-hook' and enables diff-hl in a git checkout).
 (ert-deftest my/test-deferred-packages-stay-deferred ()
   "Test that none of `my/deferred-package-features' load merely from init.el."
-  (load (expand-file-name "init.el" user-emacs-directory) t)
-  (let ((loaded (seq-filter #'featurep my/deferred-package-features)))
-    (should (null loaded))))
+  (let* ((emacs (expand-file-name invocation-name invocation-directory))
+         (init (expand-file-name "init.el" user-emacs-directory))
+         (form (format "(progn (load %S t) (princ (format \"MY-LOADED %%S\" (seq-filter #'featurep '%S))))"
+                       init my/deferred-package-features))
+         (output (with-temp-buffer
+                   (call-process emacs nil t nil "-Q" "--batch" "--eval" form)
+                   (buffer-string))))
+    (should (string-match "MY-LOADED \\(.*\\)" output))
+    (should (null (read (match-string 1 output))))))
 
 ;; Crude safeguard against startup-time regressions like the org-timegrid one
 ;; above: spawn a genuinely fresh Emacs process (this test file's own load of
@@ -158,17 +168,23 @@ Deliberately omits generic names like `all' and `any' that would false-positive.
 
 ;;; Appointments, meeting log and jsonrpc filters (init.el)
 ;; These run against temp buffers/files and rebind the global state they touch;
-;; nothing reads or writes ~/org. ERT runs tests alphabetically, and the
-;; meeting-log tests load `org-agenda' (via `org-map-entries'), so keep their
-;; names after `my/test-deferred-packages-stay-deferred'.
+;; nothing reads or writes ~/org.
 (require 'cl-lib)
 
 (defmacro my/tests--at-time (hour minute &rest body)
-  "Run BODY with `decode-time' reporting HOUR:MINUTE."
+  "Run BODY with the current time of day, per `decode-time', set to HOUR:MINUTE.
+The date stays real: `time-to-days' is built on `decode-time', so a made-up
+date would disagree with `my-appt-dismissed-day' and trigger its daily reset."
   (declare (indent 2))
-  `(cl-letf (((symbol-function 'decode-time)
-              (lambda (&rest _) (list 0 ,minute ,hour 17 10 2026 6 nil nil))))
-     ,@body))
+  (let ((orig (make-symbol "orig")))
+    `(let ((,orig (symbol-function 'decode-time)))
+       (cl-letf (((symbol-function 'decode-time)
+                  (lambda (&optional time &rest args)
+                    (let ((decoded (apply ,orig time args)))
+                      (if time
+                          decoded
+                        (append (list 0 ,minute ,hour) (nthcdr 3 decoded)))))))
+         ,@body))))
 
 (defmacro my/tests--with-appt-state (&rest body)
   "Run BODY with the appointment mode-line state reset and colors pinned."

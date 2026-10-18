@@ -72,6 +72,7 @@
 
 ;; Turn off the file path in the  title bar and the proxy icon
 (setq frame-title-format nil)
+(defvar ns-use-proxy-icon) ; only exists in NS builds; avoids a byte-compile warning elsewhere
 (when (eq system-type 'darwin)
   (setq ns-use-proxy-icon nil))
 
