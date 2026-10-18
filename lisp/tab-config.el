@@ -43,6 +43,9 @@
 (declare-function project-buffers "project")
 (declare-function vc-git-state "vc-git")
 
+
+;;; Mode exclusions
+
 ;; Set tab-line always on except for the exclude modes list
 (setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode ))
 
@@ -57,6 +60,8 @@
     (unless (memq mode tab-line-exclude-modes)
       (push mode tab-line-exclude-modes)))
   (tab-line-force-update t))
+
+;;; UI Styling
 
 (global-tab-line-mode t)
 
@@ -127,16 +132,21 @@
 
 ;; Space the tabs out a bit
 (defun tab2-space-tab-name (buffer &optional _buffers)
-  (format " %s " (buffer-name buffer)))
+  (let ((name (buffer-name buffer)))
+    (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
+               (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name))
+      (setq name (concat (match-string 1 name) (match-string 2 name))))
+    (format " %s " name)))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
 
 ;; only put a close button on selected tabs - set to nil if totally unwanted
 (setq tab-line-close-button-show `selected)
 
-;;; Structure for tracking the views
-;; tab2 concept of virtual views is a window configuration + buffer list
+;;; View Support
 
+;; Structure for tracking the views
+;; tab2 concept of virtual views is a window configuration + buffer list
 (cl-defstruct tab2-view name buffers wc)
 
 ;; Maintain a global list of views
@@ -305,7 +315,7 @@
     major-mode))
 
 (defvar tab2-white-list-modes
-  '(text-mode lisp-interaction-mode messages-buffer-mode)
+  '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode)
   "List of modes that will be tracked even if the buffer is not a file")
 
 (defvar tab2-white-list-buffer-names
@@ -483,6 +493,8 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
     (if (functionp close) (funcall close e) (tab2-close-tab e))
     (force-mode-line-update)))
 
+;;; Drag and drop support
+
 ;; todo may need to force update more expansively for multiple windows when split
 (defun tab2-mouse-move-tab (event)
   "Move a tab to a different position on the tab line.
@@ -524,6 +536,8 @@ at the mouse-down event to the position at mouse-up event."
 
 ;; Add on our extra key map for the drag event
 (keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab2-mouse-move-tab)
+
+;;; Group and Tab Selection
 
 ;; Advice to add on add-new view button in the view view
 (define-advice tab-line-format (:filter-return (format))
@@ -728,8 +742,8 @@ at the mouse-down event to the position at mouse-up event."
        (when (project-current nil)
 	 (list (tab2-make-group-tab selected-group "Project")))
        (list (tab2-make-group-tab selected-group "Files"))
-       ;; Insert a modified group if any files are modified
 
+       ;; Insert a modified group if any files are modified
        (when (find-first 'tab2-buffer-modified-file-p buffers)
 	 (list (tab2-make-group-tab selected-group "Modified")))
        tabs

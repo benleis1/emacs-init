@@ -114,6 +114,11 @@
 			    "README*" "*-pkg.el"))
 		 :source "elpaca-menu-lock-file" :id gcmh :host gitlab :type git :protocol https
 		 :inherit t :depth treeless :ref "0089f9c3a6d4e9a310d0791cf6fa8f35642ecfd9"))
+ (ghostel :source "elpaca-menu-lock-file" :recipe
+	  (:package "ghostel" :fetcher github :repo "dakra/ghostel" :files
+		    (:defaults "etc" "src" "vendor" "build.zig" "build.zig.zon" "symbols.map")
+		    :source "MELPA" :id ghostel :type git :protocol https :inherit t :depth treeless
+		    :ref "037378b44ceedf1c8bf15e365fc62c7f5c92363d"))
  (ilist-plus :source "elpaca-menu-lock-file" :recipe
 	     (:source "elpaca-menu-lock-file" :package "ilist-plus" :id ilist-plus :host github
 		      :repo "benleis1/ilist-plus" :type git :protocol https :inherit t :depth
@@ -273,8 +278,8 @@
  (pulsar :source "elpaca-menu-lock-file" :recipe
 	 (:package "pulsar" :repo ("https://github.com/protesilaos/pulsar" . "pulsar") :tar "1.4.1"
 		   :host gnu :files ("*" (:exclude ".git" "COPYING" "doclicense.texi")) :source
-		   "GNU ELPA" :id pulsar :type git :protocol https :inherit t :depth treeless :ref
-		   "83d53271a0ec2728ef36b45704d47bafd170e814"))
+		   "elpaca-menu-lock-file" :id pulsar :type git :protocol https :inherit t :depth
+		   treeless :ref "83d53271a0ec2728ef36b45704d47bafd170e814"))
  (reformatter :source "elpaca-menu-lock-file" :recipe
 	      (:package "reformatter" :repo "purcell/emacs-reformatter" :fetcher github :files
 			("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo" "doc/dir" "doc/*.info"

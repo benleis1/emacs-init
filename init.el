@@ -124,6 +124,12 @@
 ;; emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 ;; external dependencies once running.
 
+;; ## Performance
+;; * Using the elpaca lockfile and byte compiling the lisp files will speed up startup times.
+;; * See the profile section for more built in options for optimizing startup.
+;; * I currently see start times around .6-.7 seconds. While another .1 seconds could be saved by not
+;; doing an elpaca-wait at the end of this file, I prefer the consistency that synchronization provides
+
 ;;; Code:
 
 ;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
@@ -306,6 +312,10 @@
 
   (custom-set-faces
    '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
+
+;; No italics for non-file buffers in the tab-line.
+(custom-set-faces
+ '(tab-line-tab-special ((t :slant normal))))
 
 ;; Expand the default font height enough that emacs looks normal when opened.
 (set-face-attribute 'default nil :height 160)
@@ -645,7 +655,17 @@
   (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
   (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
   (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
-  (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up))
+  (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up)
+
+  ;; pixel-scroll-precision-mode-map binds <next>/<prior> itself, which beats
+  ;; ghostel's local map, so PgUp/PgDn never reach the terminal (e.g. in less).
+  (add-hook 'ghostel-mode-hook
+            (lambda ()
+              (let ((map (copy-keymap pixel-scroll-precision-mode-map)))
+                (define-key map [next] nil)
+                (define-key map [prior] nil)
+                (setq-local minor-mode-overriding-map-alist
+                            (list (cons 'pixel-scroll-precision-mode map)))))))
 
 ;; Use winner mode by default for managing window configurations
 ;; particularly useful when popping up a 2nd or 3rd window and
@@ -2786,44 +2806,13 @@ declaration if any such methods were found."
   ))
 
 (my-profile-mark "Font name completion for customize buffers")
-;;; Font name completion for customize buffers
-;; This was added to base emacs in version 31 and I will remove it soon.
-
-;; return if the current position is a Font Family widget. Checks one
-;; character back too since widget-at looks at the char *after* point, which
-;; falls outside the field once you've typed up to its end.
-(defun font-family-widget-p ()
-  (let ((w (or (widget-at (point))
-               (widget-at (max (point-min) (1- (point)))))))
-    (equal (widget-get w :tag) "Font Family")))
-
-;; Completion function for font names to be hooked to custom mode
-;; need to return a list (start end collection) if this matches or nil if not
-(defun complete-font-name ()
-  (when (font-family-widget-p)
-    `(,(pos-bol) ,(pos-eol) ,(font-family-list))))
-
-;; Hook completion in and setup M-TAB binding for it. custom-field-keymap
-;; normally binds M-TAB to `widget-complete', which bypasses
-;; completion-at-point-functions entirely and falls back to the `string'
-;; widget's own :complete, hard-coded to ispell-complete-word. Rebind both
-;; the GUI (<M-tab>) and terminal (M-TAB, i.e. ESC TAB) forms so either
-;; frame type reaches completion-at-point/complete-font-name.
-(defun add-complete-font-name()
-  (add-hook 'completion-at-point-functions #'complete-font-name nil t)
-  (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
-  (define-key custom-field-keymap (kbd "M-TAB") 'completion-at-point))
-
-(add-hook 'Custom-mode-hook 'add-complete-font-name)
+;;; Font name widget in customize face
 
 ;; Inline "Set Font..." button next to the Font Family field in
 ;; customize-face buffers, on the same line like the Value Menu buttons
 ;; next to Weight/Slant/etc.
-;;
 ;; Uses x-select-font directly (the same dialog menu-set-font uses under the
-;; hood) rather than menu-set-font itself, since menu-set-font's job is to
-;; apply the chosen font as the new default frame font on all frames --
-;; x-select-font just returns the pick without touching any frame's font.
+;; hood)
 (defun my-select-font ()
   "Read a font from the user without changing any frame's font.
 Uses the native font dialog via `x-select-font' when available,
@@ -2923,18 +2912,7 @@ tag, followed by the normal editable field."
   ;; Route xref (e.g. eglot's jump-to-definition/references in Java) through
   ;; consult's UI instead of the default *xref* buffer.
   (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-
-  ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
-  ;; completion-at-point, which otherwise falls back to the *Completions*
-  ;; buffer popup (e.g. for the font-family widget completion done earlier). Route it
-  ;; through consult so it also uses the minibuffer.
-  (setq completion-in-region-function
-	(lambda (&rest args)
-          (apply (if vertico-mode
-                     #'consult-completion-in-region
-                   #'completion--in-region)
-		 args))))
+        xref-show-definitions-function #'consult-xref))
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ;;; temptemp - try out new builtin completion.
@@ -2948,7 +2926,7 @@ tag, followed by the normal editable field."
       ("M-i" . completion-preview-insert-word)
       ("M-n" . completion-preview-next-candidate)
       ("M-p" . completion-preview-prev-candidate)
-      ("M-<RET>" . completion-preview-insert)
+      ("M-RET" . completion-preview-insert)
       ;; With TAB we effectively defer to the *Completions* buffer to
       ;; show more completion candidates at once.
       ("<tab>" . completion-preview-complete))

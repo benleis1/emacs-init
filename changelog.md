@@ -58,3 +58,7 @@ mode glyph which I'm leveraging on the far left
 
 * Dark theme work: modus-vivendi adjustments, plus the embers and matrix
   variants, and dark versions of the close/funnel icons. Title bar removed.
+
+* Built in profiling support 
+* new install.sh script and my-diagnose-config helper function to check for dependencies
+* Added pulsar to show where jumps are occurring.

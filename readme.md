@@ -124,6 +124,12 @@ I have an optional `install.sh` script that will do basic symlinking of the lisp
 emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 external dependencies once running.
 
+## Performance
+* Using the elpaca lockfile and byte compiling the lisp files will speed up startup times.
+* See the profile section for more built in options for optimizing startup.
+* I currently see start times around .6-.7 seconds. While another .1 seconds could be saved by not
+doing an elpaca-wait at the end of this file, I prefer the consistency that synchronization provides
+
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
@@ -134,6 +140,7 @@ external dependencies once running.
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
   - [Installation](#installation)
+  - [Performance](#performance)
 - [Code:](#code)
 - [Profiling](#profiling)
   - [my-toggle-profiler](#my-toggle-profiler)
@@ -465,6 +472,12 @@ I like using a 1.3 scaled version of the system UI font for the tabs.
 
   (custom-set-faces
    '(tab-line-inactive ((t :family ".AppleSystemUIFont" :height 1.3)))))
+```
+
+No italics for non-file buffers in the tab-line.
+```
+(custom-set-faces
+ '(tab-line-tab-special ((t :slant normal))))
 ```
 
 Expand the default font height enough that emacs looks normal when opened.
@@ -3725,7 +3738,7 @@ No key binding for now.
       ("M-i" . completion-preview-insert-word)
       ("M-n" . completion-preview-next-candidate)
       ("M-p" . completion-preview-prev-candidate)
-      ("M-<RET>" . completion-preview-insert)
+      ("M-RET" . completion-preview-insert)
       ;; With TAB we effectively defer to the *Completions* buffer to
       ;; show more completion candidates at once.
       ("<tab>" . completion-preview-complete))
