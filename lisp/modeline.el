@@ -450,6 +450,38 @@ eglot's own indicator."
                                 (list (cons 'mouse-1 eglot-menu)
                                       (cons 'mouse-3 eglot-server-menu))))))))
 
+;;; Busy ghostel terminals
+
+(defvar ghostel--command-running)
+(defvar ghostel-command-start-functions)
+(defvar ghostel-command-finish-functions)
+
+(defun my-modeline--busy-ghostel-buffers ()
+  "Live ghostel buffers whose shell is currently running a command."
+  (seq-filter (lambda (buf)
+                (and (eq (buffer-local-value 'major-mode buf) 'ghostel-mode)
+                     (buffer-local-value 'ghostel--command-running buf)))
+              (buffer-list)))
+
+(defun my-modeline-segment-ghostel-busy ()
+  "An hourglass while any ghostel terminal is running a command (per its
+OSC 133 shell integration), with the busy buffers' names in the tooltip."
+  (when-let* ((busy (my-modeline--busy-ghostel-buffers)))
+    (propertize "⏳"
+                'help-echo (concat "Busy terminals:\n"
+                                   (mapconcat #'buffer-name busy "\n"))
+                'mouse-face 'mode-line-highlight)))
+
+;; The mode-line only recomputes on redisplay, which a terminal finishing in
+;; a hidden buffer doesn't trigger. The finish hook also runs before ghostel
+;; clears `ghostel--command-running', so refresh on a zero-delay timer.
+(defun my-modeline--refresh-ghostel-busy (&rest _)
+  (run-at-time 0 nil #'force-mode-line-update t))
+
+(with-eval-after-load 'ghostel
+  (add-hook 'ghostel-command-start-functions #'my-modeline--refresh-ghostel-busy)
+  (add-hook 'ghostel-command-finish-functions #'my-modeline--refresh-ghostel-busy))
+
 (defun my-modeline-segment-modes ()
   "Major mode name and `mode-line-process', deliberately without the
 `minor-mode-alist' text stock `mode-line-modes' also shows: mouse-3 on the
@@ -688,6 +720,7 @@ the same standard way, rather than only the buffer name being clickable."
     my-modeline-segment-eglot
     my-eglot-flymake-segment
     my-modeline-segment-position
+    my-modeline-segment-ghostel-busy
     my-modeline-segment-vcs
     )
   "Segment functions rendered left-to-right immediately after the left-side

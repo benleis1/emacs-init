@@ -491,6 +491,16 @@
 	(type unspecified)
 	(fnname yellow-cooler)
 	(fnname-call unspecified)
+
+	;; Solarized blue/green for terminal (ghostel) ANSI colors only for legibility in the prompt.
+	(bg-term-blue "#268bd2")
+	(fg-term-blue "#268bd2")
+	(bg-term-blue-bright "#268bd2")
+	(fg-term-blue-bright "#268bd2")
+	(bg-term-green "#859900")
+	(fg-term-green "#859900")
+	(bg-term-green-bright "#859900")
+	(fg-term-green-bright "#859900")
 	))
 
 (setq modus-vivendi-palette-overrides
