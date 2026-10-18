@@ -62,3 +62,6 @@ mode glyph which I'm leveraging on the far left
 * Built in profiling support 
 * new install.sh script and my-diagnose-config helper function to check for dependencies
 * Added pulsar to show where jumps are occurring.
+* Pixel scrolling: smooth page up/down so tall images in markdown don't make
+  the view jump. Only enabled in graphical frames, and ghostel buffers keep
+  PgUp/PgDn for the terminal.

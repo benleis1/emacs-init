@@ -649,23 +649,31 @@
 
 ;; Smooth pixel-based scrolling so tall images in markdown don't make
 ;; page up/down jump.
-(when (display-graphic-p)
-  (pixel-scroll-precision-mode 1)
-  (setq pixel-scroll-precision-interpolate-page t)
-  (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
-  (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
-  (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
-  (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up)
+;; Nothing is activated or bound until a graphical frame exists, so this also
+;; works for daemons and terminal-first sessions.
+(defun my-pixel-scroll-setup (&optional frame)
+  "Enable pixel scrolling and its keybindings once a graphical FRAME exists."
+  (when (and (display-graphic-p frame)
+             (not (bound-and-true-p pixel-scroll-precision-mode)))
+    (pixel-scroll-precision-mode 1)
+    (setq pixel-scroll-precision-interpolate-page t)
+    (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
+    (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
+    (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
+    (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up)
 
-  ;; pixel-scroll-precision-mode-map binds <next>/<prior> itself, which beats
-  ;; ghostel's local map, so PgUp/PgDn never reach the terminal (e.g. in less).
-  (add-hook 'ghostel-mode-hook
-            (lambda ()
-              (let ((map (copy-keymap pixel-scroll-precision-mode-map)))
-                (define-key map [next] nil)
-                (define-key map [prior] nil)
-                (setq-local minor-mode-overriding-map-alist
-                            (list (cons 'pixel-scroll-precision-mode map)))))))
+    ;; pixel-scroll-precision-mode-map binds <next>/<prior> itself, which beats
+    ;; ghostel's local map, so PgUp/PgDn never reach the terminal (e.g. in less).
+    (add-hook 'ghostel-mode-hook
+              (lambda ()
+                (let ((map (copy-keymap pixel-scroll-precision-mode-map)))
+                  (define-key map [next] nil)
+                  (define-key map [prior] nil)
+                  (setq-local minor-mode-overriding-map-alist
+                              (list (cons 'pixel-scroll-precision-mode map))))))))
+
+(my-pixel-scroll-setup)
+(add-hook 'after-make-frame-functions #'my-pixel-scroll-setup)
 
 ;; Use winner mode by default for managing window configurations
 ;; particularly useful when popping up a 2nd or 3rd window and

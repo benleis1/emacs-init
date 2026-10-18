@@ -154,6 +154,7 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-theme-margin-color](#my-theme-margin-color)
   - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
+  - [my-pixel-scroll-setup](#my-pixel-scroll-setup)
   - [my-before-save-hook](#my-before-save-hook)
   - [my-skip-large-files-stale-p](#my-skip-large-files-stale-p)
 - [backup and autosave.](#backup-and-autosave)
@@ -228,10 +229,7 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [command-line-diff](#command-line-diff)
   - [gc-notification](#gc-notification)
 - [Completion frameworks.](#completion-frameworks)
-- [Font name completion for customize buffers](#font-name-completion-for-customize-buffers)
-  - [font-family-widget-p](#font-family-widget-p)
-  - [complete-font-name](#complete-font-name)
-  - [add-complete-font-name](#add-complete-font-name)
+- [Font name widget in customize face](#font-name-widget-in-customize-face)
   - [my-select-font](#my-select-font)
   - [my-widget-find-ancestor](#my-widget-find-ancestor)
   - [my-customize-face-set-font](#my-customize-face-set-font)
@@ -862,16 +860,37 @@ Add a faint window divider
 ```
 don't allow overscrolling.
 
+## my-pixel-scroll-setup
+>Enable pixel scrolling and its keybindings once a graphical FRAME exists.
+
 Smooth pixel-based scrolling so tall images in markdown don't make
 page up/down jump.
+Nothing is activated or bound until a graphical frame exists, so this also
+works for daemons and terminal-first sessions.
 ```
-(when (display-graphic-p)
-  (pixel-scroll-precision-mode 1)
-  (setq pixel-scroll-precision-interpolate-page t)
-  (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
-  (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
-  (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
-  (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up))
+(defun my-pixel-scroll-setup (&optional frame)
+  "Enable pixel scrolling and its keybindings once a graphical FRAME exists."
+  (when (and (display-graphic-p frame)
+             (not (bound-and-true-p pixel-scroll-precision-mode)))
+    (pixel-scroll-precision-mode 1)
+    (setq pixel-scroll-precision-interpolate-page t)
+    (keymap-global-set "<next>"  #'pixel-scroll-interpolate-down)
+    (keymap-global-set "<prior>" #'pixel-scroll-interpolate-up)
+    (keymap-global-set "C-v"     #'pixel-scroll-interpolate-down)
+    (keymap-global-set "M-v"     #'pixel-scroll-interpolate-up)
+
+    ;; pixel-scroll-precision-mode-map binds <next>/<prior> itself, which beats
+    ;; ghostel's local map, so PgUp/PgDn never reach the terminal (e.g. in less).
+    (add-hook 'ghostel-mode-hook
+              (lambda ()
+                (let ((map (copy-keymap pixel-scroll-precision-mode-map)))
+                  (define-key map [next] nil)
+                  (define-key map [prior] nil)
+                  (setq-local minor-mode-overriding-map-alist
+                              (list (cons 'pixel-scroll-precision-mode map))))))))
+
+(my-pixel-scroll-setup)
+(add-hook 'after-make-frame-functions #'my-pixel-scroll-setup)
 ```
 
 Use winner mode by default for managing window configurations
@@ -3532,44 +3551,7 @@ Turned off while I try out the built in completion framework in emacs 31
 
 (my-profile-mark "Font name completion for customize buffers")
 ```
-# Font name completion for customize buffers
-This was added to base emacs in version 31 and I will remove it soon.
-
-## font-family-widget-p
-return if the current position is a Font Family widget. Checks one
-character back too since widget-at looks at the char *after* point, which
-falls outside the field once you've typed up to its end.
-```
-(defun font-family-widget-p ()
-  (let ((w (or (widget-at (point))
-               (widget-at (max (point-min) (1- (point)))))))
-    (equal (widget-get w :tag) "Font Family")))
-```
-
-## complete-font-name
-Completion function for font names to be hooked to custom mode
-need to return a list (start end collection) if this matches or nil if not
-```
-(defun complete-font-name ()
-  (when (font-family-widget-p)
-    `(,(pos-bol) ,(pos-eol) ,(font-family-list))))
-```
-
-## add-complete-font-name
-Hook completion in and setup M-TAB binding for it. custom-field-keymap
-normally binds M-TAB to `widget-complete', which bypasses
-completion-at-point-functions entirely and falls back to the `string'
-widget's own :complete, hard-coded to ispell-complete-word. Rebind both
-the GUI (<M-tab>) and terminal (M-TAB, i.e. ESC TAB) forms so either
-frame type reaches completion-at-point/complete-font-name.
-```
-(defun add-complete-font-name()
-  (add-hook 'completion-at-point-functions #'complete-font-name nil t)
-  (define-key custom-field-keymap (kbd "M-<tab>") 'completion-at-point)
-  (define-key custom-field-keymap (kbd "M-TAB") 'completion-at-point))
-
-(add-hook 'Custom-mode-hook 'add-complete-font-name)
-```
+# Font name widget in customize face
 
 ## my-select-font
 >Read a font from the user without changing any frame's font.
@@ -3579,11 +3561,8 @@ falling back to `mouse-select-font'.
 Inline "Set Font..." button next to the Font Family field in
 customize-face buffers, on the same line like the Value Menu buttons
 next to Weight/Slant/etc.
-
 Uses x-select-font directly (the same dialog menu-set-font uses under the
-hood) rather than menu-set-font itself, since menu-set-font's job is to
-apply the chosen font as the new default frame font on all frames --
-x-select-font just returns the pick without touching any frame's font.
+hood)
 ```
 (defun my-select-font ()
   "Read a font from the user without changing any frame's font.
@@ -3711,18 +3690,7 @@ No key binding for now.
   ;; Route xref (e.g. eglot's jump-to-definition/references in Java) through
   ;; consult's UI instead of the default *xref* buffer.
   (setq xref-show-xrefs-function #'consult-xref
-        xref-show-definitions-function #'consult-xref)
-
-  ;; vertico-mode only takes over completing-read (minibuffer), not in-buffer
-  ;; completion-at-point, which otherwise falls back to the *Completions*
-  ;; buffer popup (e.g. for the font-family widget completion done earlier). Route it
-  ;; through consult so it also uses the minibuffer.
-  (setq completion-in-region-function
-	(lambda (&rest args)
-          (apply (if vertico-mode
-                     #'consult-completion-in-region
-                   #'completion--in-region)
-		 args))))
+        xref-show-definitions-function #'consult-xref))
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ```
