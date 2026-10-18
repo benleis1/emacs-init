@@ -1773,21 +1773,14 @@ ignored -- this must never block dismissing the mode-line notice."
       (define-key ghostel-semi-char-mode-map (kbd (car spec))
                   (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
 
-  ;; Prefix the buffer name with a busy emoji while a command runs (OSC 133 C..D).
+  ;; Track busy state (OSC 133 C..D); tab2-space-tab-name shows it in the tab.
   (defvar-local my-ghostel-busy nil)
-
-  (defun my-ghostel-buffer-name (title)
-    (when-let* ((name (ghostel-buffer-name-by-title title)))
-      (if my-ghostel-busy
-          (concat "*ghostel: ⏳ " (substring name (length "*ghostel: ")))
-        name)))
 
   (defun my-ghostel-set-busy (buffer busy)
     (with-current-buffer buffer
-      (setq my-ghostel-busy busy)
-      (ghostel--rename-managed (funcall ghostel-buffer-name-function ghostel--title))))
+      (setq my-ghostel-busy busy))
+    (tab-line-force-update t))
 
-  (setq ghostel-buffer-name-function #'my-ghostel-buffer-name)
   (add-hook 'ghostel-command-start-functions
             (lambda (buffer) (my-ghostel-set-busy buffer t)))
   (add-hook 'ghostel-command-finish-functions
@@ -1822,6 +1815,18 @@ ignored -- this must never block dismissing the mode-line notice."
 
 ;; Add ansi color code support to all compilation buffers.
 (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
+
+;; Name each byte-compile log buffer after the file being compiled, so
+;; "*Compile-Log: foo.el*" is identifiable in the buffer list instead of one
+;; shared "*Compile-Log*" mixing every file.
+(defvar byte-compile-log-buffer)
+(with-eval-after-load 'bytecomp
+  (define-advice byte-compile-file (:around (orig filename &rest args) my/per-file-log)
+    (let ((byte-compile-log-buffer
+           (if (equal byte-compile-log-buffer "*Compile-Log*")
+               (format "*Compile-Log: %s*" (file-name-nondirectory filename))
+             byte-compile-log-buffer)))
+      (apply orig filename args))))
 
 ;; Set display line number mode on
 (add-hook 'prog-mode-hook #'my-common-prog-mode-setup)

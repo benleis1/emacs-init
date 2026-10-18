@@ -131,12 +131,22 @@
 (defvar tab2-git-modified-marker (if window-system "" "◨"))
 
 ;; Space the tabs out a bit
+(defvar my-ghostel-busy)
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
     (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
                (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name))
       (setq name (concat (match-string 1 name) (match-string 2 name))))
-    (format " %s " name)))
+    ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
+    (setq name (string-replace " " " " name))
+    (format " %s%s "(or (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
+                              (when-let* ((icon (my-modeline--icon-safe
+                                                 #'nerd-icons-octicon "nf-oct-terminal")))
+                                (concat icon "  ")))
+                         "")
+            (if (and (boundp 'my-ghostel-busy) (buffer-local-value 'my-ghostel-busy buffer))
+                (concat "⏳ " name)
+              name))))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
 
@@ -588,13 +598,17 @@ at the mouse-down event to the position at mouse-up event."
 
     (apply 'propertize
            (concat
-	    (propertize (string-replace "%" "%%" name) ;; (bug#57848)
-                               'face face
-                               'keymap tab-line-tab-map
-                               'help-echo (if selected-p "Current tab"
-                                            "Click to select tab")
-                               ;; Don't turn mouse-1 into mouse-2 (bug#49247)
-                               'follow-link 'ignore)
+	    ;; Append FACE rather than replace so an icon's own :family face survives.
+	    (let ((str (string-replace "%" "%%" name))) ;; (bug#57848)
+	      (add-face-text-property 0 (length str) face t str)
+	      (add-text-properties 0 (length str)
+	                           `(keymap ,tab-line-tab-map
+	                             help-echo ,(if selected-p "Current tab"
+	                                          "Click to select tab")
+	                             ;; Don't turn mouse-1 into mouse-2 (bug#49247)
+	                             follow-link ignore)
+	                           str)
+	      str)
 
 	    ;; Modified marker - TODO - move to custom faces
 	    (cond ((and buffer (buffer-modified-p buffer) (buffer-file-name buffer))
