@@ -1103,3 +1103,51 @@ also holds machine-local files (local.el and the like) that aren't ours."
                                     init))
           (push file orphans))))
     (should (null (nreverse orphans)))))
+
+;;; ghostel dependencies
+;; The config reaches into ghostel internals (`ghostel--*'); these tests fail
+;; loudly after a ghostel update that renames or drops one of them.
+
+(defun my/tests--ghostel-symbols-used ()
+  "Every `ghostel-*' symbol referenced by init.el and lisp/*.el (not the tests)."
+  (let (syms)
+    (dolist (file (cons (expand-file-name "init.el" my/repo-root)
+                        (seq-remove (lambda (f) (string-match-p "tests?\\.el\\'" f))
+                                    (directory-files (expand-file-name "lisp" my/repo-root)
+                                                     t "\\.el\\'"))))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (while (re-search-forward "\\_<\\(ghostel-[-a-z0-9]+\\)\\_>" nil t)
+          (push (intern (match-string 1)) syms))))
+    (delete-dups syms)))
+
+(defun my/tests--ghostel-available-p ()
+  (and (require 'ghostel nil t) (require 'ghostel-prompt nil t)))
+
+(ert-deftest my/test-ghostel-symbols-used-by-config-exist ()
+  "Every ghostel symbol the config references is still defined by ghostel."
+  (skip-unless my/repo-root)
+  (skip-unless (my/tests--ghostel-available-p))
+  (let ((missing (seq-remove (lambda (s) (or (boundp s) (fboundp s) (featurep s)))
+                             (my/tests--ghostel-symbols-used))))
+    (should (null missing))))
+
+(ert-deftest my/test-ghostel-command-running-tracks-osc133 ()
+  "`ghostel--command-running' is nil in the start hook, t after it, nil after finish.
+The busy indicators rely on this ordering: the hooks fire before the flag
+changes, which is why the refresh is deferred to a timer."
+  (skip-unless (my/tests--ghostel-available-p))
+  (skip-unless (fboundp 'ghostel--osc133-marker))
+  (with-temp-buffer
+    (let (seen-start seen-finish)
+      (setq-local ghostel-command-start-functions
+                  (list (lambda (_buf) (setq seen-start (list ghostel--command-running)))))
+      (setq-local ghostel-command-finish-functions
+                  (list (lambda (_buf _exit) (setq seen-finish (list ghostel--command-running)))))
+      (setq-local ghostel--command-running nil)
+      (ghostel--osc133-marker "C" nil)
+      (should (equal seen-start '(nil)))
+      (should ghostel--command-running)
+      (ghostel--osc133-marker "D" "0")
+      (should (equal seen-finish '(t)))
+      (should-not ghostel--command-running))))

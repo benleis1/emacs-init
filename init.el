@@ -1698,8 +1698,10 @@ ignored -- this must never block dismissing the mode-line notice."
 
 (my-profile-mark "Terminal support")
 ;;; Terminal support via ghostel
-;; Note: this works better with eza --hyper-link which allows clicking on the output to open
+;; Note: this works better with `eza --hyper-link` which allows clicking on the output to open
+;;
 ;; Also define a bash function for general opens
+;; ```
 ;; e() {
 ;;    if [[ -n "$INSIDE_EMACS" ]]; then
 ;;       ghostel_cmd find-file $*
@@ -1707,6 +1709,7 @@ ignored -- this must never block dismissing the mode-line notice."
 ;;	echo "Not running ghostel"
 ;;    fi
 ;;}
+;; ```
 
 (use-package ghostel
   :ensure t
@@ -1771,21 +1774,7 @@ ignored -- this must never block dismissing the mode-line notice."
                   ("M-d" . word-forward)))
     (let ((kind (cdr spec)))
       (define-key ghostel-semi-char-mode-map (kbd (car spec))
-                  (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
-
-  ;; Track busy state (OSC 133 C..D); tab2-space-tab-name shows it in the tab.
-  (defvar-local my-ghostel-busy nil)
-
-  (defun my-ghostel-set-busy (buffer busy)
-    (with-current-buffer buffer
-      (setq my-ghostel-busy busy))
-    (tab-line-force-update t))
-
-  (add-hook 'ghostel-command-start-functions
-            (lambda (buffer) (my-ghostel-set-busy buffer t)))
-  (add-hook 'ghostel-command-finish-functions
-            (lambda (buffer _exit) (my-ghostel-set-busy buffer nil)))
-  )
+                  (lambda () (interactive) (my-ghostel-kill-and-send kind))))))
 
 
 (my-profile-mark "Programming modes")
@@ -3030,6 +3019,28 @@ tag, followed by the normal editable field."
   ;; splits the window
   (setq consult-preview-key "M-.")
 
+  ;; Ghostel terminals get their own section in `consult-buffer' (narrow with
+  ;; "t SPC") instead of mixing with ordinary buffers.  The main buffer source
+  ;; hides them via `consult-buffer-filter'; this source opts out of that
+  ;; filter with :filter nil.
+  (add-to-list 'consult-buffer-filter "\\`\\*ghostel")
+  (defvar my-consult-source-ghostel
+    `(:name "Terminal"
+      :narrow ?t
+      :category buffer
+      :face consult-buffer
+      :history buffer-name-history
+      :state ,#'consult--buffer-state
+      :items ,(lambda ()
+                (consult--buffer-query :mode 'ghostel-mode :filter nil
+                                       :sort 'visibility :as #'consult--buffer-pair))))
+  (unless (memq 'my-consult-source-ghostel consult-buffer-sources)
+    (setq consult-buffer-sources
+          (cl-loop for src in consult-buffer-sources
+                   collect src
+                   when (eq src 'consult-source-buffer)
+                   collect 'my-consult-source-ghostel)))
+
   ;; Route xref (e.g. eglot's jump-to-definition/references in Java) through
   ;; consult's UI instead of the default *xref* buffer.
   (setq xref-show-xrefs-function #'consult-xref
@@ -3111,6 +3122,9 @@ Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
                   (and (treesit-available-p) (treesit-language-available-p 'java)
                        "installed")
                   "run M-x treesit-install-language-grammar RET java")
+            (list "Dynamic module support (for ghostel)" nil
+                  (and (bound-and-true-p module-file-suffix) module-file-suffix)
+                  "ghostel needs Emacs built with --with-modules")
             (list "C compiler (for tree-sitter grammars)" nil
                   (funcall exe "cc" "gcc" "clang")
                   "needed to build tree-sitter grammars")

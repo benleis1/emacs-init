@@ -131,7 +131,7 @@
 (defvar tab2-git-modified-marker (if window-system "" "◨"))
 
 ;; Space the tabs out a bit
-(defvar my-ghostel-busy)
+(defvar ghostel--command-running)
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
     (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
@@ -139,12 +139,13 @@
       (setq name (concat (match-string 1 name) (match-string 2 name))))
     ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
     (setq name (string-replace " " " " name))
-    (format " %s%s "(or (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
+    (format " %s%s " (or (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
                               (when-let* ((icon (my-modeline--icon-safe
                                                  #'nerd-icons-octicon "nf-oct-terminal")))
                                 (concat icon "  ")))
                          "")
-            (if (and (boundp 'my-ghostel-busy) (buffer-local-value 'my-ghostel-busy buffer))
+            (if (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
+                     (buffer-local-value 'ghostel--command-running buffer))
                 (concat "⏳ " name)
               name))))
 

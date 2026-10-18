@@ -472,11 +472,13 @@ OSC 133 shell integration), with the busy buffers' names in the tooltip."
                                    (mapconcat #'buffer-name busy "\n"))
                 'mouse-face 'mode-line-highlight)))
 
-;; The mode-line only recomputes on redisplay, which a terminal finishing in
-;; a hidden buffer doesn't trigger. The finish hook also runs before ghostel
-;; clears `ghostel--command-running', so refresh on a zero-delay timer.
+;; Redisplay doesn't happen when a terminal finishes in a hidden buffer, and the
+;; finish hook runs before ghostel clears `ghostel--command-running', so refresh
+;; the mode line and the tabs (which also show busy state) on a zero-delay timer.
 (defun my-modeline--refresh-ghostel-busy (&rest _)
-  (run-at-time 0 nil #'force-mode-line-update t))
+  (run-at-time 0 nil (lambda ()
+                       (force-mode-line-update t)
+                       (tab-line-force-update t))))
 
 (with-eval-after-load 'ghostel
   (add-hook 'ghostel-command-start-functions #'my-modeline--refresh-ghostel-busy)
