@@ -736,8 +736,7 @@
 ;; after copying to the kill ring
 (unless (display-graphic-p)
   (require 'mouse)
-  (xterm-mouse-mode t)
-  (defun track-mouse (_e))) ;;check if stubbing this out is still needed in v31
+  (xterm-mouse-mode t))
 
 ;; Setup recent files mode - this is much more in use now that I have consult
 ;; `recentf-auto-cleanup' defaults to `mode', which runs a synchronous
