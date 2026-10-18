@@ -194,6 +194,7 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-meeting-log--append-clock](#my-meeting-log--append-clock)
   - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
+- [Terminal support via ghostel](#terminal-support-via-ghostel)
 - [Programming modes](#programming-modes)
   - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
   - [Project.el settings.](#projectel-settings)
@@ -676,6 +677,16 @@ Specific folio theme overrides
 	(type unspecified)
 	(fnname yellow-cooler)
 	(fnname-call unspecified)
+
+	;; Solarized blue/green for terminal (ghostel) ANSI colors only for legibility in the prompt.
+	(bg-term-blue "#268bd2")
+	(fg-term-blue "#268bd2")
+	(bg-term-blue-bright "#268bd2")
+	(fg-term-blue-bright "#268bd2")
+	(bg-term-green "#859900")
+	(fg-term-green "#859900")
+	(bg-term-green-bright "#859900")
+	(fg-term-green-bright "#859900")
 	))
 
 (setq modus-vivendi-palette-overrides
@@ -979,8 +990,7 @@ after copying to the kill ring
 ```
 (unless (display-graphic-p)
   (require 'mouse)
-  (xterm-mouse-mode t)
-  (defun track-mouse (_e))) ;;check if stubbing this out is still needed in v31
+  (xterm-mouse-mode t))
 ```
 
 Setup recent files mode - this is much more in use now that I have consult
@@ -2227,6 +2237,107 @@ SVG calendar view
     ;; today -- keep the strip itself always on today regardless of span.
     (advice-add 'org-timegrid-agenda--display-day :override
                 (lambda () (calendar-absolute-from-gregorian (calendar-current-date))))))
+
+(my-profile-mark "Terminal support")
+```
+# Terminal support via ghostel
+Note: this works better with eza --hyper-link which allows clicking on the output to open
+Also define a bash function for general opens
+e() {
+   if [[ -n "$INSIDE_EMACS" ]]; then
+      ghostel_cmd find-file $*
+   else
+	echo "Not running ghostel"
+   fi
+}
+
+```
+(use-package ghostel
+  :ensure t
+  :defer t
+  :config
+  (defcustom my-ghostel-escape-timeout 0.25
+    "Seconds to wait after Esc for a key that should become Meta in Emacs."
+    :type 'number)
+
+  (defun my-ghostel-escape ()
+    "Esc: M-<key> for keys in `ghostel-keymap-exceptions', else send Esc to the terminal."
+    (interactive)
+    (let ((next (read-event nil nil my-ghostel-escape-timeout)))
+      (if (and (characterp next)
+               (member (format "M-%c" next) ghostel-keymap-exceptions))
+          (setq unread-command-events
+                (list (logior next (ash 1 27))))
+        (ghostel--send-event)
+        (when next (push next unread-command-events)))))
+
+  (define-key ghostel-semi-char-mode-map (kbd "<escape>") #'my-ghostel-escape)
+
+  ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
+  (defun my-ghostel-kill-range (kind)
+    "Return (BEG . END) of the input text readline KIND would cut, or nil."
+    (when-let* ((cur ghostel--cursor-char-pos)
+                (start (or (ghostel-input-start-point)
+                           (save-excursion (goto-char cur) (line-beginning-position)))))
+      (save-excursion
+        (goto-char cur)
+        (pcase kind
+          ('line-end (cons cur (line-end-position)))
+          ('line-start (cons (max start cur) cur))
+          ('bigword-back
+           (skip-chars-backward " \t" start)
+           (skip-chars-backward "^ \t\n" start)
+           (cons (point) cur))
+          ('word-back
+           (skip-chars-backward "^[:alnum:]" start)
+           (skip-chars-backward "[:alnum:]" start)
+           (cons (point) cur))
+          ('word-forward
+           (let ((limit (line-end-position)))
+             (skip-chars-forward "^[:alnum:]" limit)
+             (skip-chars-forward "[:alnum:]" limit)
+             (cons cur (point))))))))
+
+  (defun my-ghostel-kill-and-send (kind)
+    (unless (ghostel-alt-screen-p)
+      (when-let* ((range (my-ghostel-kill-range kind))
+                  (text (string-trim-right
+                         (buffer-substring-no-properties (car range) (cdr range)))))
+        (unless (string-empty-p text)
+          (if (eq last-command 'my-ghostel-kill)
+              (kill-append text (memq kind '(bigword-back word-back line-start)))
+            (kill-new text))
+          (setq this-command 'my-ghostel-kill))))
+    (ghostel--send-event))
+
+  (dolist (spec '(("C-k" . line-end) ("C-u" . line-start) ("C-w" . bigword-back)
+                  ("M-DEL" . word-back) ("<M-backspace>" . word-back)
+                  ("M-d" . word-forward)))
+    (let ((kind (cdr spec)))
+      (define-key ghostel-semi-char-mode-map (kbd (car spec))
+                  (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
+
+  ;; Prefix the buffer name with a busy emoji while a command runs (OSC 133 C..D).
+  (defvar-local my-ghostel-busy nil)
+
+  (defun my-ghostel-buffer-name (title)
+    (when-let* ((name (ghostel-buffer-name-by-title title)))
+      (if my-ghostel-busy
+          (concat "*ghostel: ⏳ " (substring name (length "*ghostel: ")))
+        name)))
+
+  (defun my-ghostel-set-busy (buffer busy)
+    (with-current-buffer buffer
+      (setq my-ghostel-busy busy)
+      (ghostel--rename-managed (funcall ghostel-buffer-name-function ghostel--title))))
+
+  (setq ghostel-buffer-name-function #'my-ghostel-buffer-name)
+  (add-hook 'ghostel-command-start-functions
+            (lambda (buffer) (my-ghostel-set-busy buffer t)))
+  (add-hook 'ghostel-command-finish-functions
+            (lambda (buffer _exit) (my-ghostel-set-busy buffer nil)))
+  )
+
 
 (my-profile-mark "Programming modes")
 ```
