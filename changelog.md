@@ -65,3 +65,4 @@ mode glyph which I'm leveraging on the far left
 * Pixel scrolling: smooth page up/down so tall images in markdown don't make
   the view jump. Only enabled in graphical frames, and ghostel buffers keep
   PgUp/PgDn for the terminal.
+* ghostel integration. Hooked into tabs and modeline with some focus on surfacing busy/needs notification sessions.

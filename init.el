@@ -1802,15 +1802,49 @@ ignored -- this must never block dismissing the mode-line notice."
       (define-key ghostel-semi-char-mode-map (kbd (car spec))
                   (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
 
+  (defun my-git-edit-file (file)
+    "Open FILE in another window; on first save, kill it and resume the terminal.
+Resumes by sending Return to the ghostel buffer that requested the edit, which
+releases the editor script (e2.sh) waiting on it so git sees the saved file.
+A window created for the edit is deleted afterwards."
+    (let* ((term (current-buffer))
+           (old-windows (window-list nil 'no-minibuf)))
+      (find-file-other-window file)
+      (let* ((buf (current-buffer))
+             (win (get-buffer-window buf))
+             (created (and win (not (memq win old-windows)))))
+        (add-hook 'after-save-hook
+                  (lambda ()
+                    (run-at-time
+                     0 nil
+                     (lambda ()
+                       ;; `with-editor-finish' may already have killed BUF.
+                       (when (buffer-live-p buf)
+                         (let ((kill-buffer-query-functions nil))
+                           (kill-buffer buf)))
+                       (when (and created (window-live-p win)
+                                  (not (one-window-p t)))
+                         (delete-window win))
+                       (when (and (buffer-live-p term)
+                                  (with-current-buffer term
+                                    (derived-mode-p 'ghostel-mode)))
+                         (with-current-buffer term
+                           (ghostel-send-string "\r"))))))
+                  nil t))))
+
+  (with-eval-after-load 'ghostel
+    (add-to-list 'ghostel-eval-cmds '("git-edit" my-git-edit-file)))
+
   ;; add onto project-switch
-  (add-to-list 'project-switch-commands '(ghostel-project "Ghostel") t)
+  (setq project-switch-commands  (cl-remove 'project-eshell  project-switch-commands :key #'car))
+
+  (add-to-list 'project-switch-commands '(ghostel-project "Ghostel" ?t) t)
   )
 
 
 (with-eval-after-load 'nerd-icons
   (add-to-list 'nerd-icons-mode-icon-alist
                '(ghostel-mode nerd-icons-mdicon "nf-md-ghost" :face nerd-icons-lblue)))
-
 
 ;; make copy mode happen automatically on a highlighted selection in bash
 (add-hook 'ghostel-mode-hook (lambda () (setq-local mouse-drag-copy-region t)))
