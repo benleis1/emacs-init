@@ -1153,15 +1153,6 @@ my preference is for short key strokes and to usually bind other global things t
 Control + a number key which are closer than the function keys.
 
 ```
-(global-set-key (kbd "C-u") 'undo) ;; I use undo all the time
-```
-```
-(global-set-key (kbd "C-+") 'universal-argument) ;; I never use universal-argument.
-```
-```
-(global-set-key (kbd "C-f") 'goto-line) ;; Another swap. I use arrow keys for basic movement.
-```
-```
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-3") 'wikimode-toggle)
