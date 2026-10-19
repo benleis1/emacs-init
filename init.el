@@ -2969,6 +2969,7 @@ declaration if any such methods were found."
   :ensure t
   :custom
   (vertico-sort-function 'vertico-sort-history-length-alpha)
+  (setq vertico-preselect 'prompt)
   :init (vertico-mode 1))
 
 (use-package marginalia
