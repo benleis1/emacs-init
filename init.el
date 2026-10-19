@@ -887,6 +887,7 @@
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
 (global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
+(global-set-key (kbd "C-c t") 'ghostel)
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 (global-set-key (kbd "s-x") 'execute-extended-command)
@@ -1807,6 +1808,14 @@ ignored -- this must never block dismissing the mode-line notice."
   (add-to-list 'project-switch-commands '(ghostel-project "Ghostel") t)
   )
 
+
+(with-eval-after-load 'nerd-icons
+  (add-to-list 'nerd-icons-mode-icon-alist
+               '(ghostel-mode nerd-icons-mdicon "nf-md-ghost" :face nerd-icons-lblue)))
+
+
+;; make copy mode happen automatically on a highlighted selection in bash
+(add-hook 'ghostel-mode-hook (lambda () (setq-local mouse-drag-copy-region t)))
 
 (my-profile-mark "Programming modes")
 ;;; Programming modes
