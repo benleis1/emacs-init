@@ -131,8 +131,8 @@ fi
 if command -v emacs >/dev/null 2>&1; then
   echo
   log="$(mktemp)"
-  if ! emacs --batch -l "$dest/early-init.el" -l "$dest/init.el" \
-       -f my-config-diagnostics 2>"$log"; then
+  if ! emacs --batch -l "$dest/lisp/config-diagnostics.el" \
+       -f my-config-diagnostics </dev/null 2>"$log"; then
     echo "WARNING: could not run my-config-diagnostics:" >&2
     cat "$log" >&2
   fi
