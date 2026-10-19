@@ -3623,6 +3623,10 @@ this enables a vertical list of completions with context dependent notes in the 
 
 (use-package marginalia
   :ensure t
+  :custom
+  ;; Pin notes to the window edge; the default `left' puts them after the
+  ;; longest candidate, so long buffer names push them off-screen.
+  (marginalia-align 'right)
   :init (marginalia-mode 1)
   :config
   ;; elpaca byte-compiles marginalia in a build session where

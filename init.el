@@ -1715,6 +1715,27 @@ ignored -- this must never block dismissing the mode-line notice."
   :ensure t
   :defer t
   :config
+  (defvar-local my-ghostel-input-needed nil
+    "Non-nil when the terminal sent a notification and no input has followed.")
+
+  ;; OSC 9 / OSC 777 notifications (e.g. Claude Code waiting on you) flag the
+  ;; buffer as needing input until the next keystroke or command.
+  (defun my-ghostel--set-input-needed (value)
+    (unless (eq value my-ghostel-input-needed)
+      (setq my-ghostel-input-needed value)
+      (force-mode-line-update t)
+      (tab-line-force-update t)))
+
+  (defun my-ghostel-notify (title body)
+    (my-ghostel--set-input-needed t)
+    (ghostel-default-notify title body))
+  (setq ghostel-notification-function #'my-ghostel-notify)
+
+  (define-advice ghostel--on-user-input (:before () my-clear-input-needed)
+    (my-ghostel--set-input-needed nil))
+  (add-hook 'ghostel-command-start-functions
+            (lambda (_buf) (my-ghostel--set-input-needed nil)))
+
   (defcustom my-ghostel-escape-timeout 0.25
     "Seconds to wait after Esc for a key that should become Meta in Emacs."
     :type 'number)
@@ -1731,6 +1752,12 @@ ignored -- this must never block dismissing the mode-line notice."
         (when next (push next unread-command-events)))))
 
   (define-key ghostel-semi-char-mode-map (kbd "<escape>") #'my-ghostel-escape)
+
+  ;; Start new terminals in the current project's root, else the current directory.
+  (define-advice ghostel (:around (fn &rest args) my-start-in-project-root)
+    (let* ((project (project-current nil))
+           (default-directory (if project (project-root project) default-directory)))
+      (apply fn args)))
 
   ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
   (defun my-ghostel-kill-range (kind)
@@ -1774,7 +1801,11 @@ ignored -- this must never block dismissing the mode-line notice."
                   ("M-d" . word-forward)))
     (let ((kind (cdr spec)))
       (define-key ghostel-semi-char-mode-map (kbd (car spec))
-                  (lambda () (interactive) (my-ghostel-kill-and-send kind))))))
+                  (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
+
+  ;; add onto project-switch
+  (add-to-list 'project-switch-commands '(ghostel-project "Ghostel") t)
+  )
 
 
 (my-profile-mark "Programming modes")
@@ -2886,6 +2917,10 @@ declaration if any such methods were found."
 
 (use-package marginalia
   :ensure t
+  :custom
+  ;; Pin notes to the window edge; the default `left' puts them after the
+  ;; longest candidate, so long buffer names push them off-screen.
+  (marginalia-align 'right)
   :init (marginalia-mode 1)
   :config
   ;; elpaca byte-compiles marginalia in a build session where
@@ -2895,7 +2930,23 @@ declaration if any such methods were found."
   ;; `seconds-to-string' already covers it), so the baked-in call is void.
   ;; MELPA's prebuilt .elc doesn't hit this since it's compiled elsewhere.
   (unless (fboundp 'compat--seconds-to-string)
-    (defalias 'compat--seconds-to-string 'seconds-to-string)))
+    (defalias 'compat--seconds-to-string 'seconds-to-string))
+
+  ;; Show whether a ghostel terminal is busy, free, or needs input in place of
+  ;; the usual modified/size/mode column.  Busy relies on ghostel's OSC 133
+  ;; shell integration; without it every terminal reads as free.
+  ;; The file column is truncated from the left, so the label must live in the
+  ;; (untruncated) status column.
+  (define-advice marginalia--buffer-status (:around (fn buffer) my-ghostel-state)
+    (if (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
+        (let ((state (cond
+                      ((buffer-local-value 'my-ghostel-input-needed buffer)
+                       '("input needed" . error))
+                      ((buffer-local-value 'ghostel--command-running buffer)
+                       '("busy" . warning))
+                      (t '("free" . success)))))
+          (propertize (format "%-12s" (car state)) 'face (cdr state)))
+      (funcall fn buffer))))
 
 ;; Trying out orderless completion
 (use-package orderless

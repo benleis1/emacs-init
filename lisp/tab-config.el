@@ -132,6 +132,7 @@
 
 ;; Space the tabs out a bit
 (defvar ghostel--command-running)
+(defvar my-ghostel-input-needed)
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
     (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
@@ -144,10 +145,11 @@
                                                  #'nerd-icons-octicon "nf-oct-terminal")))
                                 (concat icon "  ")))
                          "")
-            (if (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
-                     (buffer-local-value 'ghostel--command-running buffer))
-                (concat "⏳ " name)
-              name))))
+            (cond
+             ((not (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)) name)
+             ((buffer-local-value 'my-ghostel-input-needed buffer) (concat (my-modeline--keyboard-icon) " " name))
+             ((buffer-local-value 'ghostel--command-running buffer) (concat "⏳ " name))
+             (t name)))))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
 

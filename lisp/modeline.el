@@ -455,22 +455,55 @@ eglot's own indicator."
 (defvar ghostel--command-running)
 (defvar ghostel-command-start-functions)
 (defvar ghostel-command-finish-functions)
+(defvar my-ghostel-input-needed)
 
-(defun my-modeline--busy-ghostel-buffers ()
-  "Live ghostel buffers whose shell is currently running a command."
+(defun my-modeline--keyboard-icon ()
+  "Keyboard glyph for terminals waiting on input; plain ⌨ without nerd-icons."
+  (or (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-keyboard")
+      "⌨"))
+
+(defun my-modeline--ghostel-buffers-where (var)
+  "Live ghostel buffers in which buffer-local VAR is non-nil."
   (seq-filter (lambda (buf)
                 (and (eq (buffer-local-value 'major-mode buf) 'ghostel-mode)
-                     (buffer-local-value 'ghostel--command-running buf)))
+                     (buffer-local-value var buf)))
               (buffer-list)))
 
+(defun my-modeline-switch-to-waiting-terminal (event)
+  "Switch to a ghostel terminal waiting for input, asking which if several."
+  (interactive "e")
+  (let ((waiting (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed)))
+    (when waiting
+      (let ((window (posn-window (event-start event))))
+        (when (window-live-p window) (select-window window)))
+      (switch-to-buffer
+       (if (cdr waiting)
+           (get-buffer (completing-read "Terminal: " (mapcar #'buffer-name waiting) nil t))
+         (car waiting))))))
+
+(defvar my-modeline-ghostel-waiting-map
+  (my-modeline-mouse-map '((mouse-1 . my-modeline-switch-to-waiting-terminal))))
+
 (defun my-modeline-segment-ghostel-busy ()
-  "An hourglass while any ghostel terminal is running a command (per its
-OSC 133 shell integration), with the busy buffers' names in the tooltip."
-  (when-let* ((busy (my-modeline--busy-ghostel-buffers)))
-    (propertize "⏳"
-                'help-echo (concat "Busy terminals:\n"
-                                   (mapconcat #'buffer-name busy "\n"))
-                'mouse-face 'mode-line-highlight)))
+  "A keyboard while any ghostel terminal waits for input, else an hourglass
+while any is running a command (per its OSC 133 shell integration).  The
+tooltip lists the matching buffers."
+  (let ((waiting (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed))
+        (busy (my-modeline--ghostel-buffers-where 'ghostel--command-running)))
+    (when (or waiting busy)
+      (propertize (if waiting (my-modeline--keyboard-icon) "⏳")
+                  'local-map (and waiting my-modeline-ghostel-waiting-map)
+                  'help-echo (mapconcat
+                              #'identity
+                              (delq nil
+                                    (list (and waiting
+                                               (concat "Terminals waiting for input (mouse-1: switch):\n"
+                                                       (mapconcat #'buffer-name waiting "\n")))
+                                          (and busy
+                                               (concat "Busy terminals:\n"
+                                                       (mapconcat #'buffer-name busy "\n")))))
+                              "\n\n")
+                  'mouse-face 'mode-line-highlight))))
 
 ;; Redisplay doesn't happen when a terminal finishes in a hidden buffer, and the
 ;; finish hook runs before ghostel clears `ghostel--command-running', so refresh
