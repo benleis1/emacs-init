@@ -2714,6 +2714,21 @@ declaration if any such methods were found."
   '("Save Desktop" . desktop-save)
   'write-file)
 
+;; Auto-save the desktop hourly, but only after one has been loaded via desktop-read.
+(defvar my-desktop-autosave-timer nil)
+
+(defun my-desktop-autosave ()
+  (when desktop-dirname
+    (let ((inhibit-message t))
+      (desktop-save desktop-dirname nil t))))
+
+(defun my-desktop-start-autosave ()
+  (unless (timerp my-desktop-autosave-timer)
+    (setq my-desktop-autosave-timer
+          (run-with-timer 3600 3600 #'my-desktop-autosave))))
+
+(add-hook 'desktop-after-read-hook #'my-desktop-start-autosave)
+
 ;; Add zoom in/out to buffer menu
 (define-key-after
   (lookup-key global-map [menu-bar buffer])
