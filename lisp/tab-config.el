@@ -170,12 +170,14 @@
 
 ;; Return the current view
 (defun tab2-get-current-view ()
-  (let ((pos (frame-parameter nil 'tab-line-sel-view)))
+  ;; Use the frame of the window being rendered, not the selected frame:
+  ;; tab lines of unselected frames are redisplayed too.
+  (let ((pos (frame-parameter (window-frame) 'tab-line-sel-view)))
     (nth (or pos 0) tab2-views)))
 
 ;; Return if the current view is the default view
 (defun tab2-default-view-p ()
-  (equal (frame-parameter nil 'tab-line-sel-view)  0))
+  (equal (frame-parameter (window-frame) 'tab-line-sel-view)  0))
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
@@ -419,6 +421,81 @@
 	(kill-new filename)
       (message "No file associated with this tab"))))
 
+;; Like `tear-off-window' but acts on the clicked tab and also works when it
+;; is the only window in the frame. The torn-off buffer gets its own view in
+;; the new frame: views are global and shared by every frame on the same view,
+;; so otherwise the new frame's tab line would re-add the buffer to the
+;; original frame's tabs. The original window is then handled like
+;; `tab2-close-tab' does, except the buffer is never killed.
+(defun tab2--leave-window (buffer window)
+  "Stop showing BUFFER's tab in WINDOW without killing BUFFER.
+Mirrors `tab2-close-tab': drop it from the view, switch away if WINDOW
+shows it, and delete WINDOW if that was its only tab."
+  (with-selected-window window
+    (let ((tab-list (tab-line-tabs-window-buffers)))
+      (tab2-set-buffer-list (remove buffer (tab2-get-buffer-list)))
+      (if (eq buffer (current-buffer))
+          (bury-buffer)
+        (set-window-prev-buffers window (assq-delete-all buffer (window-prev-buffers)))
+        (set-window-next-buffers window (delq buffer (window-next-buffers))))
+      (unless (cdr tab-list)
+        (ignore-errors (delete-window window)))))
+  ;; Redisplay hasn't run yet, so the window's tab group still belongs to the
+  ;; torn-off buffer and would hide the buffer that took its place (e.g. a
+  ;; non-file ghostel buffer while the group is still a file one).
+  (when (window-live-p window)
+    (with-selected-window window (tab2-auto-track-selected-window))))
+
+(defun tab2-tear-off-buffer (buffer window)
+  "Move BUFFER, shown in WINDOW, into a new frame with its own view."
+  (let* ((frame (make-frame))
+         (n 1)
+         (name (format "tear off[%d]" n)))
+    (while (tab2-get-view-by-name name)
+      (setq n (1+ n)
+            name (format "tear off[%d]" n)))
+    (setq tab2-views (append tab2-views
+                             (list (make-tab2-view :name name
+                                                   :buffers (list buffer)))))
+    (with-selected-frame frame
+      (set-frame-parameter nil 'tab-line-sel-view (1- (length tab2-views)))
+      (set-frame-parameter nil 'tab2-tear-off-view name)
+      (switch-to-buffer buffer))
+    (tab2--leave-window buffer window)
+    (force-mode-line-update t)
+    (tab-line-force-update t)
+    (select-frame-set-input-focus frame)
+    (redisplay t)
+    frame))
+
+;; Only the view name is kept on the frame: frame parameters are written to the
+;; desktop file, which can't hold a view's buffers.
+(defun tab2--close-tear-off-view (frame)
+  "Close the view created by tearing off a tab into FRAME, if any."
+  (when-let* ((name (frame-parameter frame 'tab2-tear-off-view))
+              (view (tab2-get-view-by-name name))
+              (pos (cl-position view tab2-views)))
+    (setq tab2-views (delq view tab2-views))
+    ;; Views are referenced by index, so fix up the other frames.
+    (dolist (f (frame-list))
+      (unless (eq f frame)
+        (let ((sel (frame-parameter f 'tab-line-sel-view)))
+          (cond ((not (integerp sel)))
+                ((= sel pos) (set-frame-parameter f 'tab-line-sel-view 0))
+                ((> sel pos) (set-frame-parameter f 'tab-line-sel-view (1- sel)))))))))
+
+(add-hook 'delete-frame-functions #'tab2--close-tear-off-view)
+
+(defun tab2-tear-off-tab (&optional e)
+  "Move the buffer of the tab clicked in event E into a new frame."
+  (interactive "e")
+  (let* ((posnp (event-start e))
+         (window (posn-window posnp))
+         (tab (get-pos-property 1 'tab (car (posn-string posnp))))
+         (buffer (tab2-get-buffer-from-tab tab)))
+    (when buffer
+      (tab2-tear-off-buffer buffer window))))
+
 ;; Override original definition of tab-line-tab-context-menu
 ;; Bind custom actions into the context menu if we are not in group mode
 (define-advice tab-line-tab-context-menu (:override (&optional _event))
@@ -434,6 +511,8 @@
 	'(menu-item "Shift Left" tab2-shift-tab-left :help "Shift the tab left"))
       (define-key-after menu [shiftright]
 	'(menu-item "Shift Right" tab2-shift-tab-right :help "Shift the tab right"))
+      (define-key-after menu [tearoff]
+	'(menu-item "Tear Off Window" tab2-tear-off-tab :help "Move this tab into a new frame"))
       (define-key-after menu [copypath]
 	'(menu-item "Copy Path" tab2-copy-current-filename-to-clipboard :help "Copy the current tab filename to the clipboard"))
       (define-key-after menu [reorder-lru]

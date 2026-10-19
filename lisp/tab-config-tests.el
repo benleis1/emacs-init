@@ -184,4 +184,123 @@ afterwards."
       (should (equal (tab2-view-name restored) "work"))
       (should (equal (tab2-view-buffers restored) (list buf))))))
 
+;;; Tear off: `tab2--leave-window', `tab2-tear-off-buffer',
+;;; `tab2--close-tear-off-view'
+
+(ert-deftest tab-config-test/leave-window-drops-tab-and-switches-away ()
+  (let ((other (generate-new-buffer "tab-config-test-other"))
+        (torn (generate-new-buffer "tab-config-test-torn")))
+    (unwind-protect
+        (save-window-excursion
+          (tab-config-tests--with-view-list
+              (list (make-tab2-view :name "default" :buffers (list other torn)))
+              0
+            (switch-to-buffer other)
+            (switch-to-buffer torn)
+            (tab2--leave-window torn (selected-window))
+            (should-not (memq torn (tab2-get-buffer-list)))
+            (should (memq other (tab2-get-buffer-list)))
+            (should-not (eq (window-buffer) torn))
+            (should (buffer-live-p torn))))
+      (kill-buffer other)
+      (kill-buffer torn))))
+
+(ert-deftest tab-config-test/leave-window-resyncs-tab-group-to-new-buffer ()
+  ;; Redisplay hasn't run yet when a tab is torn off, so the window's tab
+  ;; group would otherwise still be the torn-off buffer's and hide the
+  ;; buffer that replaced it. A sentinel stands in for the stale group.
+  (let ((term (generate-new-buffer "tab-config-test-term"))
+        (torn (generate-new-buffer "tab-config-test-torn")))
+    (unwind-protect
+        (save-window-excursion
+          (tab-config-tests--with-view-list
+              (list (make-tab2-view :name "default" :buffers (list term torn)))
+              0
+            (with-current-buffer term (text-mode))
+            (switch-to-buffer term)
+            (switch-to-buffer torn)
+            (set-window-parameter nil 'tab-line-group "stale-group")
+            ;; Only the explicit resync may update the group here, not the
+            ;; hook that redisplay would normally run.
+            (let ((window-buffer-change-functions nil)
+                  (window-selection-change-functions nil))
+              (tab2--leave-window torn (selected-window)))
+            (should (eq (window-buffer) term))
+            (should (equal (window-parameter nil 'tab-line-group)
+                           (tab-line-tabs-buffer-group-name term)))))
+      (set-window-parameter nil 'tab-line-group nil)
+      (kill-buffer term)
+      (kill-buffer torn))))
+
+(ert-deftest tab-config-test/tear-off-buffer-creates-numbered-views ()
+  ;; Batch Emacs can't create a second frame, so `make-frame' is stubbed
+  ;; to hand back the selected one.
+  (let ((one (generate-new-buffer "tab-config-test-one"))
+        (two (generate-new-buffer "tab-config-test-two")))
+    (unwind-protect
+        (save-window-excursion
+          (tab-config-tests--with-view-list
+              (list (make-tab2-view :name "default" :buffers (list one two)))
+              0
+            (cl-letf (((symbol-function 'make-frame) (lambda (&rest _) (selected-frame)))
+                      ((symbol-function 'select-frame-set-input-focus) #'ignore)
+                      ((symbol-function 'redisplay) #'ignore)
+                      ((symbol-function 'tab2--leave-window) #'ignore))
+              (tab2-tear-off-buffer one (selected-window))
+              (should (equal (frame-parameter nil 'tab2-tear-off-view) "tear off[1]"))
+              (tab2-tear-off-buffer two (selected-window))
+              (should (equal (frame-parameter nil 'tab2-tear-off-view) "tear off[2]")))
+            (should (equal (tab2-list-views) '("default" "tear off[1]" "tear off[2]")))
+            (should (equal (tab2-view-buffers (tab2-get-view-by-name "tear off[1]"))
+                           (list one)))
+            (should (equal (tab2-view-buffers (tab2-get-view-by-name "tear off[2]"))
+                           (list two)))
+            (should (eql (frame-parameter nil 'tab-line-sel-view) 2))))
+      (set-frame-parameter nil 'tab2-tear-off-view nil)
+      (kill-buffer one)
+      (kill-buffer two))))
+
+(ert-deftest tab-config-test/tear-off-buffer-reuses-lowest-free-number ()
+  (let ((buf (generate-new-buffer "tab-config-test-buf")))
+    (unwind-protect
+        (save-window-excursion
+          (tab-config-tests--with-view-list
+              (list (make-tab2-view :name "default")
+                    (make-tab2-view :name "tear off[1]")
+                    (make-tab2-view :name "tear off[3]"))
+              0
+            (cl-letf (((symbol-function 'make-frame) (lambda (&rest _) (selected-frame)))
+                      ((symbol-function 'select-frame-set-input-focus) #'ignore)
+                      ((symbol-function 'redisplay) #'ignore)
+                      ((symbol-function 'tab2--leave-window) #'ignore))
+              (tab2-tear-off-buffer buf (selected-window)))
+            (should (member "tear off[2]" (tab2-list-views)))))
+      (set-frame-parameter nil 'tab2-tear-off-view nil)
+      (kill-buffer buf))))
+
+(ert-deftest tab-config-test/close-tear-off-view-removes-the-frames-view ()
+  (tab-config-tests--with-view-list
+      (list (make-tab2-view :name "default")
+            (make-tab2-view :name "tear off[1]")
+            (make-tab2-view :name "tear off[2]"))
+      0
+    (unwind-protect
+        (progn
+          (set-frame-parameter nil 'tab2-tear-off-view "tear off[1]")
+          (tab2--close-tear-off-view (selected-frame))
+          (should (equal (tab2-list-views) '("default" "tear off[2]"))))
+      (set-frame-parameter nil 'tab2-tear-off-view nil))))
+
+(ert-deftest tab-config-test/close-tear-off-view-ignores-ordinary-frames ()
+  (tab-config-tests--with-view-list
+      (list (make-tab2-view :name "default")
+            (make-tab2-view :name "work"))
+      0
+    (set-frame-parameter nil 'tab2-tear-off-view nil)
+    (tab2--close-tear-off-view (selected-frame))
+    (should (equal (tab2-list-views) '("default" "work")))))
+
+(ert-deftest tab-config-test/close-tear-off-view-is-a-delete-frame-hook ()
+  (should (memq 'tab2--close-tear-off-view delete-frame-functions)))
+
 (provide 'tab-config-tests)
