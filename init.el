@@ -117,6 +117,7 @@
 ;; - Ediff
 ;; - Python (partly)
 ;; - SQL
+;; - Ghostel terminal
 ;;
 ;; ## Installation
 
@@ -3132,7 +3133,9 @@ tag, followed by the normal editable field."
 ;;; Config diagnostics
 (defun my-config-diagnostics ()
   "Check the external dependencies this config relies on and show the status.
-Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
+Each line is OK, MISSING (required) or WARN (optional feature unavailable).
+Interactively the results go to a buffer; in batch mode they are printed to
+stdout."
   (interactive)
   (let* ((exe (lambda (&rest names) (seq-some #'executable-find names)))
          (jar-count (lambda (dir)
@@ -3203,23 +3206,34 @@ Each line is OK, MISSING (required) or WARN (optional feature unavailable)."
                           "terminal clipboard support")
                     (list "pw-play / paplay" nil (funcall exe "pw-play" "paplay")
                           "appointment sound")))))))
-    (with-current-buffer (get-buffer-create "*my-config-diagnostics*")
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (propertize "Config diagnostics\n\n" 'face 'bold))
-        (dolist (check checks)
-          (pcase-let ((`(,label ,required ,found ,hint) check))
-            (insert (if found
-                        (propertize "[ OK    ]" 'face 'success)
-                      (if required
-                          (propertize "[MISSING]" 'face 'error)
-                        (propertize "[WARN   ]" 'face 'warning)))
-                    " " label
-                    (if found (format "  -> %s" found) (format "  (%s)" hint))
-                    "\n")))
-        (goto-char (point-min))
-        (special-mode))
-      (display-buffer (current-buffer)))))
+    (if noninteractive
+        (progn
+          (princ "Config diagnostics\n\n")
+          (dolist (check checks)
+            (pcase-let ((`(,label ,required ,found ,hint) check))
+              (princ (format "%s %s%s\n"
+                             (cond (found "[ OK    ]")
+                                   (required "[MISSING]")
+                                   (t "[WARN   ]"))
+                             label
+                             (if found (format "  -> %s" found) (format "  (%s)" hint)))))))
+      (with-current-buffer (get-buffer-create "*my-config-diagnostics*")
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "Config diagnostics\n\n" 'face 'bold))
+          (dolist (check checks)
+            (pcase-let ((`(,label ,required ,found ,hint) check))
+              (insert (if found
+                          (propertize "[ OK    ]" 'face 'success)
+                        (if required
+                            (propertize "[MISSING]" 'face 'error)
+                          (propertize "[WARN   ]" 'face 'warning)))
+                      " " label
+                      (if found (format "  -> %s" found) (format "  (%s)" hint))
+                      "\n")))
+          (goto-char (point-min))
+          (special-mode))
+        (display-buffer (current-buffer))))))
 
 (my-profile-mark "Local.el loading")
 ;;; Local.el loading

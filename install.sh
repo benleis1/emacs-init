@@ -79,11 +79,11 @@ done
 
 font_installed() {
   if command -v fc-list >/dev/null 2>&1; then
-    fc-list | grep -qi "DejaVuSansM.*Nerd"
+    fc-list | grep -i "DejaVuSansM.*Nerd" >/dev/null
   else
     find "$HOME/Library/Fonts" /Library/Fonts /System/Library/Fonts \
          "$HOME/.local/share/fonts" /usr/share/fonts /usr/local/share/fonts \
-         -iname "DejaVuSansM*Nerd*" 2>/dev/null | grep -q .
+         -iname "DejaVuSansM*Nerd*" 2>/dev/null | grep . >/dev/null
   fi
 }
 
@@ -125,4 +125,16 @@ if ! command -v pg_format >/dev/null 2>&1; then
   echo "WARNING: 'pg_format' (pgformatter) not found. The SQL formatting commands won't work." >&2
   echo "         macOS: brew install pgformatter" >&2
   echo "         Linux: sudo apt install pgformatter   (or your distro's equivalent)" >&2
+fi
+
+# run diagnostics after everything else is done
+if command -v emacs >/dev/null 2>&1; then
+  echo
+  log="$(mktemp)"
+  if ! emacs --batch -l "$dest/early-init.el" -l "$dest/init.el" \
+       -f my-config-diagnostics 2>"$log"; then
+    echo "WARNING: could not run my-config-diagnostics:" >&2
+    cat "$log" >&2
+  fi
+  rm -f "$log"
 fi
