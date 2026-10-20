@@ -1871,18 +1871,17 @@ titles (e.g. Claude Code) lack; the default bashN title doesn't count."
 
 (defun my-ghostel-desktop-restore (_file-name buffer-name misc)
   (require 'ghostel)
-  (ghostel--load-module t)
   (let* ((default-directory (or (plist-get misc :directory) default-directory))
-         (buffer (ghostel--create buffer-name)))
+         (ghostel-buffer-name buffer-name)
+         (process-environment
+          (if-let* ((title (plist-get misc :title)))
+              (cons (concat "MY_RESTORE_TITLE=" title) process-environment)
+            process-environment))
+         ;; Prefix arg forces a new buffer (never reuses a live one); `ghostel'
+         ;; pops to it, but desktop restores the layout itself.
+         (buffer (save-window-excursion (ghostel '(4)))))
     (with-current-buffer buffer
-      (setq ghostel--managed-buffer-name (buffer-name)
-            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name)))
-      (let ((process-environment
-             (if-let* ((title (plist-get misc :title)))
-                 (cons (concat "MY_RESTORE_TITLE=" title) process-environment)
-               process-environment)))
-        (ghostel--start-process))
-      (ghostel--apply-initial-input-mode))
+      (setq ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
     buffer))
 
 (with-eval-after-load 'desktop
@@ -3009,8 +3008,8 @@ declaration if any such methods were found."
   :ensure t
   :custom
   (vertico-sort-function 'vertico-sort-history-length-alpha)
-  (setq vertico-preselect 'prompt)
-  :init (vertico-mode 1))
+  :init (vertico-mode 1)
+  (setq vertico-preselect 'prompt))
 
 (use-package marginalia
   :ensure t
