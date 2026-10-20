@@ -1849,6 +1849,46 @@ A window created for the edit is deleted afterwards."
 ;; make copy mode happen automatically on a highlighted selection in bash
 (add-hook 'ghostel-mode-hook (lambda () (setq-local mouse-drag-copy-region t)))
 
+;; Persist ghostel buffers in the desktop: only the name and directory come back,
+;; as a fresh shell (running processes can't be restored).  The handler is
+;; registered here rather than in the use-package block because ghostel is
+;; deferred and `desktop-read' needs the handler before ghostel loads.
+(defun my-ghostel-user-title ()
+  "Return the title set via `set-tab-title', or nil.
+The shell prompt prefixes its titles with an em space, which program-set
+titles (e.g. Claude Code) lack; the default bashN title doesn't count."
+  (when (and ghostel--title (string-prefix-p "\u2003" ghostel--title))
+    (let ((title (string-trim (substring ghostel--title 1))))
+      (unless (string-match-p "\\`\\(bash[0-9]*\\)?\\'" title)
+        title))))
+
+(defun my-ghostel-desktop-misc (_dirname)
+  (list :directory default-directory :identity ghostel--buffer-identity
+        :title (my-ghostel-user-title)))
+
+(add-hook 'ghostel-mode-hook
+          (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
+
+(defun my-ghostel-desktop-restore (_file-name buffer-name misc)
+  (require 'ghostel)
+  (ghostel--load-module t)
+  (let* ((default-directory (or (plist-get misc :directory) default-directory))
+         (buffer (ghostel--create buffer-name)))
+    (with-current-buffer buffer
+      (setq ghostel--managed-buffer-name (buffer-name)
+            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name)))
+      (let ((process-environment
+             (if-let* ((title (plist-get misc :title)))
+                 (cons (concat "MY_RESTORE_TITLE=" title) process-environment)
+               process-environment)))
+        (ghostel--start-process))
+      (ghostel--apply-initial-input-mode))
+    buffer))
+
+(with-eval-after-load 'desktop
+  (add-to-list 'desktop-buffer-mode-handlers
+               '(ghostel-mode . my-ghostel-desktop-restore)))
+
 (my-profile-mark "Programming modes")
 ;;; Programming modes
 
