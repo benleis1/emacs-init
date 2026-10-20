@@ -1755,8 +1755,13 @@ ignored -- this must never block dismissing the mode-line notice."
   ;; Start new terminals in the current project's root, else the current directory.
   (define-advice ghostel (:around (fn &rest args) my-start-in-project-root)
     (let* ((project (project-current nil))
-           (default-directory (if project (project-root project) default-directory)))
-      (apply fn args)))
+           (default-directory (if project (project-root project) default-directory))
+           (buf (apply fn args)))
+      (when (and project (buffer-live-p buf))
+        (with-current-buffer buf
+          (unless my-ghostel-project
+            (setq my-ghostel-project (project-root project)))))
+      buf))
 
   ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
   (defun my-ghostel-kill-range (kind)
@@ -1858,6 +1863,10 @@ A window created for the edit is deleted afterwards."
 Owned by Emacs so it can be saved in the desktop; it overrides the
 terminal-reported title in the buffer name.")
 
+(defvar-local my-ghostel-project nil
+  "Root of the project the terminal was created for, or nil.
+Unlike `default-directory' this does not follow `cd'.")
+
 (defun my-ghostel-set-title (&rest words)
   "Set `my-ghostel-user-title' from WORDS (empty clears it).
 Called from the shell via `ghostel-eval-cmds'; the buffer is renamed when
@@ -1890,7 +1899,7 @@ the next prompt reports its title."
 
 (defun my-ghostel-desktop-misc (_dirname)
   (list :directory default-directory :identity ghostel--buffer-identity
-        :title my-ghostel-user-title))
+        :title my-ghostel-user-title :project my-ghostel-project))
 
 (add-hook 'ghostel-mode-hook
           (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
@@ -1904,6 +1913,7 @@ the next prompt reports its title."
          (buffer (save-window-excursion (ghostel '(4)))))
     (with-current-buffer buffer
       (setq my-ghostel-user-title (plist-get misc :title)
+            my-ghostel-project (plist-get misc :project)
             ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))
             my-ghostel-restored-name (buffer-name)
             my-ghostel-adopt-pending t)

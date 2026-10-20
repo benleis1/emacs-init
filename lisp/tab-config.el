@@ -130,6 +130,7 @@
 ;; Space the tabs out a bit
 (defvar ghostel--command-running)
 (defvar my-ghostel-input-needed)
+(defvar my-ghostel-project)
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
     (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
@@ -793,7 +794,14 @@ at the mouse-down event to the position at mouse-up event."
 	   (seq-filter (lambda (b) (buffer-file-name b)) buffers))
 
 	  ((equal curgroup "Project")
-	   (seq-filter (lambda (b) (member b project-buffers)) buffers))
+	   (let ((root (when-let* ((pr (project-current nil))) (project-root pr))))
+	     (seq-filter (lambda (b)
+			   ;; A terminal's recorded project wins over its (cd-able) directory.
+			   (if-let* ((tracked (and (eq (buffer-local-value 'major-mode b) 'ghostel-mode)
+						   (buffer-local-value 'my-ghostel-project b))))
+			       (equal tracked root)
+			     (member b project-buffers)))
+			 buffers)))
 
 	  ((equal curgroup "Modified")
 	   (seq-filter (lambda (b) (tab2-buffer-modified-file-p b)) buffers))
@@ -883,7 +891,10 @@ at the mouse-down event to the position at mouse-up event."
 	      (and selected-group
 		   valid
 		   (not (equal bufgroup selected-group))
+		   ;; Optimization: lets files skip the project buffer list rebuild below.
 		   (not (and filep (equal selected-group "Project") (project-current nil)))
+		   (not (and (equal selected-group "Project")
+			     (tab2-filter-buffers-by-group (list (current-buffer)) "Project")))
 		   (not (and filep (equal selected-group "Files")))))
 
       (set-window-parameter nil 'tab-line-group bufgroup))))
