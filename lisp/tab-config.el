@@ -29,9 +29,6 @@
 ;; which is less of a distracting jump away from the tabs when needed.
 ;;
 ;;
-;; TODO:
-;;       persist view  to file - tab / buffer separation is done but not window-state
-
 ;; TODO: key bindings
 ;;
 ;;; Code:
@@ -160,7 +157,8 @@
 
 ;; Structure for tracking the views
 ;; tab2 concept of virtual views is a window configuration + buffer list
-(cl-defstruct tab2-view name buffers wc)
+;; wstate is the printable `window-state-get' form, kept so layouts survive a desktop save.
+(cl-defstruct tab2-view name buffers wc wstate)
 
 ;; Maintain a global list of views
 ;; TODO: we don't really need to capture the wc until a swap
@@ -181,7 +179,9 @@
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
-  (setf (tab2-view-wc (tab2-get-current-view)) (current-window-configuration)))
+  (let ((view (tab2-get-current-view)))
+    (setf (tab2-view-wc view) (current-window-configuration)
+          (tab2-view-wstate view) (window-state-get (frame-root-window) t))))
 
 ;; Simple low-level accessor. Most callers should use tab2-get-filtered-buffer-list
 (defun tab2-get-buffer-list ()
@@ -276,8 +276,10 @@
 	(message "switch to %s" name)
 	(tab2-save-view-state)
 	(set-frame-parameter nil 'tab-line-sel-view new-view-pos)
-	(when (tab2-view-wc new-view)
-	  (set-window-configuration (tab2-view-wc new-view)))))))
+	(cond ((tab2-view-wc new-view)
+	       (set-window-configuration (tab2-view-wc new-view)))
+	      ((tab2-view-wstate new-view)
+	       (window-state-put (tab2-view-wstate new-view) (frame-root-window) 'safe)))))))
 
 ;; Close a view and revert back to default
 (defun tab2-close-view-by-name (name)
@@ -908,46 +910,54 @@ at the mouse-down event to the position at mouse-up event."
 (setq tab-line-tabs-buffer-list-function 'tab2-get-filtered-buffer-list)
 
 ;;; Serialization
-(cl-defstruct tab2-persist-view name buffernames)
+(cl-defstruct tab2-persist-view name buffernames wstate)
+
+(defun tab2--tear-off-view-names ()
+  (delq nil (mapcar (lambda (f) (frame-parameter f 'tab2-tear-off-view)) (frame-list))))
 
 ;; serialize a view
 (defun tab2-convert-to-persist-format (view)
-  (let ((name (tab2-view-name view))
-	(buffers (mapcar (lambda (it) (buffer-name it)) (tab2-view-buffers view))))
+  (make-tab2-persist-view
+   :name (tab2-view-name view)
+   :buffernames (mapcar #'buffer-name (seq-filter #'buffer-live-p (tab2-view-buffers view)))
+   :wstate (tab2-view-wstate view)))
 
-    (make-tab2-persist-view :name name :buffernames buffers)))
-
-;; serialize all views
+;; serialize all views except tear-off ones, which belong to frames that aren't restored
 (defun tab2-serialize-views ()
-  (mapcar (lambda (it) (tab2-convert-to-persist-format it)) tab2-views))
+  (let ((skip (tab2--tear-off-view-names)))
+    (mapcar #'tab2-convert-to-persist-format
+            (seq-remove (lambda (v) (member (tab2-view-name v) skip)) tab2-views))))
 
-;; Deserialize a view
+;; Deserialize a view, dropping buffers that desktop didn't recreate
 (defun tab2-convert-from-persist-format (view)
-  (let ((name (tab2-persist-view-name view))
-	(buffers (mapcar (lambda (it) (get-buffer it)) (tab2-persist-view-buffernames view))))
-    (message "deserialized %s" name)
-    (make-tab2-view :name name :buffers buffers)))
+  (make-tab2-view :name (tab2-persist-view-name view)
+                  :buffers (delq nil (mapcar #'get-buffer (tab2-persist-view-buffernames view)))
+                  :wstate (tab2-persist-view-wstate view)))
 
 (defun tab2-deserialize-views (views)
-  (mapcar (lambda (it) (tab2-convert-from-persist-format it)) views))
+  (mapcar #'tab2-convert-from-persist-format views))
 
-;; persist bufnames to frame in order for reload
+;; persist views and the selected view's name to the frame for reload
 (defun tab2-save-to-frame ()
-  (set-frame-parameter nil 'tab2-views (tab2-serialize-views)))
+  (tab2-save-view-state)
+  (set-frame-parameter nil 'tab2-views (tab2-serialize-views))
+  (set-frame-parameter nil 'tab2-sel-view-name
+                       (let ((name (tab2-view-name (tab2-get-current-view))))
+                         (unless (member name (tab2--tear-off-view-names)) name))))
 
-;; process the tab-buffer list in the frame parameters and set up to match
+;; process the saved views in the frame parameters and set up to match
 (defun tab2-rebuild-buffer-list-from-frame-params ()
-  (let* ((serialized-views (frame-parameter nil 'tab2-views))
-	 (views (tab2-deserialize-views serialized-views)))
+  (let* ((views (tab2-deserialize-views (frame-parameter nil 'tab2-views)))
+         (sel (frame-parameter nil 'tab2-sel-view-name)))
     (when views
-      (setq tab2-views views))
+      (setq tab2-views views)
+      (set-frame-parameter nil 'tab-line-sel-view
+                           (or (cl-position sel views :key #'tab2-view-name :test #'equal) 0)))
     (force-mode-line-update)))
 
 ;; hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
 (add-hook 'desktop-save-hook 'tab2-save-to-frame)
-
-;;(remove-hook 'desktop-save-hook 'tab2-save-to-frame)
 
 ;; Preserve the directory where the script was loaded from for
 ;; use in doing relative open of resource files

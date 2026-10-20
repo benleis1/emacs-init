@@ -305,9 +305,11 @@ default, but rebuilt fresh on every call so the help text is accurate"
                 'face 'mode-line-buffer-id
                 'help-echo
                 '(format "%s\nmouse-1: Previous buffer\nmouse-3: Next buffer"
-                         (if buffer-file-name
-                             (abbreviate-file-name buffer-file-name)
-                           (buffer-name)))
+                         (cond (buffer-file-name
+                                (abbreviate-file-name buffer-file-name))
+                               ((derived-mode-p 'ghostel-mode)
+                                (abbreviate-file-name default-directory))
+                               (t (buffer-name))))
                 'mouse-face 'mode-line-highlight
                 'local-map mode-line-buffer-identification-keymap)))
 
