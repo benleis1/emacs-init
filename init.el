@@ -2739,6 +2739,23 @@ declaration if any such methods were found."
                    border-color cursor-color mouse-color))
     (setf (alist-get param frameset-filter-alist) :never)))
 
+;; Persist only the primary frame in the desktop.  Any frame made while another
+;; real frame already exists (tear-offs, C-x 5 2, ...) is marked `desktop-dont-save'.
+(defun my-desktop-mark-secondary-frame (frame)
+  (when (seq-some (lambda (f)
+                    (and (not (eq f frame))
+                         (not (frame-initial-p f))
+                         (not (frame-parameter f 'desktop-dont-save))))
+                  (frame-list))
+    (set-frame-parameter frame 'desktop-dont-save t)))
+(add-hook 'after-make-frame-functions #'my-desktop-mark-secondary-frame)
+
+;; Desktop files saved before this may hold several frames; restore just the first.
+(define-advice desktop-restore-frameset (:before () my-primary-only)
+  (when (and desktop-saved-frameset (cdr (frameset-states desktop-saved-frameset)))
+    (setf (frameset-states desktop-saved-frameset)
+          (list (car (frameset-states desktop-saved-frameset))))))
+
 ;; Setup file menu to include load/save desktop
 ;; Note: lookup-key is the way to find existing entry names
 (define-key-after
