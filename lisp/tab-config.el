@@ -955,6 +955,17 @@ at the mouse-down event to the position at mouse-up event."
                            (or (cl-position sel views :key #'tab2-view-name :test #'equal) 0)))
     (force-mode-line-update)))
 
+;; A buffer desktop restored under a transient name (ghostel renames itself once
+;; its shell reports a title) misses the by-name lookup above.  Once it has its
+;; final name, re-add it to the views the saved frame params list it in.
+(defun tab2-adopt-restored-buffer (buffer)
+  (dolist (pv (frame-parameter nil 'tab2-views))
+    (when (member (buffer-name buffer) (tab2-persist-view-buffernames pv))
+      (when-let* ((view (tab2-get-view-by-name (tab2-persist-view-name pv))))
+        (unless (memq buffer (tab2-view-buffers view))
+          (setf (tab2-view-buffers view)
+                (append (tab2-view-buffers view) (list buffer))))))))
+
 ;; hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
 (add-hook 'desktop-save-hook 'tab2-save-to-frame)

@@ -1853,18 +1853,44 @@ A window created for the edit is deleted afterwards."
 ;; as a fresh shell (running processes can't be restored).  The handler is
 ;; registered here rather than in the use-package block because ghostel is
 ;; deferred and `desktop-read' needs the handler before ghostel loads.
-(defun my-ghostel-user-title ()
-  "Return the title set via `set-tab-title', or nil.
-The shell prompt prefixes its titles with an em space, which program-set
-titles (e.g. Claude Code) lack; the default bashN title doesn't count."
-  (when (and ghostel--title (string-prefix-p "\u2003" ghostel--title))
-    (let ((title (string-trim (substring ghostel--title 1))))
-      (unless (string-match-p "\\`\\(bash[0-9]*\\)?\\'" title)
-        title))))
+(defvar-local my-ghostel-user-title nil
+  "Tab title set from the shell via `set-tab-title', or nil.
+Owned by Emacs so it can be saved in the desktop; it overrides the
+terminal-reported title in the buffer name.")
+
+(defun my-ghostel-set-title (&rest words)
+  "Set `my-ghostel-user-title' from WORDS (empty clears it).
+Called from the shell via `ghostel-eval-cmds'; the buffer is renamed when
+the next prompt reports its title."
+  (setq my-ghostel-user-title
+        (let ((title (string-trim (string-join words " "))))
+          (unless (string-empty-p title) title))))
+
+(defun my-ghostel-buffer-name (title)
+  (if my-ghostel-user-title
+      (format "*ghostel: %s*" my-ghostel-user-title)
+    (ghostel-buffer-name-by-title title)))
+
+(with-eval-after-load 'ghostel
+  (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))
+  (setq ghostel-buffer-name-function #'my-ghostel-buffer-name))
+
+(defvar-local my-ghostel-adopt-pending nil
+  "Non-nil in a desktop-restored buffer still awaiting its final name.")
+
+(defvar-local my-ghostel-restored-name nil
+  "Name the buffer had when desktop restored it.")
+
+(defun my-ghostel-adopt-after-rename ()
+  (when (and my-ghostel-adopt-pending
+             (not (equal (buffer-name) my-ghostel-restored-name)))
+    (setq my-ghostel-adopt-pending nil)
+    (tab2-adopt-restored-buffer (current-buffer))
+    (force-mode-line-update t)))
 
 (defun my-ghostel-desktop-misc (_dirname)
   (list :directory default-directory :identity ghostel--buffer-identity
-        :title (my-ghostel-user-title)))
+        :title my-ghostel-user-title))
 
 (add-hook 'ghostel-mode-hook
           (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
@@ -1873,15 +1899,15 @@ titles (e.g. Claude Code) lack; the default bashN title doesn't count."
   (require 'ghostel)
   (let* ((default-directory (or (plist-get misc :directory) default-directory))
          (ghostel-buffer-name buffer-name)
-         (process-environment
-          (if-let* ((title (plist-get misc :title)))
-              (cons (concat "MY_RESTORE_TITLE=" title) process-environment)
-            process-environment))
          ;; Prefix arg forces a new buffer (never reuses a live one); `ghostel'
          ;; pops to it, but desktop restores the layout itself.
          (buffer (save-window-excursion (ghostel '(4)))))
     (with-current-buffer buffer
-      (setq ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
+      (setq my-ghostel-user-title (plist-get misc :title)
+            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))
+            my-ghostel-restored-name (buffer-name)
+            my-ghostel-adopt-pending t)
+      (add-hook 'buffer-list-update-hook #'my-ghostel-adopt-after-rename nil t))
     buffer))
 
 (with-eval-after-load 'desktop
