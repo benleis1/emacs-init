@@ -163,9 +163,11 @@
 
 ;; Maintain a global list of views
 ;; TODO: we don't really need to capture the wc until a swap
-(setq tab2-views (list (make-tab2-view :name "default" :wc (current-window-configuration))))
+;; defvar/unless so reloading this file doesn't discard the live views.
+(defvar tab2-views (list (make-tab2-view :name "default" :wc (current-window-configuration))))
 ;;(setq tab2-current-view 0)
-(set-frame-parameter nil 'tab-line-sel-view 0)
+(unless (frame-parameter nil 'tab-line-sel-view)
+  (set-frame-parameter nil 'tab-line-sel-view 0))
 
 ;; Return the current view
 (defun tab2-get-current-view ()
@@ -590,6 +592,52 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 
 ;;; Drag and drop support
 
+(defun tab2--pointer-outside-frame (frame)
+  "Return the pointer's absolute (X . Y) if it is outside FRAME, else nil."
+  (when-let* ((pos (mouse-absolute-pixel-position))
+              (edges (frame-edges frame 'outer-edges)))
+    (pcase-let ((`(,left ,top ,right ,bottom) edges))
+      (unless (and (>= (car pos) left) (< (car pos) right)
+                   (>= (cdr pos) top) (< (cdr pos) bottom))
+        pos))))
+
+(defun tab2--window-at-pointer (pos exclude-frame)
+  "Return the window under pointer POS in a frame other than EXCLUDE-FRAME.
+POS is an absolute (X . Y) pixel position.  Only visible frames count.  Falls
+back to that frame's selected window when the pointer is over frame chrome
+rather than a window."
+  (cl-some
+   (lambda (f)
+     (when (and (not (eq f exclude-frame)) (frame-visible-p f) (not (frame-parent f))
+                (null (tab2--pointer-outside-frame f)))
+       (or (seq-find (lambda (w)
+                       (pcase-let ((`(,l ,top ,r ,b) (window-absolute-pixel-edges w)))
+                         (and (>= (car pos) l) (< (car pos) r)
+                              (>= (cdr pos) top) (< (cdr pos) b)
+                              (not (window-dedicated-p w))
+                              (not (window-parameter w 'window-side)))))
+                     (window-list f 'no-minibuf))
+           (frame-selected-window f))))
+   (frame-list)))
+
+(defun tab2-move-buffer-to-window (buffer from-window to-window)
+  "Move BUFFER's tab from FROM-WINDOW's frame into TO-WINDOW's frame.
+A tear-off frame left without tabs is deleted."
+  (let ((from-frame (window-frame from-window))
+        (to-frame (window-frame to-window)))
+    (with-selected-window to-window
+      (unless (memq buffer (tab2-get-buffer-list))
+        (tab2-set-buffer-list (append (tab2-get-buffer-list) (list buffer))))
+      (switch-to-buffer buffer))
+    (tab2--leave-window buffer from-window)
+    (when-let* (((frame-live-p from-frame))
+                (name (frame-parameter from-frame 'tab2-tear-off-view))
+                (view (tab2-get-view-by-name name))
+                ((not (seq-some #'buffer-live-p (tab2-view-buffers view)))))
+      (delete-frame from-frame))
+    (tab-line-force-update t)
+    (select-frame-set-input-focus to-frame)))
+
 ;; todo may need to force update more expansively for multiple windows when split
 (defun tab2-mouse-move-tab (event)
   "Move a tab to a different position on the tab line.
@@ -606,6 +654,17 @@ at the mouse-down event to the position at mouse-up event."
 	 (to-buffer (tab2-get-buffer-from-tab to)))
 
 ;;    (message "move %s p:%s to %s p:%s" from-str (car from-rowcol) to-str (car to-rowcol))
+
+    ;; Released outside the frame: tear the tab off into a frame at the pointer.
+    ;; Released over another frame: move the tab into that frame's window.
+    (when-let* ((from-buffer)
+                (window (posn-window (event-start event)))
+                ((window-live-p window))
+                (pos (tab2--pointer-outside-frame (window-frame window))))
+      (if-let* ((target (tab2--window-at-pointer pos (window-frame window))))
+          (tab2-move-buffer-to-window from-buffer window target)
+        (let ((frame (tab2-tear-off-buffer from-buffer window)))
+          (set-frame-position frame (car pos) (cdr pos)))))
 
     ;; Only adjust when the drag started and ended on two distinct real tabs.
     ;; A drop that lands off the tab strip (blank fill area, scroll/filter
@@ -913,6 +972,7 @@ at the mouse-down event to the position at mouse-up event."
 ;; Hook that up to the auto-track function
 (add-hook 'window-buffer-change-functions 'tab2-auto-track-selected-window)
 
+
 ;; Set the override tab name format function to the one I've defined
 (setopt tab-line-tab-name-format-function 'tab2-format-tab)
 
@@ -985,6 +1045,26 @@ at the mouse-down event to the position at mouse-up event."
         (unless (memq buffer (tab2-view-buffers view))
           (setf (tab2-view-buffers view)
                 (append (tab2-view-buffers view) (list buffer))))))))
+
+(defcustom tab2-desktop-save-views-only t
+  "When non-nil, only save tab-tracked buffers that are in a saved view.
+Buffers that were opened but never joined a view (and buffers in tear-off
+views) are then left out of the desktop file."
+  :type 'boolean
+  :group 'tab2)
+
+;; This runs after `desktop-save-hook', so the view lists are already current.
+(define-advice desktop-save-buffer-p (:around (orig filename bufname mode &rest rest) tab2-views-only)
+  (let ((buffer (get-buffer bufname))
+        (skip (tab2--tear-off-view-names)))
+    (and (apply orig filename bufname mode rest)
+         (or (not tab2-desktop-save-views-only)
+             (not buffer)
+             (not (tab2-buffer-filter buffer))
+             (seq-some (lambda (v)
+                         (and (not (member (tab2-view-name v) skip))
+                              (memq buffer (tab2-view-buffers v))))
+                       tab2-views)))))
 
 ;; hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
@@ -1172,3 +1252,98 @@ at the mouse-down event to the position at mouse-up event."
         (force-mode-line-update))
       (kill-buffer command-buffer)
       (switch-to-buffer current-buffer))))
+
+;;; Debugging
+
+(defun tab2--buffer-project-root (buffer)
+  "Return the project root BUFFER belongs to, or nil.
+A terminal's pinned `my-ghostel-project' wins over its directory."
+  (or (buffer-local-value 'my-ghostel-project buffer)
+      (with-current-buffer buffer
+        (when-let* ((pr (project-current nil)))
+          (expand-file-name (file-name-as-directory (project-root pr)))))))
+
+(defun tab2--buffer-groups (buffer root)
+  "Return the list of tab group names BUFFER is assigned to.
+ROOT is the project root used for the virtual \"Project\" group."
+  (seq-filter (lambda (g) (and g (not (equal g ""))))
+              (list (when (buffer-file-name buffer) "Files")
+                    (when (and root (tab2-buffer-in-project-p buffer root)) "Project")
+                    (when (tab2-buffer-modified-file-p buffer) "Modified")
+                    (tab-line-tabs-buffer-group-name buffer))))
+
+(defun tab2--window-mode (window)
+  "Describe which kind of tab line WINDOW is showing."
+  (cond ((window-parameter window 'tab-line-views) "views")
+        ((window-parameter window 'tab-line-groups) "groups")
+        (t "tabs")))
+
+(defun tab2-dump-state ()
+  "Show all tab2 state in the *tab2-state* buffer.
+Lists frames, windows, views and every tracked buffer with the groups it is
+assigned to and its project root."
+  (interactive)
+  (let ((buf (get-buffer-create "*tab2-state*"))
+        (frames (frame-list))
+        (views tab2-views)
+        (origin (selected-window)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (special-mode)
+        (erase-buffer)
+        (insert (format "== Frames (%d) ==\n" (length frames)))
+        (dolist (f frames)
+          (let* ((sel (frame-parameter f 'tab-line-sel-view))
+                 (view (nth (or sel 0) views)))
+            (insert (format "%s%s: view %s (index %s)%s\n"
+                            (if (eq f (selected-frame)) "* " "  ")
+                            (frame-parameter f 'name)
+                            (if view (format "%S" (tab2-view-name view)) "<none>")
+                            sel
+                            (if-let* ((tear (frame-parameter f 'tab2-tear-off-view)))
+                                (format " [tear-off %S]" tear) "")))
+            (dolist (w (window-list f 'no-minibuf))
+              (let* ((wbuf (window-buffer w))
+                     (group (window-parameter w 'tab-line-group))
+                     (root (tab2--buffer-project-root wbuf)))
+                (insert (format "    %s%s  buffer=%s  mode=%s  group=%s  project=%s\n"
+                                (if (eq w origin) "* " "  ")
+                                w (buffer-name wbuf) (tab2--window-mode w)
+                                (if group (format "%S" group) "nil")
+                                (or root "-")))
+                (when view
+                  (insert (format "      shown tabs: %s\n"
+                                  (mapconcat #'buffer-name
+                                             (tab2-filter-buffers-by-group
+                                              (seq-filter #'buffer-live-p (tab2-view-buffers view))
+                                              group)
+                                             ", "))))))))
+        (insert (format "\n== Views (%d) ==\n" (length views)))
+        (dolist (view views)
+          (let ((bufs (tab2-view-buffers view)))
+            (insert (format "\n[%s]  %d buffer(s)%s\n"
+                            (tab2-view-name view) (length bufs)
+                            (if (tab2-view-wstate view) "  (window state saved)" "")))
+            (dolist (b bufs)
+              (if (not (buffer-live-p b))
+                  (insert "  <dead buffer>\n")
+                (let ((root (tab2--buffer-project-root b)))
+                  (insert (format "  %-32s groups=%s  tracked=%s\n"
+                                  (buffer-name b)
+                                  (mapconcat #'identity (tab2--buffer-groups b root) ",")
+                                  (if (tab2-buffer-filter b) "yes" "no")))
+                  (insert (format "    mode=%s  file=%s\n    project=%s%s\n"
+                                  (tab2-buffer-mode b)
+                                  (or (buffer-file-name b) "-")
+                                  (or root "-")
+                                  (if (buffer-local-value 'my-ghostel-project b) " (pinned)" ""))))))))
+        (let ((untracked (seq-filter
+                          (lambda (b)
+                            (and (tab2-buffer-filter b)
+                                 (not (seq-some (lambda (v) (memq b (tab2-view-buffers v))) views))))
+                          (buffer-list))))
+          (insert (format "\n== Trackable buffers in no view (%d) ==\n" (length untracked)))
+          (dolist (b untracked)
+            (insert (format "  %s\n" (buffer-name b)))))
+        (goto-char (point-min))))
+    (pop-to-buffer buf)))
