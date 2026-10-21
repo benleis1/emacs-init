@@ -38,6 +38,7 @@
   :group 'tab-line)
 
 (declare-function vc-git-state "vc-git")
+(declare-function project-root "project")
 
 
 ;;; Mode exclusions
