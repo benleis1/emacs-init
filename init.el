@@ -15,10 +15,11 @@
 ;;
 ;; ## Philosophy
 ;;
-;; My emacs configuration is an opinionated personal setup that I have made public to share with
-;; others. Originally this generation of the config files arose out of my migration to MacOS and
-;; realizing the value of git as a backing store. This time, these are the high level priorities
-;; that inform the decisions I've made throughout this file.
+;; This generation of Emacs config files originally arose out of my migration to MacOS and
+;; simultaneously realizing the value of git as a backing store. When starting over I decided to
+;; reexamine my workflows and take advantage of some of the modern enhancements available in Emacs.
+;; As a bonus this medium makes it easy to learn from and share with others. What follows are the
+;; high level priorities that inform the decisions I've made throughout this file.
 ;;
 ;; Philosophically, I have strong instincts about how I want an editor to behave and part of the
 ;; appeal of emacs is the ability to configure as deeply as I want. While I try to find the cleanest
@@ -769,7 +770,7 @@
 ;; the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 
-;; Switch focus to help windows when they come up and kill rather thn bury them when you quit
+;; Switch focus to help windows when they come up and kill rather than bury them when you quit
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
 
