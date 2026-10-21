@@ -615,6 +615,10 @@
 (setq-default major-mode 'text-mode)
 ;; break paragraphs on after 100 characters.
 (setq-default fill-column 100)
+;; Make the cursor consistent in text mode with other modes.
+(add-hook 'text-mode-hook
+          (lambda ()
+            (setq cursor-type 'box)))
 
 ;; turn off menu mode in text mode to save space
 (unless (display-graphic-p)
