@@ -461,7 +461,7 @@ eglot's own indicator."
 
 (defun my-modeline--keyboard-icon ()
   "Keyboard glyph for terminals waiting on input; plain ⌨ without nerd-icons."
-  (or (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-keyboard")
+  (or (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-keyboard_outline" :height 1.2)
       "⌨"))
 
 (defun my-modeline--ghostel-buffers-where (var)
