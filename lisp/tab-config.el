@@ -37,7 +37,6 @@
   "Overrides and extensions to `tab-line'."
   :group 'tab-line)
 
-(declare-function project-buffers "project")
 (declare-function vc-git-state "vc-git")
 
 
@@ -778,37 +777,46 @@ at the mouse-down event to the position at mouse-up event."
 (defun tab2-buffer-modified-file-p (buffer)
   (and (buffer-file-name buffer) (buffer-modified-p buffer)))
 
-;; Return a list of the buffers opened in the current project
-;; or nil if we're not in a project
-(defun tab2-get-project-buffer-list ()
-  (let ((pr (project-current nil)))
-    (when pr (project-buffers pr))))
+;; Per-buffer cache of project membership: (PATH ROOT . MEMBERP).  Membership is
+;; recomputed only when the buffer's path or the current project root changes,
+;; instead of rescanning every buffer (as `project-buffers' does) on each redraw.
+(defvar-local tab2-project-membership-cache nil)
+
+(defun tab2-buffer-in-project-p (buffer root)
+  "Return non-nil if BUFFER belongs to the project rooted at ROOT."
+  (when root
+    ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
+    (if-let* ((pinned (buffer-local-value 'my-ghostel-project buffer)))
+        (equal pinned root)
+      (let ((path (or (buffer-file-name buffer)
+                      (buffer-local-value 'default-directory buffer)))
+            (cache (buffer-local-value 'tab2-project-membership-cache buffer)))
+        (if (and cache (equal (car cache) path) (equal (cadr cache) root))
+            (cddr cache)
+          (let ((member (and path (file-in-directory-p path root) t)))
+            (with-current-buffer buffer
+              (setq tab2-project-membership-cache (cons path (cons root member))))
+            member))))))
 
 ;; Filter the list of buffers based on the selected group
 ;; if Files then return all of the file based buffers.
-;; if Project then return all files in the curent project.
+;; if Project then return all buffers in the curent project.
 (defun  tab2-filter-buffers-by-group (buffers curgroup)
-  (let ((project-buffers (tab2-get-project-buffer-list)))
-    (cond ((not curgroup) buffers)
-	  ((equal curgroup "Files")
-	   (seq-filter (lambda (b) (buffer-file-name b)) buffers))
+  (cond ((not curgroup) buffers)
+        ((equal curgroup "Files")
+         (seq-filter (lambda (b) (buffer-file-name b)) buffers))
 
-	  ((equal curgroup "Project")
-	   (let ((root (when-let* ((pr (project-current nil))) (project-root pr))))
-	     (seq-filter (lambda (b)
-			   ;; A terminal's recorded project wins over its (cd-able) directory.
-			   (if-let* ((tracked (and (eq (buffer-local-value 'major-mode b) 'ghostel-mode)
-						   (buffer-local-value 'my-ghostel-project b))))
-			       (equal tracked root)
-			     (member b project-buffers)))
-			 buffers)))
+        ((equal curgroup "Project")
+         (let ((root (when-let* ((pr (project-current nil)))
+                       (expand-file-name (file-name-as-directory (project-root pr))))))
+           (seq-filter (lambda (b) (tab2-buffer-in-project-p b root)) buffers)))
 
-	  ((equal curgroup "Modified")
-	   (seq-filter (lambda (b) (tab2-buffer-modified-file-p b)) buffers))
+        ((equal curgroup "Modified")
+         (seq-filter (lambda (b) (tab2-buffer-modified-file-p b)) buffers))
 
-	  (t (seq-filter (lambda (b)
-			   (equal (tab-line-tabs-buffer-group-name b) curgroup))
-			 buffers)))))
+        (t (seq-filter (lambda (b)
+                         (equal (tab-line-tabs-buffer-group-name b) curgroup))
+                       buffers))))
 
 (defun find-first (fn ls)
   (cond ((null ls) nil)

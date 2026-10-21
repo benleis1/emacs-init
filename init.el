@@ -2784,7 +2784,7 @@ declaration if any such methods were found."
 (defun my-desktop-mark-secondary-frame (frame)
   (when (seq-some (lambda (f)
                     (and (not (eq f frame))
-                         (not (frame-initial-p f))
+                         (not (eq (framep f) t))
                          (not (frame-parameter f 'desktop-dont-save))))
                   (frame-list))
     (set-frame-parameter frame 'desktop-dont-save t)))
