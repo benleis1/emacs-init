@@ -28,8 +28,10 @@
 ;; I've borrowed and modified some code from Nicolas Rougier to gather input on the header line
 ;; which is less of a distracting jump away from the tabs when needed.
 ;;
+;; Recently I've completed view support integration with desktop saves and a first non-buffer
+;; integration for ghostel buffers.
 ;;
-;; TODO: key bindings
+;; TODO: setup global key bindings
 ;;
 ;;; Code:
 
@@ -686,6 +688,18 @@ at the mouse-down event to the position at mouse-up event."
 			 (if (and (equal elt to-buffer) (>= (car to-rowcol) (car from-rowcol)))
 			     (setq value (cons from-buffer value)))
 			 ))))
+      (force-mode-line-update))
+
+    ;; Dropped on blank tab-line space in the same window (right of the last
+    ;; tab): move the tab to the end.  Buttons have a string but no tab, so
+    ;; they are excluded by the null to-str check.
+    (when (and from-buffer (null to-str)
+               (eq (posn-area (event-end event)) 'tab-line)
+               (eq (posn-window (event-end event)) (posn-window (event-start event)))
+               (memq from-buffer (tab2-get-buffer-list)))
+      (tab2-set-buffer-list
+       (append (delq from-buffer (copy-sequence (tab2-get-buffer-list)))
+               (list from-buffer)))
       (force-mode-line-update))))
 
 ;; Add on our extra key map for the drag event
