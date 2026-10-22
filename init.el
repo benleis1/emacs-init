@@ -2787,6 +2787,7 @@ declaration if any such methods were found."
 (defun my-desktop-mark-secondary-frame (frame)
   (when (seq-some (lambda (f)
                     (and (not (eq f frame))
+                         ;; framep is t for TTY and the daemon's initial frame; only GUI frames count.
                          (not (eq (framep f) t))
                          (not (frame-parameter f 'desktop-dont-save))))
                   (frame-list))
