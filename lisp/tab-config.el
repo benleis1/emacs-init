@@ -648,59 +648,59 @@ at the mouse-down event to the position at mouse-up event."
   (interactive "e")
   (let* ((from-str (car (posn-string (event-start event))))
          (to-str (car (posn-string (event-end event))))
-	 (from-rowcol (posn-col-row (event-start event)))
-	 (to-rowcol (posn-col-row (event-end event)))
-	 (from (and from-str (tab-line--get-tab-property 'tab from-str)))
+         (from-rowcol (posn-col-row (event-start event)))
+         (to-rowcol (posn-col-row (event-end event)))
+         (from (and from-str (tab-line--get-tab-property 'tab from-str)))
          (to (and to-str (tab-line--get-tab-property 'tab to-str)))
-	 (from-buffer (tab2-get-buffer-from-tab from))
-	 (to-buffer (tab2-get-buffer-from-tab to)))
+         (from-buffer (tab2-get-buffer-from-tab from))
+         (to-buffer (tab2-get-buffer-from-tab to))
+         (window (posn-window (event-start event)))
+         (outside-pos (and from-buffer (window-live-p window)
+                           (tab2--pointer-outside-frame (window-frame window)))))
 
 ;;    (message "move %s p:%s to %s p:%s" from-str (car from-rowcol) to-str (car to-rowcol))
 
-    ;; Released outside the frame: tear the tab off into a frame at the pointer.
-    ;; Released over another frame: move the tab into that frame's window.
-    (when-let* ((from-buffer)
-                (window (posn-window (event-start event)))
-                ((window-live-p window))
-                (pos (tab2--pointer-outside-frame (window-frame window))))
-      (if-let* ((target (tab2--window-at-pointer pos (window-frame window))))
+    (cond
+     ;; Released outside the frame: tear the tab off into a frame at the pointer.
+     ;; Released over another frame: move the tab into that frame's window.
+     (outside-pos
+      (if-let* ((target (tab2--window-at-pointer outside-pos (window-frame window))))
           (tab2-move-buffer-to-window from-buffer window target)
         (let ((frame (tab2-tear-off-buffer from-buffer window)))
-          (set-frame-position frame (car pos) (cdr pos)))))
+          (set-frame-position frame (car outside-pos) (cdr outside-pos)))))
 
-    ;; Only adjust when the drag started and ended on two distinct real tabs.
-    ;; A drop that lands off the tab strip (blank fill area, scroll/filter
-    ;; buttons, or just off the strip) has to-str/to as nil; without this
-    ;; guard the dragged buffer got removed from the list below but never
-    ;; re-inserted (nothing matches a nil to-buffer), so it silently vanished.
-    ;; if going left to right add on the right and vice versa if going right to left
-    (when (and from-buffer to-buffer (not (eq from-buffer to-buffer)))
+     ;; Only adjust when the drag started and ended on two distinct real tabs.
+     ;; A drop that lands off the tab strip (blank fill area, scroll/filter
+     ;; buttons, or just off the strip) has to-str/to as nil; without this
+     ;; guard the dragged buffer got removed from the list below but never
+     ;; re-inserted (nothing matches a nil to-buffer), so it silently vanished.
+     ;; if going left to right add on the right and vice versa if going right to left
+     ((and from-buffer to-buffer (not (eq from-buffer to-buffer)))
       (tab2-set-buffer-list
-	    (reverse (let (value)
-		       (dolist (elt (tab2-get-buffer-list) value)
-			 ;; add the element in its new position moving leftwards
-			 (if (and (equal elt to-buffer) (> (car from-rowcol) (car to-rowcol)))
-			     (setq value (cons from-buffer value)))
-			 ;; add all other elements in old position
-			 (if (not (equal elt from-buffer))
-			     (setq value (cons elt value)))
-			 ;; add the element in its new position moving rightwards
-			 (if (and (equal elt to-buffer) (>= (car to-rowcol) (car from-rowcol)))
-			     (setq value (cons from-buffer value)))
-			 ))))
+       (reverse (let (value)
+                  (dolist (elt (tab2-get-buffer-list) value)
+                    ;; add the element in its new position moving leftwards
+                    (if (and (equal elt to-buffer) (> (car from-rowcol) (car to-rowcol)))
+                        (setq value (cons from-buffer value)))
+                    ;; add all other elements in old position
+                    (if (not (equal elt from-buffer))
+                        (setq value (cons elt value)))
+                    ;; add the element in its new position moving rightwards
+                    (if (and (equal elt to-buffer) (>= (car to-rowcol) (car from-rowcol)))
+                        (setq value (cons from-buffer value)))))))
       (force-mode-line-update))
 
-    ;; Dropped on blank tab-line space in the same window (right of the last
-    ;; tab): move the tab to the end.  Buttons have a string but no tab, so
-    ;; they are excluded by the null to-str check.
-    (when (and from-buffer (null to-str)
-               (eq (posn-area (event-end event)) 'tab-line)
-               (eq (posn-window (event-end event)) (posn-window (event-start event)))
-               (memq from-buffer (tab2-get-buffer-list)))
+     ;; Dropped on blank tab-line space in the same window (right of the last
+     ;; tab): move the tab to the end.  Buttons have a string but no tab, so
+     ;; they are excluded by the null to-str check.
+     ((and from-buffer (null to-str)
+           (eq (posn-area (event-end event)) 'tab-line)
+           (eq (posn-window (event-end event)) window)
+           (memq from-buffer (tab2-get-buffer-list)))
       (tab2-set-buffer-list
        (append (delq from-buffer (copy-sequence (tab2-get-buffer-list)))
                (list from-buffer)))
-      (force-mode-line-update))))
+      (force-mode-line-update)))))
 
 ;; Add on our extra key map for the drag event
 (keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab2-mouse-move-tab)
@@ -856,12 +856,17 @@ at the mouse-down event to the position at mouse-up event."
 ;; instead of rescanning every buffer (as `project-buffers' does) on each redraw.
 (defvar-local tab2-project-membership-cache nil)
 
+(defun tab2--normalize-root (root)
+  "Return ROOT as an absolute directory name with a trailing slash, or nil."
+  (when root (expand-file-name (file-name-as-directory root))))
+
 (defun tab2-buffer-in-project-p (buffer root)
-  "Return non-nil if BUFFER belongs to the project rooted at ROOT."
+  "Return non-nil if BUFFER belongs to the project rooted at ROOT.
+ROOT must already be normalized with `tab2--normalize-root'."
   (when root
     ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
     (if-let* ((pinned (buffer-local-value 'my-ghostel-project buffer)))
-        (equal pinned root)
+        (equal (tab2--normalize-root pinned) root)
       (let ((path (or (buffer-file-name buffer)
                       (buffer-local-value 'default-directory buffer)))
             (cache (buffer-local-value 'tab2-project-membership-cache buffer)))
@@ -882,7 +887,7 @@ at the mouse-down event to the position at mouse-up event."
 
         ((equal curgroup "Project")
          (let ((root (when-let* ((pr (project-current nil)))
-                       (expand-file-name (file-name-as-directory (project-root pr))))))
+                       (tab2--normalize-root (project-root pr)))))
            (seq-filter (lambda (b) (tab2-buffer-in-project-p b root)) buffers)))
 
         ((equal curgroup "Modified")
@@ -1272,10 +1277,10 @@ views) are then left out of the desktop file."
 (defun tab2--buffer-project-root (buffer)
   "Return the project root BUFFER belongs to, or nil.
 A terminal's pinned `my-ghostel-project' wins over its directory."
-  (or (buffer-local-value 'my-ghostel-project buffer)
+  (or (tab2--normalize-root (buffer-local-value 'my-ghostel-project buffer))
       (with-current-buffer buffer
         (when-let* ((pr (project-current nil)))
-          (expand-file-name (file-name-as-directory (project-root pr)))))))
+          (tab2--normalize-root (project-root pr))))))
 
 (defun tab2--buffer-groups (buffer root)
   "Return the list of tab group names BUFFER is assigned to.
