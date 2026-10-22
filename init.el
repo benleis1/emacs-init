@@ -853,11 +853,13 @@
   :hook ((dired-mode . nerd-icons-dired-mode))
   )
 
-
 ;; Do all dired ops in a single window
 (setq dired-kill-when-opening-new-dired-buffer t)
 ;; allow find-alternate-file i.e. open and kill dired
 (put 'dired-find-alternate-file 'disabled nil)
+;; Clicks default to dired-mouse-find-file-other-window, which ignores the kill setting
+(with-eval-after-load 'dired
+  (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
 
 (my-profile-mark "modeline")
 ;;; modeline
