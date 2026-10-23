@@ -363,6 +363,17 @@
 	(tab2-set-buffer-list (append intersect-tabs (list new-tab)))
       (tab2-set-buffer-list intersect-tabs))))
 
+;; Window history (prev/next buffers, also restored from a saved window state) is shared by
+;; every view, so killing/burying/cycling away from a buffer could land on one that belongs to
+;; another view, and `tab2-get-filtered-buffer-list' would then adopt it into this one.
+(defun tab2--skip-foreign-buffer (window buffer _bury-or-kill)
+  "Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view."
+  (and (tab2-buffer-filter buffer)
+       (with-selected-window window
+         (not (memq buffer (tab2-get-buffer-list))))))
+
+(setq switch-to-prev-buffer-skip #'tab2--skip-foreign-buffer)
+
 ;; Filter special buffers from tab-line maintaining current order
 (setq tab-line-tabs-function 'tab2-get-filtered-buffer-list)
 
@@ -881,7 +892,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 ;; if Files then return all of the file based buffers.
 ;; if Project then return all buffers in the curent project.
 (defun  tab2-filter-buffers-by-group (buffers curgroup)
-  (cond ((not curgroup) buffers)
+  (cond ((or (not curgroup) (equal curgroup "All")) buffers)
         ((equal curgroup "Files")
          (seq-filter (lambda (b) (buffer-file-name b)) buffers))
 
@@ -935,6 +946,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
        (when (project-current nil)
 	 (list (tab2-make-group-tab selected-group "Project")))
        (list (tab2-make-group-tab selected-group "Files"))
+       (list (tab2-make-group-tab selected-group "All"))
 
        ;; Insert a modified group if any files are modified
        (when (find-first 'tab2-buffer-modified-file-p buffers)
@@ -977,6 +989,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
     (when (or (and (not selected-group) valid)
 	      (and selected-group
 		   valid
+		   (not (equal selected-group "All"))
 		   (not (equal bufgroup selected-group))
 		   ;; Optimization: lets files skip the project buffer list rebuild below.
 		   (not (and filep (equal selected-group "Project") (project-current nil)))
