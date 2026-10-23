@@ -724,6 +724,20 @@ at the mouse-down event to the position at mouse-up event."
       (append format (list tab2-new-view-button))
     format))
 
+;; Only show the tab-line on the active window. The `tab-line-format' window
+;; parameter overrides the buffer-local value; `none' removes the line entirely.
+(defun tab2-update-tab-line-visibility (&optional frame)
+  "Hide the tab-line on every window of FRAME except the active one."
+  (let* ((frame (or frame (selected-frame)))
+         (active (if (minibuffer-window-active-p (minibuffer-window frame))
+                     (minibuffer-selected-window)
+                   (frame-selected-window frame))))
+    (dolist (win (window-list frame 'never))
+      (set-window-parameter win 'tab-line-format (if (eq win active) nil 'none)))))
+
+(add-hook 'window-selection-change-functions #'tab2-update-tab-line-visibility)
+(add-hook 'window-configuration-change-hook #'tab2-update-tab-line-visibility)
+
 ;; Convenience wrapper for getting the git state which needs to be done in buffer
 ;; but is  more accurate than vc-state. Cached with a short TTL since this is
 ;; called from every tab-line render and `vc-git-state' shells out to git.
