@@ -127,12 +127,14 @@
 (defvar tab2-modified-marker "⏺")
 
 ;; git modified markers - I'm still looking for a better one to display in terminal mode
-(defvar tab2-git-modified-marker (if window-system "" "◨"))
+(defvar tab2-git-modified-marker (if window-system "" "◨"))
 
 ;; Space the tabs out a bit
 (defvar ghostel--command-running)
 (defvar my-ghostel-input-needed)
-(defvar my-ghostel-project)
+
+;; general support for project overrides which can be used by non project based buffers
+(defvar tab2-pinned-project)
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
     (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
@@ -890,7 +892,7 @@ at the mouse-down event to the position at mouse-up event."
 ROOT must already be normalized with `tab2--normalize-root'."
   (when root
     ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
-    (if-let* ((pinned (buffer-local-value 'my-ghostel-project buffer)))
+    (if-let* ((pinned (buffer-local-value 'tab2-pinned-project buffer)))
         (equal (tab2--normalize-root pinned) root)
       (let ((path (or (buffer-file-name buffer)
                       (buffer-local-value 'default-directory buffer)))
@@ -1303,8 +1305,8 @@ views) are then left out of the desktop file."
 
 (defun tab2--buffer-project-root (buffer)
   "Return the project root BUFFER belongs to, or nil.
-A terminal's pinned `my-ghostel-project' wins over its directory."
-  (or (tab2--normalize-root (buffer-local-value 'my-ghostel-project buffer))
+A terminal's pinned `tab2-pinned-project' wins over its directory."
+  (or (tab2--normalize-root (buffer-local-value 'tab2-pinned-project buffer))
       (with-current-buffer buffer
         (when-let* ((pr (project-current nil)))
           (tab2--normalize-root (project-root pr))))))
@@ -1382,7 +1384,7 @@ assigned to and its project root."
                                   (tab2-buffer-mode b)
                                   (or (buffer-file-name b) "-")
                                   (or root "-")
-                                  (if (buffer-local-value 'my-ghostel-project b) " (pinned)" ""))))))))
+                                  (if (buffer-local-value 'tab2-pinned-project b) " (pinned)" ""))))))))
         (let ((untracked (seq-filter
                           (lambda (b)
                             (and (tab2-buffer-filter b)

@@ -241,7 +241,7 @@ Space the tabs out a bit
 ```
 (defvar ghostel--command-running)
 (defvar my-ghostel-input-needed)
-(defvar my-ghostel-project)
+(defvar tab2-pinned-project)
 ```
 
 ## tab2-space-tab-name
@@ -1193,7 +1193,7 @@ ROOT must already be normalized with `tab2--normalize-root'.
 ROOT must already be normalized with `tab2--normalize-root'."
   (when root
     ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
-    (if-let* ((pinned (buffer-local-value 'my-ghostel-project buffer)))
+    (if-let* ((pinned (buffer-local-value 'tab2-pinned-project buffer)))
         (equal (tab2--normalize-root pinned) root)
       (let ((path (or (buffer-file-name buffer)
                       (buffer-local-value 'default-directory buffer)))
@@ -1690,13 +1690,13 @@ bunch of code from nicolas rougier adapted to use the header-line
 
 ## tab2--buffer-project-root
 >Return the project root BUFFER belongs to, or nil.
-A terminal's pinned `my-ghostel-project' wins over its directory.
+A terminal's pinned `tab2-pinned-project' wins over its directory.
 
 ```
 (defun tab2--buffer-project-root (buffer)
   "Return the project root BUFFER belongs to, or nil.
-A terminal's pinned `my-ghostel-project' wins over its directory."
-  (or (tab2--normalize-root (buffer-local-value 'my-ghostel-project buffer))
+A terminal's pinned `tab2-pinned-project' wins over its directory."
+  (or (tab2--normalize-root (buffer-local-value 'tab2-pinned-project buffer))
       (with-current-buffer buffer
         (when-let* ((pr (project-current nil)))
           (tab2--normalize-root (project-root pr))))))
@@ -1792,7 +1792,7 @@ assigned to and its project root."
                                   (tab2-buffer-mode b)
                                   (or (buffer-file-name b) "-")
                                   (or root "-")
-                                  (if (buffer-local-value 'my-ghostel-project b) " (pinned)" ""))))))))
+                                  (if (buffer-local-value 'tab2-pinned-project b) " (pinned)" ""))))))))
         (let ((untracked (seq-filter
                           (lambda (b)
                             (and (tab2-buffer-filter b)

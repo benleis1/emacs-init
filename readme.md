@@ -36,7 +36,7 @@ applications.  Wherever possible I try to wire in useful help text to show when 
 is most extensive in the modeline pieces.
 
 If possible I'll use built in functionality or packages that require minimal adaptation and just
-xa use-package declaration. If not I try to keep everything in one section by general
+a use-package declaration. If not I try to keep everything in one section by general
 functionality area. Along these lines currently I prefer one larger file to a series of smaller
 ones for both reading and modifying.  This may shift in the future but currently I only move code
 out to a new file if it reaches a "sufficiently" large size. I also do not use a literate style
@@ -469,7 +469,7 @@ Mixed-pitch mode. I use this in markdown and org modes currently.
   "Default variable-pitch font family.")
 ```
 
-I like using a 1.3 scaled version of the system UI font for the tabs.
+I like using a 1.3 scaled version of the system UI font for the tabs on MacOS.
 ```
 (when (eq system-type 'darwin)
   (custom-set-faces
@@ -771,14 +771,13 @@ Add the font changes onto the enable theme hook
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 ```
 
-Make locally-defined themes (e.g. modus-vivendi-embers-theme.el, which
-lives in the lisp subdirectory) discoverable by `load-theme'/`M-x customize-themes'
-without needing a package wrapper.
+Make any locally-defined themes which live in the lisp subdirectory discoverable by
+`load-theme'/`M-x customize-themes' without needing a package wrapper.
 ```
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 ```
 
-Currently trying out the folio theme as my main theme.
+Currently folio is my main theme.
 ```
 (use-package folio-theme
   :ensure (:host github :repo "kn66/folio-theme.el")
@@ -799,12 +798,9 @@ Loaded here, after elpaca/use-package are ready.
        (load "linux")))
 ```
 
-No elpaca-wait needed here: the active theme is set explicitly via
-`load-theme' above, not by custom.el. custom-enabled-themes only ends up
-in custom.el if you use "Save Theme Settings" in `M-x customize-themes';
-as long as that's avoided, custom.el never races the theme package install.
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 All customizations are stored on the side in custom.el
+In general, I try to avoid usage and declare directly here instead.
 ```
 (setq custom-file (concat user-emacs-directory "custom.el"))
 (when (file-exists-p custom-file)
@@ -1080,8 +1076,8 @@ Zone / screensaver is whimsical but its built-in and lightweight,
   (use-package zone
     :ensure nil ; Built-in package
     :config
-    (setq zone-idle 600) ; Time in seconds (10 minutes)
-    (zone-when-idle 600)))
+    ;; 1 hour
+    (zone-when-idle 3600)))
 ```
 
 Brief pulse/highlight for various motions
@@ -1916,7 +1912,8 @@ Takes an optional, ignored argument so it tolerates being called as
                                                        "\n\nmouse-1: open agenda\nmouse-3: dismiss")
                                    'mouse-face 'mode-line-highlight
                                    'keymap my-appt-mode-line-keymap)
-                      " ")))))))
+                      " ")))))
+    (force-mode-line-update t)))
 
 (advice-add 'appt-check :after #'my-appt-mode-line-update)
 
@@ -2317,8 +2314,8 @@ e() {
            (buf (apply fn args)))
       (when (and project (buffer-live-p buf))
         (with-current-buffer buf
-          (unless my-ghostel-project
-            (setq my-ghostel-project (project-root project)))))
+          (unless tab2-pinned-project
+            (setq tab2-pinned-project (project-root project)))))
       buf))
 
   ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
@@ -2425,7 +2422,7 @@ deferred and `desktop-read' needs the handler before ghostel loads.
 Owned by Emacs so it can be saved in the desktop; it overrides the
 terminal-reported title in the buffer name.")
 
-(defvar-local my-ghostel-project nil
+(defvar-local tab2-pinned-project nil
   "Root of the project the terminal was created for, or nil.
 Unlike `default-directory' this does not follow `cd'.")
 ```
@@ -2477,7 +2474,7 @@ the next prompt reports its title."
 ```
 (defun my-ghostel-desktop-misc (_dirname)
   (list :directory default-directory :identity ghostel--buffer-identity
-        :title my-ghostel-user-title :project my-ghostel-project))
+        :title my-ghostel-user-title :project tab2-pinned-project))
 
 (add-hook 'ghostel-mode-hook
           (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
@@ -2494,7 +2491,7 @@ the next prompt reports its title."
          (buffer (save-window-excursion (ghostel '(4)))))
     (with-current-buffer buffer
       (setq my-ghostel-user-title (plist-get misc :title)
-            my-ghostel-project (plist-get misc :project)
+            tab2-pinned-project (plist-get misc :project)
             ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))
             my-ghostel-restored-name (buffer-name)
             my-ghostel-adopt-pending t)
