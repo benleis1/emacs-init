@@ -15,10 +15,11 @@ Author: Benjamin Leis
 
 ## Philosophy
 
-My emacs configuration is an opinionated personal setup that I have made public to share with
-others. Originally this generation of the config files arose out of my migration to MacOS and
-realizing the value of git as a backing store. This time, these are the high level priorities
-that inform the decisions I've made throughout this file.
+This generation of Emacs config files originally arose out of my migration to MacOS and
+simultaneously realizing the value of git as a backing store. When starting over I decided to
+reexamine my workflows and take advantage of some of the modern enhancements available in Emacs.
+As a bonus this medium makes it easy to learn from and share with others. What follows are the
+high level priorities that inform the decisions I've made throughout this file.
 
 Philosophically, I have strong instincts about how I want an editor to behave and part of the
 appeal of emacs is the ability to configure as deeply as I want. While I try to find the cleanest
@@ -35,7 +36,7 @@ applications.  Wherever possible I try to wire in useful help text to show when 
 is most extensive in the modeline pieces.
 
 If possible I'll use built in functionality or packages that require minimal adaptation and just
-a use-package declaration. If not I try to keep everything in one section by general
+xa use-package declaration. If not I try to keep everything in one section by general
 functionality area. Along these lines currently I prefer one larger file to a series of smaller
 ones for both reading and modifying.  This may shift in the future but currently I only move code
 out to a new file if it reaches a "sufficiently" large size. I also do not use a literate style
@@ -196,6 +197,11 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
 - [Terminal support via ghostel](#terminal-support-via-ghostel)
+  - [my-ghostel-set-title](#my-ghostel-set-title)
+  - [my-ghostel-buffer-name](#my-ghostel-buffer-name)
+  - [my-ghostel-adopt-after-rename](#my-ghostel-adopt-after-rename)
+  - [my-ghostel-desktop-misc](#my-ghostel-desktop-misc)
+  - [my-ghostel-desktop-restore](#my-ghostel-desktop-restore)
 - [Programming modes](#programming-modes)
   - [my-common-prog-mode-setup](#my-common-prog-mode-setup)
   - [Project.el settings.](#projectel-settings)
@@ -224,6 +230,9 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [elisp](#elisp)
 - [SQL](#sql)
 - [imenu-list](#imenu-list)
+  - [my-desktop-mark-secondary-frame](#my-desktop-mark-secondary-frame)
+  - [my-desktop-autosave](#my-desktop-autosave)
+  - [my-desktop-start-autosave](#my-desktop-start-autosave)
 - [Excorporate setup.](#excorporate-setup)
   - [my-diary-cleanup](#my-diary-cleanup)
   - [my-agenda-update-diary](#my-agenda-update-diary)
@@ -822,6 +831,12 @@ break paragraphs on after 100 characters.
 ```
 (setq-default fill-column 100)
 ```
+Make the cursor consistent in text mode with other modes.
+```
+(add-hook 'text-mode-hook
+          (lambda ()
+            (setq cursor-type 'box)))
+```
 
 turn off menu mode in text mode to save space
 ```
@@ -1013,7 +1028,7 @@ the gui app open for long periods of time
 (run-at-time nil 600 'recentf-save-list)
 ```
 
-Switch focus to help windows when they come up and kill rather thn bury them when you quit
+Switch focus to help windows when they come up and kill rather than bury them when you quit
 ```
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
@@ -1114,7 +1129,6 @@ Icons for dired. I'm not sure if I care enough to keep this longterm yet.
   )
 ```
 
-
 Do all dired ops in a single window
 ```
 (setq dired-kill-when-opening-new-dired-buffer t)
@@ -1122,6 +1136,11 @@ Do all dired ops in a single window
 allow find-alternate-file i.e. open and kill dired
 ```
 (put 'dired-find-alternate-file 'disabled nil)
+```
+Clicks default to dired-mouse-find-file-other-window, which ignores the kill setting
+```
+(with-eval-after-load 'dired
+  (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
 
 (my-profile-mark "modeline")
 ```
@@ -2294,8 +2313,13 @@ e() {
   ;; Start new terminals in the current project's root, else the current directory.
   (define-advice ghostel (:around (fn &rest args) my-start-in-project-root)
     (let* ((project (project-current nil))
-           (default-directory (if project (project-root project) default-directory)))
-      (apply fn args)))
+           (default-directory (if project (project-root project) default-directory))
+           (buf (apply fn args)))
+      (when (and project (buffer-live-p buf))
+        (with-current-buffer buf
+          (unless my-ghostel-project
+            (setq my-ghostel-project (project-root project)))))
+      buf))
 
   ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
   (defun my-ghostel-kill-range (kind)
@@ -2341,8 +2365,43 @@ e() {
       (define-key ghostel-semi-char-mode-map (kbd (car spec))
                   (lambda () (interactive) (my-ghostel-kill-and-send kind)))))
 
+  (defun my-git-edit-file (file)
+    "Open FILE in another window; on first save, kill it and resume the terminal.
+Resumes by sending Return to the ghostel buffer that requested the edit, which
+releases the editor script (e2.sh) waiting on it so git sees the saved file.
+A window created for the edit is deleted afterwards."
+    (let* ((term (current-buffer))
+           (old-windows (window-list nil 'no-minibuf)))
+      (find-file-other-window file)
+      (let* ((buf (current-buffer))
+             (win (get-buffer-window buf))
+             (created (and win (not (memq win old-windows)))))
+        (add-hook 'after-save-hook
+                  (lambda ()
+                    (run-at-time
+                     0 nil
+                     (lambda ()
+                       ;; `with-editor-finish' may already have killed BUF.
+                       (when (buffer-live-p buf)
+                         (let ((kill-buffer-query-functions nil))
+                           (kill-buffer buf)))
+                       (when (and created (window-live-p win)
+                                  (not (one-window-p t)))
+                         (delete-window win))
+                       (when (and (buffer-live-p term)
+                                  (with-current-buffer term
+                                    (derived-mode-p 'ghostel-mode)))
+                         (with-current-buffer term
+                           (ghostel-send-string "\r"))))))
+                  nil t))))
+
+  (with-eval-after-load 'ghostel
+    (add-to-list 'ghostel-eval-cmds '("git-edit" my-git-edit-file)))
+
   ;; add onto project-switch
-  (add-to-list 'project-switch-commands '(ghostel-project "Ghostel") t)
+  (setq project-switch-commands  (cl-remove 'project-eshell  project-switch-commands :key #'car))
+
+  (add-to-list 'project-switch-commands '(ghostel-project "Ghostel" ?t) t)
   )
 
 
@@ -2351,10 +2410,100 @@ e() {
                '(ghostel-mode nerd-icons-mdicon "nf-md-ghost" :face nerd-icons-lblue)))
 ```
 
-
 make copy mode happen automatically on a highlighted selection in bash
 ```
 (add-hook 'ghostel-mode-hook (lambda () (setq-local mouse-drag-copy-region t)))
+```
+
+Persist ghostel buffers in the desktop: only the name and directory come back,
+as a fresh shell (running processes can't be restored).  The handler is
+registered here rather than in the use-package block because ghostel is
+deferred and `desktop-read' needs the handler before ghostel loads.
+```
+(defvar-local my-ghostel-user-title nil
+  "Tab title set from the shell via `set-tab-title', or nil.
+Owned by Emacs so it can be saved in the desktop; it overrides the
+terminal-reported title in the buffer name.")
+
+(defvar-local my-ghostel-project nil
+  "Root of the project the terminal was created for, or nil.
+Unlike `default-directory' this does not follow `cd'.")
+```
+
+## my-ghostel-set-title
+>Set `my-ghostel-user-title' from WORDS (empty clears it).
+Called from the shell via `ghostel-eval-cmds'; the buffer is renamed when
+the next prompt reports its title.
+
+```
+(defun my-ghostel-set-title (&rest words)
+  "Set `my-ghostel-user-title' from WORDS (empty clears it).
+Called from the shell via `ghostel-eval-cmds'; the buffer is renamed when
+the next prompt reports its title."
+  (setq my-ghostel-user-title
+        (let ((title (string-trim (string-join words " "))))
+          (unless (string-empty-p title) title))))
+```
+
+## my-ghostel-buffer-name
+```
+(defun my-ghostel-buffer-name (title)
+  (if my-ghostel-user-title
+      (format "*ghostel: %s*" my-ghostel-user-title)
+    (ghostel-buffer-name-by-title title)))
+
+(with-eval-after-load 'ghostel
+  (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))
+  (setq ghostel-buffer-name-function #'my-ghostel-buffer-name))
+
+(defvar-local my-ghostel-adopt-pending nil
+  "Non-nil in a desktop-restored buffer still awaiting its final name.")
+
+(defvar-local my-ghostel-restored-name nil
+  "Name the buffer had when desktop restored it.")
+```
+
+## my-ghostel-adopt-after-rename
+```
+(defun my-ghostel-adopt-after-rename ()
+  (when (and my-ghostel-adopt-pending
+             (not (equal (buffer-name) my-ghostel-restored-name)))
+    (setq my-ghostel-adopt-pending nil)
+    (tab2-adopt-restored-buffer (current-buffer))
+    (force-mode-line-update t)))
+```
+
+## my-ghostel-desktop-misc
+```
+(defun my-ghostel-desktop-misc (_dirname)
+  (list :directory default-directory :identity ghostel--buffer-identity
+        :title my-ghostel-user-title :project my-ghostel-project))
+
+(add-hook 'ghostel-mode-hook
+          (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
+```
+
+## my-ghostel-desktop-restore
+```
+(defun my-ghostel-desktop-restore (_file-name buffer-name misc)
+  (require 'ghostel)
+  (let* ((default-directory (or (plist-get misc :directory) default-directory))
+         (ghostel-buffer-name buffer-name)
+         ;; Prefix arg forces a new buffer (never reuses a live one); `ghostel'
+         ;; pops to it, but desktop restores the layout itself.
+         (buffer (save-window-excursion (ghostel '(4)))))
+    (with-current-buffer buffer
+      (setq my-ghostel-user-title (plist-get misc :title)
+            my-ghostel-project (plist-get misc :project)
+            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))
+            my-ghostel-restored-name (buffer-name)
+            my-ghostel-adopt-pending t)
+      (add-hook 'buffer-list-update-hook #'my-ghostel-adopt-after-rename nil t))
+    buffer))
+
+(with-eval-after-load 'desktop
+  (add-to-list 'desktop-buffer-mode-handlers
+               '(ghostel-mode . my-ghostel-desktop-restore)))
 
 (my-profile-mark "Programming modes")
 ```
@@ -3372,6 +3521,29 @@ restore too, so already-saved desktop files are fixed as well.
     (setf (alist-get param frameset-filter-alist) :never)))
 ```
 
+## my-desktop-mark-secondary-frame
+Persist only the primary frame in the desktop.  Any frame made while another
+real frame already exists (tear-offs, C-x 5 2, ...) is marked `desktop-dont-save'.
+```
+(defun my-desktop-mark-secondary-frame (frame)
+  (when (seq-some (lambda (f)
+                    (and (not (eq f frame))
+                         ;; framep is t for TTY and the daemon's initial frame; only GUI frames count.
+                         (not (eq (framep f) t))
+                         (not (frame-parameter f 'desktop-dont-save))))
+                  (frame-list))
+    (set-frame-parameter frame 'desktop-dont-save t)))
+(add-hook 'after-make-frame-functions #'my-desktop-mark-secondary-frame)
+```
+
+Desktop files saved before this may hold several frames; restore just the first.
+```
+(define-advice desktop-restore-frameset (:before () my-primary-only)
+  (when (and desktop-saved-frameset (cdr (frameset-states desktop-saved-frameset)))
+    (setf (frameset-states desktop-saved-frameset)
+          (list (car (frameset-states desktop-saved-frameset))))))
+```
+
 Setup file menu to include load/save desktop
 Note: lookup-key is the way to find existing entry names
 ```
@@ -3386,6 +3558,29 @@ Note: lookup-key is the way to find existing entry names
   [save-desktop]
   '("Save Desktop" . desktop-save)
   'write-file)
+```
+
+Auto-save the desktop hourly, but only after one has been loaded via desktop-read.
+```
+(defvar my-desktop-autosave-timer nil)
+```
+
+## my-desktop-autosave
+```
+(defun my-desktop-autosave ()
+  (when desktop-dirname
+    (let ((inhibit-message t))
+      (desktop-save desktop-dirname nil t))))
+```
+
+## my-desktop-start-autosave
+```
+(defun my-desktop-start-autosave ()
+  (unless (timerp my-desktop-autosave-timer)
+    (setq my-desktop-autosave-timer
+          (run-with-timer 3600 3600 #'my-desktop-autosave))))
+
+(add-hook 'desktop-after-read-hook #'my-desktop-start-autosave)
 ```
 
 Add zoom in/out to buffer menu
@@ -3654,7 +3849,8 @@ this enables a vertical list of completions with context dependent notes in the 
   :ensure t
   :custom
   (vertico-sort-function 'vertico-sort-history-length-alpha)
-  :init (vertico-mode 1))
+  :init (vertico-mode 1)
+  (setq vertico-preselect 'prompt))
 
 (use-package marginalia
   :ensure t
