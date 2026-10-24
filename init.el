@@ -22,7 +22,7 @@
 ;; high level priorities that inform the decisions I've made throughout this file.
 ;;
 ;; Philosophically, I have strong instincts about how I want an editor to behave and part of the
-;; appeal of emacs is the ability to configure as deeply as I want. While I try to find the cleanest
+;; appeal of Emacs is the ability to configure as deeply as I want. While I try to find the cleanest
 ;; mechanisms to do so, I will use advice and replace systems that don't meet my needs. The tradeoff
 ;; here is the possibility of more maintenance fixes from release to release. Periodically, I like to
 ;; revisit some of the larger decisions I've made. For example my current DAPE customizations have
@@ -140,7 +140,8 @@
 
 ;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
 ;; tab-config.el, dape-java.el, the local themes) here.
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+(eval-and-compile
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
 
 ;;; Profiling
@@ -1669,7 +1670,7 @@ ignored -- this must never block dismissing the mode-line notice."
 (setq org-startup-indented t)
 
 ;; Setup the standup summary capture template
-(defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename")
+(defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename.")
 (setq org-capture-templates
   '(    ;; ... other templates
 
@@ -1749,7 +1750,7 @@ ignored -- this must never block dismissing the mode-line notice."
 ;;         export MY_TITLE=$*
 ;;     fi
 ;; }
-x
+
 ;; export PROMPT_COMMAND=interal-set-window-title
 ;; ```
 
@@ -1764,13 +1765,13 @@ set-tab-title() {
 
 ;; ```
 
+(defvar-local my-ghostel-input-needed nil
+  "Non-nil when the terminal sent a notification and no input has followed.")
+
 (use-package ghostel
   :ensure t
   :defer t
   :config
-  (defvar-local my-ghostel-input-needed nil
-    "Non-nil when the terminal sent a notification and no input has followed.")
-
   ;; OSC 9 / OSC 777 notifications (e.g. Claude Code waiting on you) flag the
   ;; buffer as needing input until the next keystroke or command.
   (defun my-ghostel--set-input-needed (value)
@@ -1791,10 +1792,12 @@ set-tab-title() {
 
   (defcustom my-ghostel-escape-timeout 0.25
     "Seconds to wait after Esc for a key that should become Meta in Emacs."
-    :type 'number)
+    :type 'number
+    :group 'environment)
 
   (defun my-ghostel-escape ()
-    "Esc: M-<key> for keys in `ghostel-keymap-exceptions', else send Esc to the terminal."
+    "Esc: M-<key> for keys in `ghostel-keymap-exceptions', else send Esc to
+the terminal."
     (interactive)
     (let ((next (read-event nil nil my-ghostel-escape-timeout)))
       (if (and (characterp next)
@@ -1960,19 +1963,6 @@ terminal icon plus input-needed / command-running status."
   (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))
   (setq ghostel-buffer-name-function #'my-ghostel-buffer-name))
 
-(defvar-local my-ghostel-adopt-pending nil
-  "Non-nil in a desktop-restored buffer still awaiting its final name.")
-
-(defvar-local my-ghostel-restored-name nil
-  "Name the buffer had when desktop restored it.")
-
-(defun my-ghostel-adopt-after-rename ()
-  (when (and my-ghostel-adopt-pending
-             (not (equal (buffer-name) my-ghostel-restored-name)))
-    (setq my-ghostel-adopt-pending nil)
-    (tab2-adopt-restored-buffer (current-buffer))
-    (force-mode-line-update t)))
-
 (defun my-ghostel-desktop-misc (_dirname)
   (list :directory default-directory :identity ghostel--buffer-identity
         :title my-ghostel-user-title :project tab2-pinned-project))
@@ -1983,17 +1973,15 @@ terminal icon plus input-needed / command-running status."
 (defun my-ghostel-desktop-restore (_file-name buffer-name misc)
   (require 'ghostel)
   (let* ((default-directory (or (plist-get misc :directory) default-directory))
-         (ghostel-buffer-name buffer-name)
          ;; Prefix arg forces a new buffer (never reuses a live one); `ghostel'
          ;; pops to it, but desktop restores the layout itself.
          (buffer (save-window-excursion (ghostel '(4)))))
     (with-current-buffer buffer
+      ;; Take the saved name so the by-name view lookup after desktop-read hits.
+      (rename-buffer buffer-name t)
       (setq my-ghostel-user-title (plist-get misc :title)
             tab2-pinned-project (plist-get misc :project)
-            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))
-            my-ghostel-restored-name (buffer-name)
-            my-ghostel-adopt-pending t)
-      (add-hook 'buffer-list-update-hook #'my-ghostel-adopt-after-rename nil t))
+            ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
     buffer))
 
 (with-eval-after-load 'desktop
@@ -2164,7 +2152,7 @@ effect without a restart."
   "Java path used by eglot/jdtls"
   :type 'directory
   :set #'my-java-home-set
-  :group 'my-environment)
+  :group 'environment)
 
 ;; Establish the initial jdtls settings derived from my-java-home.
 ;; This is the single source of truth for that derivation -- see
@@ -3347,6 +3335,7 @@ tag, followed by the normal editable field."
 
 (my-profile-mark "config diagnostics")
 ;;; Config diagnostics
+;; These are separate from here to make them easier to call independently.
 (require 'config-diagnostics)
 
 (my-profile-mark "Local.el loading")

@@ -303,4 +303,50 @@ afterwards."
 (ert-deftest tab-config-test/close-tear-off-view-is-a-delete-frame-hook ()
   (should (memq 'tab2--close-tear-off-view delete-frame-functions)))
 
+;; `tab2-git-state' runs from every tab-line render, so an error out of
+;; `vc-git-state' (e.g. git's process spawn signalling because the
+;; buffer's `default-directory' was deleted) must degrade to nil rather
+;; than abort the whole tab line. `vc-git-state' is stubbed throughout.
+(defmacro tab-config-tests--with-git-state-buffer (stub &rest body)
+  "Run BODY in a temp buffer with `vc-git-state' replaced by STUB."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (setq tab2-git-state-cache nil)
+     (cl-letf (((symbol-function 'vc-git-state) ,stub))
+       ,@body)))
+
+(ert-deftest tab-config-test/git-state-returns-vc-git-state ()
+  (tab-config-tests--with-git-state-buffer (lambda (_file) 'edited)
+    (should (eq (tab2-git-state (current-buffer)) 'edited))))
+
+(ert-deftest tab-config-test/git-state-nil-when-vc-git-state-signals ()
+  (tab-config-tests--with-git-state-buffer
+      (lambda (_file) (error "Spawning child process: No such file or directory"))
+    (should (null (tab2-git-state (current-buffer))))))
+
+(ert-deftest tab-config-test/git-state-nil-when-file-error-signalled ()
+  (tab-config-tests--with-git-state-buffer
+      (lambda (_file) (signal 'file-missing '("Setting current directory" "No such file")))
+    (should (null (tab2-git-state (current-buffer))))))
+
+(ert-deftest tab-config-test/git-state-skips-vc-when-directory-deleted ()
+  (let ((dir (make-temp-file "tab-config-tests-" t))
+        (called nil))
+    (unwind-protect
+        (tab-config-tests--with-git-state-buffer
+            (lambda (_file) (setq called t) 'edited)
+          (setq default-directory (file-name-as-directory dir))
+          (delete-directory dir t)
+          (should (null (tab2-git-state (current-buffer))))
+          (should-not called))
+      (when (file-exists-p dir) (delete-directory dir t)))))
+
+(ert-deftest tab-config-test/git-state-failure-is-cached ()
+  (let ((calls 0))
+    (tab-config-tests--with-git-state-buffer
+        (lambda (_file) (cl-incf calls) (error "boom"))
+      (tab2-git-state (current-buffer))
+      (tab2-git-state (current-buffer))
+      (should (= calls 1)))))
+
 (provide 'tab-config-tests)
