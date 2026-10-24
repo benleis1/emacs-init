@@ -64,23 +64,11 @@
   (if (boundp 'my-default-fixed-pitch-font)
       my-default-fixed-pitch-font
     (and (boundp 'nerd-icons-font-family) nerd-icons-font-family))
-  "Font family explicitly requested for every icon glyph this file draws,
-via `my-modeline--icon'. nerd-icons' own icon functions default to
-`nerd-icons-font-family' (\"Symbols Nerd Font Mono\"), but that exact font
-may not be what's actually installed -- this config uses
-`my-default-fixed-pitch-font' instead (see init.el), the same override
-`my-imenu-list-icon-face' needs for the same reason. Forcing it explicitly
-on every call, rather than relying on nerd-icons' default, means an icon
-can't silently render as a tofu box just because the two names don't match.")
+  "Font family explicitly requested for every icon glyph this file draws.")
 
 (defun my-modeline--icon (fn &rest args)
-  "Call FN, a nerd-icons icon function (e.g. `nerd-icons-octicon'), with
-ARGS, forcing `my-modeline-icon-font-family'. nerd-icons' generated icon
-functions read the `nerd-icons-font-family' variable directly and have no
-`:family' key in ARGS to override per call, so the only way to force a
-specific family for just these calls -- without changing the family for
-nerd-icons-dired and everything else that shares that global default --
-is a dynamic let-binding around the call."
+  "Call FN, a nerd-icons icon function (e.g. `nerd-icons-octicon'), with ARGS.
+This lets me set the `my-modeline-icon-font-family' around the call."
   (let ((nerd-icons-font-family (or my-modeline-icon-font-family nerd-icons-font-family)))
     (apply fn args)))
 
@@ -877,20 +865,21 @@ work the same way.")
   "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
 Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
 list for the buffer, even when it's currently empty.
-While a backend is still running and hasn't reported yet, an ellipsis is
-shown after the counters."
+While a backend is still running and hasn't reported yet, a ⟳ glyph is
+shown after the counters and the tooltip also says \"flymake is running\"."
   (when (bound-and-true-p flymake-mode)
     (let* ((counters (format-mode-line flymake-mode-line-counters))
            (checking (seq-difference (flymake-running-backends)
                                      (flymake-reporting-backends)))
-           (busy (propertize "…" 'face 'compilation-mode-line-run)))
+           (busy (propertize "⟳" 'face 'compilation-mode-line-run)))
       (propertize (cond ((not checking)
                          (if (string-empty-p counters) "  OK  " counters))
                         ((string-empty-p counters) (concat "  " busy "  "))
                         (t (concat (string-trim-right counters) " " busy " ")))
                   'local-map my-flymake-modeline-map
                   'mouse-face 'mode-line-highlight
-                  'help-echo "mouse-1: show flymake diagnostics"))))
+                  'help-echo (concat (if checking "flymake is running\n" "")
+                                     "mouse-1: show flymake diagnostics")))))
 
 ;;; Zoom slider
 

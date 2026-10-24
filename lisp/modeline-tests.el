@@ -134,22 +134,32 @@
   (modeline-tests--with-flymake t "E:1 W:2" '(a) '(a)
     (should (equal (substring-no-properties (my-flymake-segment)) "E:1 W:2"))))
 
-(ert-deftest modeline-test/flymake-segment-ellipsis-alone-while-checking ()
+(ert-deftest modeline-test/flymake-segment-glyph-alone-while-checking ()
   (modeline-tests--with-flymake t "" '(a) nil
-    (should (equal (substring-no-properties (my-flymake-segment)) "  …  "))))
+    (should (equal (substring-no-properties (my-flymake-segment)) "  ⟳  "))))
 
-(ert-deftest modeline-test/flymake-segment-ellipsis-after-counters-while-checking ()
+(ert-deftest modeline-test/flymake-segment-glyph-after-counters-while-checking ()
   (modeline-tests--with-flymake t "E:1 " '(a b) '(a)
-    (should (equal (substring-no-properties (my-flymake-segment)) "E:1 … "))))
+    (should (equal (substring-no-properties (my-flymake-segment)) "E:1 ⟳ "))))
+
+(ert-deftest modeline-test/flymake-segment-tooltip-while-checking ()
+  (modeline-tests--with-flymake t "" '(a) nil
+    (should (equal (get-text-property 0 'help-echo (my-flymake-segment))
+                   "flymake is running\nmouse-1: show flymake diagnostics"))))
+
+(ert-deftest modeline-test/flymake-segment-tooltip-when-idle ()
+  (modeline-tests--with-flymake t "" '(a) '(a)
+    (should (equal (get-text-property 0 'help-echo (my-flymake-segment))
+                   "mouse-1: show flymake diagnostics"))))
 
 (ert-deftest modeline-test/flymake-segment-idle-once-all-backends-reported ()
   (modeline-tests--with-flymake t "" '(a b) '(b a)
     (should (equal (substring-no-properties (my-flymake-segment)) "  OK  "))))
 
-(ert-deftest modeline-test/flymake-segment-ellipsis-uses-running-face ()
+(ert-deftest modeline-test/flymake-segment-glyph-uses-running-face ()
   (modeline-tests--with-flymake t "" '(a) nil
     (let* ((s (my-flymake-segment))
-           (pos (string-match "…" s)))
+           (pos (string-match "⟳" s)))
       (should (eq (get-text-property pos 'face s) 'compilation-mode-line-run)))))
 
 (ert-deftest modeline-test/flymake-segment-click-properties ()
