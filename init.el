@@ -452,6 +452,10 @@
 	;; default red-syntax is too close to error
 	(warning  yellow-syntax)
 
+	;; Lighter ANSI "white" (LightGray) so pspg's cursor/status bars in ghostel aren't dark.
+	(bg-term-white "#e0e0e0")
+	(fg-term-white "#e0e0e0")
+
 	))
 
 ;; enable fixed fonts for code and variable for text
@@ -1883,6 +1887,28 @@ the next prompt reports its title."
   (if my-ghostel-user-title
       (format "*ghostel: %s*" my-ghostel-user-title)
     (ghostel-buffer-name-by-title title)))
+
+(defvar ghostel--command-running)
+
+(defun my-ghostel-tab-name (name buffer)
+  "Return the tab text for ghostel BUFFER named NAME.
+Strips the \"*ghostel: \" decoration (keeping any <N> suffix) and adds a
+terminal icon plus input-needed / command-running status."
+  (when (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name)
+    (setq name (concat (match-string 1 name) (match-string 2 name))))
+  ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
+  (setq name (string-replace "\u2003" " " name))
+  (concat (when-let* ((icon (my-modeline--icon-safe
+                             #'nerd-icons-octicon "nf-oct-terminal")))
+            (concat icon "  "))
+          (cond
+           ((buffer-local-value 'my-ghostel-input-needed buffer)
+            (concat (my-modeline--keyboard-icon) " " name))
+           ((buffer-local-value 'ghostel--command-running buffer)
+            (concat "⏳ " name))
+           (t name))))
+
+(tab2-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
 (with-eval-after-load 'ghostel
   (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))

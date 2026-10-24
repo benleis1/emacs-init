@@ -129,29 +129,27 @@
 ;; git modified markers - I'm still looking for a better one to display in terminal mode
 (defvar tab2-git-modified-marker (if window-system "" "◨"))
 
-;; Space the tabs out a bit
-(defvar ghostel--command-running)
-(defvar my-ghostel-input-needed)
-
 ;; general support for project overrides which can be used by non project based buffers
 (defvar tab2-pinned-project)
+
+;; Space the tabs out a bit
+(defvar tab2-buffer-name-functions nil
+  "Alist of (MAJOR-MODE . FUNCTION) used to transform tab names.
+FUNCTION is called with the buffer name and the buffer, and returns the
+full text to display for the tab (icons and status included, without the
+surrounding padding).  Use `tab2-register-buffer-name-function' to add
+entries.")
+
+(defun tab2-register-buffer-name-function (mode function)
+  "Register FUNCTION as the tab name transform for buffers in MODE."
+  (setf (alist-get mode tab2-buffer-name-functions) function))
+
 (defun tab2-space-tab-name (buffer &optional _buffers)
   (let ((name (buffer-name buffer)))
-    (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
-               (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name))
-      (setq name (concat (match-string 1 name) (match-string 2 name))))
-    ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
-    (setq name (string-replace " " " " name))
-    (format " %s%s " (or (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
-                              (when-let* ((icon (my-modeline--icon-safe
-                                                 #'nerd-icons-octicon "nf-oct-terminal")))
-                                (concat icon "  ")))
-                         "")
-            (cond
-             ((not (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)) name)
-             ((buffer-local-value 'my-ghostel-input-needed buffer) (concat (my-modeline--keyboard-icon) " " name))
-             ((buffer-local-value 'ghostel--command-running buffer) (concat "⏳ " name))
-             (t name)))))
+    (when-let* ((fn (alist-get (buffer-local-value 'major-mode buffer)
+                               tab2-buffer-name-functions)))
+      (setq name (funcall fn name buffer)))
+    (format " %s " name)))
 
 (setq tab-line-tab-name-function #'tab2-space-tab-name)
 
@@ -339,7 +337,7 @@
     major-mode))
 
 (defvar tab2-white-list-modes
-  '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode)
+  '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode eshell-mode)
   "List of modes that will be tracked even if the buffer is not a file")
 
 (defvar tab2-white-list-buffer-names
