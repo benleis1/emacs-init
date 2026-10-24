@@ -30,7 +30,7 @@
 ;;
 ;; Unlike many other users who have shared their config files, I like using the mouse and even the
 ;; occasional menu rather than remembering key bindings for everything. So I've spent some time
-;; trying to get emacs to work more consistently for these modes. For example with flyspell on you
+;; trying to get Emacs to work more consistently for these modes. For example with flyspell on you
 ;; can right click and get a context menu with the possible spellings like in most other
 ;; applications.  Wherever possible I try to wire in useful help text to show when hovering. This
 ;; is most extensive in the modeline pieces.
@@ -73,14 +73,14 @@
 ;;> eglot programming u/x
 
 ;;
-;; Normally I run a gui standalone emacs as well as an emacs server for terminal
+;; Normally I run a gui standalone Emacs as well as an Emacs server for terminal
 ;; mode editing My typical alias setup
 ;;
 ;; ```
-;; # launcher for terminal emacs alias
+;; # launcher for terminal Emacs alias
 ;; emacs='emacsclient -t -s default --alternate-editor=`
 ;;
-;;  # launcher for gui emacs
+;;  # launcher for gui Emacs
 ;;  function gemacs() {
 ;;     /opt/homebrew/bin/emacs $* &
 ;;  }
@@ -102,7 +102,7 @@
 ;;   - DejaVu Sans Mono Nerd Font installed (required). It's the startup font
 ;;     set in early-init.el, and a missing font makes Emacs fall back to a
 ;;     terminal frame instead of a GUI one. It also supplies the mode-line and
-;;     dired icons. To use another font, change `my-default-fixed-pitch-font'
+;;     Dired icons. To use another font, change `my-default-fixed-pitch-font'
 ;;     in early-init.el.
 ;;   - aspell installed (falls back to ispell if not found) for flyspell.
 ;;   - A Java installation reachable via `my-java-home` (defaults to a jenv
@@ -122,12 +122,12 @@
 ;;
 ;; ## Installation
 
-;; I have an optional `install.sh` script that will do basic symlinking of the lisp files into the
+;; I have an optional `install.sh` script that will do basic symlinking of the Lisp files into the
 ;; emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 ;; external dependencies once running.
 
 ;; ## Performance
-;; * Using the elpaca lockfile and byte compiling the lisp files will speed up startup times.
+;; * Using the elpaca lockfile and byte compiling the Lisp files will speed up startup times.
 ;; * See the profile section for more built in options for optimizing startup.
 ;; * I currently see start times around .6-.7 seconds. While another .1 seconds could be saved by not
 ;; doing an elpaca-wait at the end of this file, I prefer the consistency that synchronization provides
@@ -156,7 +156,7 @@
 ;; this file and the use-package report.
 
 (defvar my-profile-init-p nil
-  "Non-nil when emacs was started with --profile-init.")
+  "Non-nil when Emacs was started with --profile-init.")
 (defvar my-profiler-running nil
   "Non-nil while the profiler started by `my-toggle-profiler' is sampling.")
 (defvar my-profile-marks nil
@@ -1317,7 +1317,7 @@ entering its warning window.")
   "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
 (defvar my-appt-beeped-keys nil
-  "Appointment KEYs (see `my-appt-due-list') already announced with the glass
+  "Track if appointment KEYs (see `my-appt-due-list') were already announced with the glass
 bell sound. Unlike `my-appt-dismissed-keys', this is set automatically --
 the first `appt-check' cycle in which a key enters its warning window adds
 it here, so later cycles stay silent for that same occurrence without
@@ -2193,8 +2193,8 @@ effect without a restart."
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
 
 (defvar eglot-suppressed-progress-titles '("Publish Diagnostics")
-  "$/progress titles never reported to the message bar or mode line,
-not even their `report' updates. jdtls fires its \"Publish
+  "$/progress titles are never reported to the message bar or mode line,
+not even the `report' updates. jdtls fires its \"Publish
 Diagnostics\" task on essentially every edit, which drowns out
 everything else `eglot-report-progress' shows, and none of its
 begin/report/end carries anything useful anyway.")
@@ -2719,6 +2719,9 @@ declaration if any such methods were found."
     (mapcar #'cdr nodes)))
 
 ;;;; flymake
+
+;; I don't want flymake info notes about 2 spaces after a period
+(setq sentence-end-double-space nil)
 
 ;; Dock the diagnostics list as a bottom "problems panel" instead of
 ;; letting it split whatever window happens to be current.
