@@ -836,7 +836,9 @@
   (setq pulsar-highlight-face 'pulsar-magenta)
   ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
   ;; generic for the pulsar-pulse-functions list
-  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t))
+  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t)
+  ;; Likewise, clicking a diagnostic runs `push-button', not a command pulsar watches.
+  (advice-add 'flymake-goto-diagnostic :after (lambda (&rest _) (pulsar-pulse-line))))
 
 (my-profile-mark "Dired")
 ;;; Dired
@@ -1317,16 +1319,18 @@ entering its warning window.")
   "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
 (defvar my-appt-beeped-keys nil
-  "Track if appointment KEYs (see `my-appt-due-list') were already announced with the glass
-bell sound. Unlike `my-appt-dismissed-keys', this is set automatically --
-the first `appt-check' cycle in which a key enters its warning window adds
-it here, so later cycles stay silent for that same occurrence without
-requiring a manual dismiss. Reset daily alongside `my-appt-dismissed-keys'.")
+  "Track if appointment KEYs (see `my-appt-due-list') were already
+announced with the glass bell sound. Unlike `my-appt-dismissed-keys',
+this is set automatically -- the first `appt-check' cycle in which a key
+enters its warning window adds it here, so later cycles stay silent for
+that same occurrence without requiring a manual dismiss. Reset daily
+alongside `my-appt-dismissed-keys'.")
 
 (defvar my-appt--pre-check-due nil
-  "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
-`appt-time-msg-list', so `my-appt-mode-line-update' can tell which
-appointment -- if any -- just matured and was deleted by this check.")
+  "This holds a snapshot of `my-appt-due-list' taken just before
+`appt-check' mutates `appt-time-msg-list'. So `my-appt-mode-line-update'
+can tell which appointment, if any, just matured and was deleted by
+this check.")
 
 (defun my-appt-glass-bell (orig-fun &rest args)
   "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,

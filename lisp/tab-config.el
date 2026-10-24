@@ -7,7 +7,7 @@
 ;;  \__\__,_|_.__/       \___\___/|_| |_|_| |_|\__, |
 ;;                                             |___/
 ;; ```
-;; Commentary:
+;;; Commentary:
 ;;
 ;; tab-line configuration
 ;; Originally these changes were aimed at making tabs operate similarly to the tabs in the browser
@@ -763,7 +763,9 @@ at the mouse-down event to the position at mouse-up event."
 ;; so it can be colored or not depending on being selected
 ;; and filter icon to the first tab
 (defun tab2-format-tab (tab tabs)
-  "Override for  `tab-line-tab-name-format-function' that adds on a modified buffer face and indicator"
+  "Override for `tab-line-tab-name-format-function' for TAB.
+Adds a modified-buffer face and indicator to TAB.
+TABS contains the whole set of tabs."
   (let* ((buffer (tab2-get-buffer-from-tab tab))
          (selected-p (if buffer
                          (eq buffer (window-buffer))
@@ -935,8 +937,8 @@ ROOT must already be normalized with `tab2--normalize-root'."
 ;; tab2-format-tab is then responsible for formatting each one i.e faces / close icons etc.
 (defun tab2-get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
-  This version is based on tab-line-tabs-buffers-groups but
-  changes first group to an icon and adds on all files"
+This version is based on tab-line-tabs-buffers-groups but changes first
+  group to an icon and adds on all files"
 
   (cond
    ;; views view
@@ -1385,3 +1387,6 @@ assigned to and its project root."
             (insert (format "  %s\n" (buffer-name b)))))
         (goto-char (point-min))))
     (pop-to-buffer buf)))
+
+(provide 'tab-config)
+;;;; tab-config.el ends here

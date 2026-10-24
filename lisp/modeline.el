@@ -876,10 +876,18 @@ work the same way.")
 (defun my-flymake-segment ()
   "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
 Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
-list for the buffer, even when it's currently empty."
+list for the buffer, even when it's currently empty.
+While a backend is still running and hasn't reported yet, an ellipsis is
+shown after the counters."
   (when (bound-and-true-p flymake-mode)
-    (let ((counters (format-mode-line flymake-mode-line-counters)))
-      (propertize (if (string-empty-p counters) "  OK  " counters)
+    (let* ((counters (format-mode-line flymake-mode-line-counters))
+           (checking (seq-difference (flymake-running-backends)
+                                     (flymake-reporting-backends)))
+           (busy (propertize "…" 'face 'compilation-mode-line-run)))
+      (propertize (cond ((not checking)
+                         (if (string-empty-p counters) "  OK  " counters))
+                        ((string-empty-p counters) (concat "  " busy "  "))
+                        (t (concat (string-trim-right counters) " " busy " ")))
                   'local-map my-flymake-modeline-map
                   'mouse-face 'mode-line-highlight
                   'help-echo "mouse-1: show flymake diagnostics"))))
