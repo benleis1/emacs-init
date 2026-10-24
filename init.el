@@ -898,6 +898,8 @@
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
+(global-set-key (kbd "s-]") 'tab2-next-view)
+(global-set-key (kbd "s-[") 'tab2-prev-view)
 (global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
 (global-set-key (kbd "C-c t") 'ghostel)
 
