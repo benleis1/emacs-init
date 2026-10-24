@@ -755,7 +755,7 @@ the same standard way, rather than only the buffer name being clickable."
 (defvar my-modeline-right-segments
   '(my-modeline-segment-misc-info
     my-modeline-segment-eglot
-    my-eglot-flymake-segment
+    my-flymake-segment
     my-modeline-segment-position
     my-modeline-segment-ghostel-busy
     my-modeline-segment-vcs
@@ -873,12 +873,11 @@ work the same way.")
 (defvar my-flymake-modeline-map
   (my-modeline-mouse-map '((mouse-1 . flymake-show-buffer-diagnostics))))
 
-(defun my-eglot-flymake-segment ()
-  "Flymake's error/warning/note counter, but only when eglot manages the buffer.
-Elsewhere (e.g. elisp buffers using plain flymake) stays silent.
+(defun my-flymake-segment ()
+  "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
 Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
 list for the buffer, even when it's currently empty."
-  (when (bound-and-true-p eglot--managed-mode)
+  (when (bound-and-true-p flymake-mode)
     (let ((counters (format-mode-line flymake-mode-line-counters)))
       (propertize (if (string-empty-p counters) "  OK  " counters)
                   'local-map my-flymake-modeline-map

@@ -1754,17 +1754,6 @@ ignored -- this must never block dismissing the mode-line notice."
 ;; export PROMPT_COMMAND=interal-set-window-title
 ;; ```
 
-
-set-tab-title() {
-;;    if [[ -n "$INSIDE_EMACS" ]] && declare -F ghostel_cmd >/dev/null; then
-;;        ghostel_cmd set-tab-title "$@"
-;;    else
-;;        export MY_TITLE=$*
-;;    fi
-}
-
-;; ```
-
 (defvar-local my-ghostel-input-needed nil
   "Non-nil when the terminal sent a notification and no input has followed.")
 
@@ -2778,6 +2767,7 @@ declaration if any such methods were found."
 
 ;; Group `use-package` declarations under their own imenu heading.
 ;; Also extract all the ;;; sections.
+(add-hook 'emacs-lisp-mode-hook #'flymake-mode)
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
 	    (setq-local imenu-depth 2)
