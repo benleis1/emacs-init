@@ -106,3 +106,56 @@
   (should (equal (my-modeline--dualize-local-maps "plain") "plain")))
 
 (provide 'modeline-tests)
+
+;;; `my-flymake-segment'
+
+(require 'flymake)
+(require 'cl-lib)
+
+(defmacro modeline-tests--with-flymake (mode counters running reporting &rest body)
+  "Run BODY with flymake state faked: MODE, COUNTERS, RUNNING and REPORTING."
+  (declare (indent 4))
+  `(let ((flymake-mode ,mode)
+         (flymake-mode-line-counters ,counters))
+     (cl-letf (((symbol-function 'format-mode-line) #'identity) ; returns "" in batch
+               ((symbol-function 'flymake-running-backends) (lambda () ,running))
+               ((symbol-function 'flymake-reporting-backends) (lambda () ,reporting)))
+       ,@body)))
+
+(ert-deftest modeline-test/flymake-segment-nil-when-mode-off ()
+  (modeline-tests--with-flymake nil "" nil nil
+    (should-not (my-flymake-segment))))
+
+(ert-deftest modeline-test/flymake-segment-ok-when-idle-and-no-counters ()
+  (modeline-tests--with-flymake t "" '(a) '(a)
+    (should (equal (substring-no-properties (my-flymake-segment)) "  OK  "))))
+
+(ert-deftest modeline-test/flymake-segment-shows-counters-when-idle ()
+  (modeline-tests--with-flymake t "E:1 W:2" '(a) '(a)
+    (should (equal (substring-no-properties (my-flymake-segment)) "E:1 W:2"))))
+
+(ert-deftest modeline-test/flymake-segment-ellipsis-alone-while-checking ()
+  (modeline-tests--with-flymake t "" '(a) nil
+    (should (equal (substring-no-properties (my-flymake-segment)) "  …  "))))
+
+(ert-deftest modeline-test/flymake-segment-ellipsis-after-counters-while-checking ()
+  (modeline-tests--with-flymake t "E:1 " '(a b) '(a)
+    (should (equal (substring-no-properties (my-flymake-segment)) "E:1 … "))))
+
+(ert-deftest modeline-test/flymake-segment-idle-once-all-backends-reported ()
+  (modeline-tests--with-flymake t "" '(a b) '(b a)
+    (should (equal (substring-no-properties (my-flymake-segment)) "  OK  "))))
+
+(ert-deftest modeline-test/flymake-segment-ellipsis-uses-running-face ()
+  (modeline-tests--with-flymake t "" '(a) nil
+    (let* ((s (my-flymake-segment))
+           (pos (string-match "…" s)))
+      (should (eq (get-text-property pos 'face s) 'compilation-mode-line-run)))))
+
+(ert-deftest modeline-test/flymake-segment-click-properties ()
+  (dolist (state '(("" (a) (a)) ("" (a) nil) ("E:1" (a) (a))))
+    (modeline-tests--with-flymake t (nth 0 state) (nth 1 state) (nth 2 state)
+      (let ((s (my-flymake-segment)))
+        (should (eq (get-text-property 0 'local-map s) my-flymake-modeline-map))
+        (should (eq (get-text-property 0 'mouse-face s) 'mode-line-highlight))
+        (should (stringp (get-text-property 0 'help-echo s)))))))
