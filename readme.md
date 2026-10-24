@@ -182,6 +182,7 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-markdown-tags-line-value-start](#my-markdown-tags-line-value-start)
   - [my-markdown-tags-capf](#my-markdown-tags-capf)
 - [Appt setup](#appt-setup)
+- [calendar which is imported into org-agenda.](#calendar-which-is-imported-into-org-agenda)
   - [my-appt-mode-line-intensity](#my-appt-mode-line-intensity)
   - [my-appt-mode-line-color](#my-appt-mode-line-color)
   - [my-appt-due-list](#my-appt-due-list)
@@ -197,8 +198,13 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-meeting-log-record-dismissed-appointments](#my-meeting-log-record-dismissed-appointments)
   - [my-org-agenda-extend-current-time-face](#my-org-agenda-extend-current-time-face)
 - [Terminal support via ghostel](#terminal-support-via-ghostel)
+- [Inside Emacs (ghostel) the tab title is owned by Emacs: set-tab-title sends it](#inside-emacs-ghostel-the-tab-title-is-owned-by-emacs-set-tab-title-sends-it)
+- [there (where it is persisted in the desktop) and the prompt only reports the](#there-where-it-is-persisted-in-the-desktop-and-the-prompt-only-reports-the)
+- [unique default name.  Elsewhere the shell keeps the title in MY_TITLE.](#unique-default-name--elsewhere-the-shell-keeps-the-title-in-my_title)
+- [function meant for interactive use](#function-meant-for-interactive-use)
   - [my-ghostel-set-title](#my-ghostel-set-title)
   - [my-ghostel-buffer-name](#my-ghostel-buffer-name)
+  - [my-ghostel-tab-name](#my-ghostel-tab-name)
   - [my-ghostel-adopt-after-rename](#my-ghostel-adopt-after-rename)
   - [my-ghostel-desktop-misc](#my-ghostel-desktop-misc)
   - [my-ghostel-desktop-restore](#my-ghostel-desktop-restore)
@@ -254,6 +260,12 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
 - [GC tuning](#gc-tuning)
 
 <!-- markdown-toc end -->
+
+Define an ignore macro that doesn't even evaluate the argument. This is useful for
+display purposes when using elispdoc rather than commenting whole regions out.
+```
+(defmacro my-ignore (_form))
+```
 
 install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
 tab-config.el, dape-java.el, the local themes) here.
@@ -363,11 +375,9 @@ already includes the nested :init and :config times.
 ```
 # Package setup
 
-Define an ignore macro that doesn't even evaluate the argument. This is useful for
-display purposes when using elispdoc rather than commenting whole regions out.
-```
-(defmacro my-ignore (_form))
-```
+Current packages are managed via Elpaca which allows loading directly from git where needed and
+also does asynchronous installation. The elpaca lock file should be used both for predictable
+package versions but also to short circuit version resolution which can take measurable time.
 
 elpaca bootstrap -- verbatim from the installed elpaca's own
 doc/installer.el (progfolio/elpaca), not a memorized/older copy, since
@@ -636,6 +646,10 @@ Specifically:
 
 	;; default red-syntax is too close to error
 	(warning  yellow-syntax)
+
+	;; Lighter ANSI "white" (LightGray) so pspg's cursor/status bars in ghostel aren't dark.
+	(bg-term-white "#e0e0e0")
+	(fg-term-white "#e0e0e0")
 
 	))
 ```
@@ -1593,6 +1607,9 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ```
 # Appt setup
 
+I use appt for managing notifications on the modeline. The primary source of events is my
+# calendar which is imported into org-agenda.
+
 Set warning time in minutes before the event
 ```
 (setq appt-message-warning-time 10)
@@ -2251,9 +2268,12 @@ SVG calendar view
 (my-profile-mark "Terminal support")
 ```
 # Terminal support via ghostel
-Note: this works better with `eza --hyper-link` which allows clicking on the output to open
+Terminal support requires some additions on the shell side to work best.
 
-Also define a bash function for general opens
+1. Alias `eza --hyper-link`to `ls` which allows directly clicking on the output of ls to open a
+file.
+
+2. Also define a bash function for general file opens in your bashrc or zshrc
 ```
 e() {
    if [[ -n "$INSIDE_EMACS" ]]; then
@@ -2262,6 +2282,48 @@ e() {
 	echo "Not running ghostel"
    fi
 }
+
+3. The shell title will also reflect in the emacs tabs. I use:
+```
+# Inside Emacs (ghostel) the tab title is owned by Emacs: set-tab-title sends it
+# there (where it is persisted in the desktop) and the prompt only reports the
+# unique default name.  Elsewhere the shell keeps the title in MY_TITLE.
+interal-set-window-title() {
+   if [[ -n "$INSIDE_EMACS" ]]; then
+       [[ -z "$DEFAULT_TAB_TITLE" ]] && claim-default-tab-title
+       printf '\e]0;%s\a' "${MY_TITLE:-$DEFAULT_TAB_TITLE}"
+   else
+       printf '\e]0;\xe2\x80\x83%s%s\a' "${MY_TITLE:+$MY_TsITLE }" "$(abbrev-path)"
+   fi
+}
+
+# function meant for interactive use
+set-tab-title() {
+    if [[ -n "$INSIDE_EMACS" ]] && declare -F ghostel_cmd >/dev/null; then
+        ghostel_cmd set-tab-title "$@"
+    else
+        export MY_TITLE=$*
+    fi
+}
+```
+x
+```
+export PROMPT_COMMAND=interal-set-window-title
+```
+
+
+```
+set-tab-title() {
+```
+   if [[ -n "$INSIDE_EMACS" ]] && declare -F ghostel_cmd >/dev/null; then
+       ghostel_cmd set-tab-title "$@"
+   else
+       export MY_TITLE=$*
+   fi
+```
+}
+```
+
 ```
 
 ```
@@ -2448,6 +2510,35 @@ the next prompt reports its title."
   (if my-ghostel-user-title
       (format "*ghostel: %s*" my-ghostel-user-title)
     (ghostel-buffer-name-by-title title)))
+
+(defvar ghostel--command-running)
+```
+
+## my-ghostel-tab-name
+>Return the tab text for ghostel BUFFER named NAME.
+Strips the "*ghostel: " decoration (keeping any <N> suffix) and adds a
+terminal icon plus input-needed / command-running status.
+
+```
+(defun my-ghostel-tab-name (name buffer)
+  "Return the tab text for ghostel BUFFER named NAME.
+Strips the \"*ghostel: \" decoration (keeping any <N> suffix) and adds a
+terminal icon plus input-needed / command-running status."
+  (when (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name)
+    (setq name (concat (match-string 1 name) (match-string 2 name))))
+  ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
+  (setq name (string-replace "\u2003" " " name))
+  (concat (when-let* ((icon (my-modeline--icon-safe
+                             #'nerd-icons-octicon "nf-oct-terminal")))
+            (concat icon "  "))
+          (cond
+           ((buffer-local-value 'my-ghostel-input-needed buffer)
+            (concat (my-modeline--keyboard-icon) " " name))
+           ((buffer-local-value 'ghostel--command-running buffer)
+            (concat "⏳ " name))
+           (t name))))
+
+(tab2-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
 (with-eval-after-load 'ghostel
   (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))

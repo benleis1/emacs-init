@@ -134,6 +134,10 @@
 
 ;;; Code:
 
+;; Define an ignore macro that doesn't even evaluate the argument. This is useful for
+;; display purposes when using elispdoc rather than commenting whole regions out.
+(defmacro my-ignore (_form))
+
 ;; install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
 ;; tab-config.el, dape-java.el, the local themes) here.
 (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
@@ -216,9 +220,9 @@
 (my-profile-mark "Package setup")
 ;;; Package setup
 
-;; Define an ignore macro that doesn't even evaluate the argument. This is useful for
-;; display purposes when using elispdoc rather than commenting whole regions out.
-(defmacro my-ignore (_form))
+;; Current packages are managed via Elpaca which allows loading directly from git where needed and
+;; also does asynchronous installation. The elpaca lock file should be used both for predictable
+;; package versions but also to short circuit version resolution which can take measurable time.
 
 ;; elpaca bootstrap -- verbatim from the installed elpaca's own
 ;; doc/installer.el (progfolio/elpaca), not a memorized/older copy, since
@@ -1201,6 +1205,9 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 (my-profile-mark "Appt setup")
 ;;; Appt setup
 
+;; I use appt for managing notifications on the modeline. The primary source of events is my
+;;; calendar which is imported into org-agenda.
+
 ;; Set warning time in minutes before the event
 (setq appt-message-warning-time 10)
 
@@ -1705,9 +1712,12 @@ ignored -- this must never block dismissing the mode-line notice."
 
 (my-profile-mark "Terminal support")
 ;;; Terminal support via ghostel
-;; Note: this works better with `eza --hyper-link` which allows clicking on the output to open
-;;
-;; Also define a bash function for general opens
+;; Terminal support requires some additions on the shell side to work best.
+
+;; 1. Alias `eza --hyper-link`to `ls` which allows directly clicking on the output of ls to open a
+;; file.
+
+;; 2. Also define a bash function for general file opens in your bashrc or zshrc
 ;; ```
 ;; e() {
 ;;    if [[ -n "$INSIDE_EMACS" ]]; then
@@ -1716,6 +1726,42 @@ ignored -- this must never block dismissing the mode-line notice."
 ;;	echo "Not running ghostel"
 ;;    fi
 ;;}
+
+;; 3. The shell title will also reflect in the emacs tabs. I use:
+;; ```
+;; # Inside Emacs (ghostel) the tab title is owned by Emacs: set-tab-title sends it
+;; # there (where it is persisted in the desktop) and the prompt only reports the
+;; # unique default name.  Elsewhere the shell keeps the title in MY_TITLE.
+;; interal-set-window-title() {
+;;    if [[ -n "$INSIDE_EMACS" ]]; then
+;;        [[ -z "$DEFAULT_TAB_TITLE" ]] && claim-default-tab-title
+;;        printf '\e]0;%s\a' "${MY_TITLE:-$DEFAULT_TAB_TITLE}"
+;;    else
+;;        printf '\e]0;\xe2\x80\x83%s%s\a' "${MY_TITLE:+$MY_TsITLE }" "$(abbrev-path)"
+;;    fi
+;; }
+
+;; # function meant for interactive use
+;; set-tab-title() {
+;;     if [[ -n "$INSIDE_EMACS" ]] && declare -F ghostel_cmd >/dev/null; then
+;;         ghostel_cmd set-tab-title "$@"
+;;     else
+;;         export MY_TITLE=$*
+;;     fi
+;; }
+x
+;; export PROMPT_COMMAND=interal-set-window-title
+;; ```
+
+
+set-tab-title() {
+;;    if [[ -n "$INSIDE_EMACS" ]] && declare -F ghostel_cmd >/dev/null; then
+;;        ghostel_cmd set-tab-title "$@"
+;;    else
+;;        export MY_TITLE=$*
+;;    fi
+}
+
 ;; ```
 
 (use-package ghostel
