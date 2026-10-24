@@ -1143,8 +1143,9 @@ views) are then left out of the desktop file."
 	 tabs)
       tabs)))
 
-;; Update the current tabline. Used during theme load.
+;; Update the current tabline. Used as a theme load hook.
 (defun tab2-force-update (_theme)
+  "Update the current tabline."
   (tab2-update-close-button)
   (tab-line-force-update nil))
 
@@ -1154,6 +1155,7 @@ views) are then left out of the desktop file."
 ;; keymap action for when the filter button is selected
 ;; Swaps between group and file mode
 (defun tab2-select-filter-button (&optional _event)
+  "Handle an EVENT for the tab filter button."
   (interactive "e")
   (let ((group-view (window-parameter nil 'tab-line-groups)))
     (if group-view
@@ -1189,7 +1191,7 @@ views) are then left out of the desktop file."
        :box (:line-width (1 . 1)
               :color ,(face-foreground 'default))
        ))
-  "Face for quick command")
+  "Face for quick command.")
 
 (defface quick-command-prompt-face
   `((t :foreground ,(face-background 'default)
@@ -1198,7 +1200,7 @@ views) are then left out of the desktop file."
        :box (:line-width (1 . 1)
              :color ,(face-foreground 'default))
        ))
-  "Face for prompt")
+  "Face for prompt.")
 
 (defface quick-command-cursor-face
   `((t :foreground ,(face-background 'default)
@@ -1207,10 +1209,10 @@ views) are then left out of the desktop file."
        :box (:line-width (1 . 1)
              :color ,(face-foreground 'default))
        ))
-  "Face for cursor")
+  "Face for cursor.")
 
 (defun tab2-quick-command--update (current-buffer command-buffer)
-  "Update header-line with current command"
+  "Update header-line with current command."
 
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
@@ -1389,4 +1391,4 @@ assigned to and its project root."
     (pop-to-buffer buf)))
 
 (provide 'tab-config)
-;;;; tab-config.el ends here
+;;; tab-config.el ends here

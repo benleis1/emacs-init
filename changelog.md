@@ -59,10 +59,19 @@ mode glyph which I'm leveraging on the far left
 * Dark theme work: modus-vivendi adjustments, plus the embers and matrix
   variants, and dark versions of the close/funnel icons. Title bar removed.
 
-* Built in profiling support 
+* Built in profiling support
 * new install.sh script and my-diagnose-config helper function to check for dependencies
 * Added pulsar to show where jumps are occurring.
 * Pixel scrolling: smooth page up/down so tall images in markdown don't make
   the view jump. Only enabled in graphical frames, and ghostel buffers keep
   PgUp/PgDn for the terminal.
 * ghostel integration. Hooked into tabs and modeline with some focus on surfacing busy/needs notification sessions.
+ * tab-config now persists views. It also has support for tear off tabs including drag and drop.
+ * elisp runs flymake by default.
+* Project bound terminals: ghostel buffers now belong to a project and show up
+  in that project's tab group. Pinned projects are generic (tab2-pinned-project)
+  and ghostel name transforms are pluggable rather than baked into tab-config.
+* The desktop auto-saves hourly once it has been loaded, so views and terminals
+  survive a crash.
+* The flymake modeline segment is now universal and shows an indicator while
+  flymake is running.
