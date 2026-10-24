@@ -753,7 +753,10 @@ at the mouse-down event to the position at mouse-up event."
       (unless (and tab2-git-state-cache
 		   (< (- now (cdr tab2-git-state-cache)) tab2-git-state-cache-ttl))
 	(setq tab2-git-state-cache
-	      (cons (vc-git-state (buffer-file-name buffer)) now)))
+	      ;; A deleted directory makes git's process spawn signal; that must not abort the whole tab-line.
+	      (cons (and (file-directory-p default-directory)
+			 (ignore-errors (vc-git-state (buffer-file-name buffer))))
+		    now)))
       (car tab2-git-state-cache))))
 
 ;; Custom tab-line-name-format function to add on a face for the modified signifier
