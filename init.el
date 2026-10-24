@@ -212,7 +212,7 @@
     (pop-to-buffer buf)))
 
 (defun my-profile-init-finish ()
-  "Show the init section timings, use-package report and profiler report."
+  "Show the init section timings, `use-package' report and profiler report."
   (my-profile-mark "init done")
   (my-profile-report-phases)
   (use-package-report)
@@ -967,8 +967,9 @@ to check all text.  If flyspell is already enabled, does nothing."
           )))
 
 (defun flyspell-toggle ()
-  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it
-uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
+  "Turn Flyspell on if it is off, or off if it is on.
+When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text
+is handled appropriately."
   (interactive)
   (if (symbol-value flyspell-mode)
       (progn ; flyspell is on, turn it off
@@ -980,8 +981,8 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
 ;; preset modes to have flyspell on. Deferred to the next idle moment rather
 ;; than enabled directly in the hook
 (defun my-flyspell-defer-enable ()
-  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
-is next idle, so opening a buffer doesn't block on starting Aspell."
+  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs is idle.
+So opening a buffer doesn't block on starting Aspell."
   (let ((buf (current-buffer)))
     (run-with-idle-timer 0.1 nil
                           (lambda ()
@@ -1102,7 +1103,7 @@ is next idle, so opening a buffer doesn't block on starting Aspell."
                 (throw 'found (match-string 1))))))))))
 
 (defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
-  "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
+  "Browse a resolved liquid link at point, else call ORIG-FN with ARGS."
   (let ((name (my-markdown-liquid-post-url-at-point)))
     (if name
         (markdown--browse-url name)
@@ -1333,17 +1334,10 @@ can tell which appointment, if any, just matured and was deleted by
 this check.")
 
 (defun my-appt-glass-bell (orig-fun &rest args)
-  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-but only when an appointment is newly entering its warning window this
-check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
-`my-appt-beeped-keys'. This keeps the sound from firing again on every
-subsequent `appt-check' cycle for the same still-pending appointment,
-which would otherwise repeat for as long as it stays undismissed (e.g.
-while away from the frame with nobody around to dismiss it).
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check."
+  "Advice for appt-active that changes the sound and then calls ORIG-FUN with ARGS.
+The actual sound is platform specific and defined under `my-play-appt-sound'."
   (setq my-appt--pre-check-due (my-appt-due-list))
+  ;; Compute new appointments and only chime if there are any.
   (let* ((newly-due (seq-remove (lambda (entry)
                                    (let ((key (nth 3 entry)))
                                      (or (member key my-appt-dismissed-keys)
@@ -2947,7 +2941,7 @@ declaration if any such methods were found."
 ;; Issues: the initial excorporate setup triggers a diary download without a callback to do cleanup
 ;; The agenda itself loads the diary buffer - we should probably just leave it off the tab-line?
 (defun my-agenda-update-diary (&optional _args)
-  "call excorporate to update the diary for today"
+  "Call excorporate to update the diary for today."
 
   ;; onetime setup
   (if (not my-calendar-init)
