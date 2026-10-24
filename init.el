@@ -1727,6 +1727,7 @@ ignored -- this must never block dismissing the mode-line notice."
 ;;	echo "Not running ghostel"
 ;;    fi
 ;;}
+;; ```
 
 ;; 3. The shell title will also reflect in the emacs tabs. I use:
 ;; ```
