@@ -12,13 +12,26 @@
 ;; Author: Benjamin Leis
 
 ;;; Commentary:
-;;
+;; A performance conscious, mouse-friendly Emacs configuration with structured navigation, modern
+;; completion and integrated development tools.
+
+;; ![sample screen](./images/sample-screen.png)
+;;> basic UX
+
 ;; ## Quick Start
 ;;
 ;; ```
 ;; git clone <repo> ~/dev/emacs-init
 ;; cd ~/dev/emacs-init
 ;; ./install.sh              # or: ./install.sh -d /path/to/emacs.d
+;; ```
+;;
+;; To try it out without touching your existing `~/.emacs.d`, install into a scratch directory
+;; and point Emacs at it (Emacs 29+):
+;;
+;; ```
+;; ./install.sh -d ~/emacs-try
+;; emacs --init-directory ~/emacs-try
 ;; ```
 ;;
 ;; ## Philosophy
@@ -73,14 +86,6 @@
 ;; Likewise, I currently have a very minimal custom mode line that only features segments I actually
 ;; use and leverages the hover help text to convey extra information like a full buffer file path.
 ;;
-;; Sample screens:
-;; ![sample screen](./images/sample-screen.png)
-;;> basic u/x
-;;
-;; ![sample lsp screen](./images/lsp.png)
-;;> eglot programming u/x
-
-;;
 ;; Normally I run a gui standalone Emacs as well as an Emacs server for terminal
 ;; mode editing. My typical alias setup:
 ;;
@@ -127,6 +132,10 @@
 ;; - Python (partly)
 ;; - SQL
 ;; - Ghostel terminal
+
+;; ![sample lsp screen](./images/lsp.png)
+;;> eglot programming UX
+
 ;;
 ;; ## Installation
 
