@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;; -*- lexical-binding: t; byte-compile-warnings: (not obsolete); -*-
 
 ;;       .o8
 ;;      "888

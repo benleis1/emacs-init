@@ -1089,7 +1089,7 @@ also holds machine-local files (local.el and the like) that aren't ours."
     (should (null (nreverse missing)))))
 
 (ert-deftest my/test-install-script-links-every-lisp-file-that-init-loads ()
-  "Each non-test, non-theme lisp/*.el is `load'ed or `require'd by init.el."
+  "Each non-test, non-theme lisp/*.el is `load'ed, `require'd or spliced in by init.el."
   (skip-unless my/repo-root)
   (let ((init (with-temp-buffer
                 (insert-file-contents (expand-file-name "init.el" my/repo-root))
@@ -1100,7 +1100,9 @@ also holds machine-local files (local.el and the like) that aren't ours."
         (unless (or (string-match-p "tests?\\'" name) (string-suffix-p "-theme" name)
                     (string-match-p (format "(\\(?:load\\|require\\)[ \t]+['\"]%s\\(?:\\.el\\)?[\"') ]"
                                             (regexp-quote name))
-                                    init))
+                                    init)
+                    ;; compile-declarations.el is spliced in by `my-include-declarations'.
+                    (string-match-p (format "\"lisp/%s\\.el\"" (regexp-quote name)) init))
           (push file orphans))))
     (should (null (nreverse orphans)))))
 

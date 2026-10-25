@@ -119,6 +119,13 @@
 ;; ghostel
 (declare-function ghostel "ghostel")
 (declare-function ghostel-buffer-name-by-title "ghostel")
+(defvar ghostel--buffer-identity)
+
+;; Built-in functions that older or newer Emacs versions don't define at compile time
+(declare-function font-face-attributes "font")
+(declare-function pixel-scroll-interpolate-down "pixel-scroll")
+(declare-function pixel-scroll-interpolate-up "pixel-scroll")
+(declare-function mouse-shift-adjust-mode "mouse")
 
 ;; Other third-party packages
 (defvar imenu-list-mode-line-format)
