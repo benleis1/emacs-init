@@ -1,4 +1,4 @@
-;;; init.el --- Emacs configuration -*- lexical-binding: t; byte-compile-warnings: (not free-vars unresolved); -*-
+;;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
 ;; ```
 ;;  oooooooooooo
 ;;  `888'     `8
@@ -246,7 +246,6 @@
 ;;   in ghostel terminals.
 ;; * `my-default-fixed-pitch-font`, `my-default-font-size` - startup font (early-init.el).
 
-
 ;;; Code:
 
 ;; Define an ignore macro that doesn't even evaluate the argument. This is useful for
@@ -259,7 +258,28 @@
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
-(setq trusted-content (expand-file-name "lisp" user-emacs-directory))
+(setq trusted-content
+      (list (file-name-as-directory (expand-file-name "lisp" user-emacs-directory))))
+
+;;; Byte-compile warning fixups
+
+;; The predeclarations that keep this file warning-clean live in lisp/compile-declarations.el.
+;; They have to be spliced into this file (a `require' would not carry bare `defvar' or
+;; `declare-function' across files), hence the macro.
+(eval-and-compile
+  (defmacro my-include-declarations ()
+    "Expand to the forms in lisp/compile-declarations.el, or nil when not compiling."
+    (when (bound-and-true-p byte-compile-current-file)
+      (let ((file (expand-file-name "lisp/compile-declarations.el" user-emacs-directory))
+            forms)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (condition-case nil
+              (while t (push (read (current-buffer)) forms))
+            (end-of-file nil)))
+        `(progn ,@(nreverse forms))))))
+(my-include-declarations)
 
 ;;; Profiling
 ;; Everything for profiling startup lives here, ahead of the rest of the file, because the
@@ -887,14 +907,17 @@ Customize the thresholds via `my-max-auto-revert-size'."
 ;; ~23ms is the cleanup itself (the rest is just loading the saved list).
 ;; Deferring cleanup to 30s idle keeps it fully automatic but takes it
 ;; off the startup critical path.
-(setq recentf-auto-cleanup 30)
-(recentf-mode 1)
-(setq recentf-max-menu-items 25)
-(setq recentf-max-saved-items 50)
+(use-package recentf
+  :ensure nil
+  :config
+  (setq recentf-auto-cleanup 30)
+  (recentf-mode 1)
+  (setq recentf-max-menu-items 25)
+  (setq recentf-max-saved-items 50)
 
-;; Every 10 minutes up date the list since I usually either run the server or keep
-;; the gui app open for long periods of time
-(run-at-time nil 600 'recentf-save-list)
+  ;; Every 10 minutes up date the list since I usually either run the server or keep
+  ;; the gui app open for long periods of time
+  (run-at-time nil 600 'recentf-save-list))
 
 ;; Switch focus to help windows when they come up and kill rather than bury them when you quit
 (setq help-window-select t)
@@ -1338,17 +1361,20 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; calendar which is imported into org-agenda.
 
 ;; Set warning time in minutes before the event
-(setq appt-message-warning-time 10)
+(use-package appt
+  :ensure nil
+  :config
+  (setq appt-message-warning-time 10)
 
-;; Only do mode line notifications - my calendar is already sync'ed
-;; with the OS notification center. Emacs isn't the source of truth.
-(setq appt-display-format 'mode)
+  ;; Only do mode line notifications - my calendar is already sync'ed
+  ;; with the OS notification center. Emacs isn't the source of truth.
+  (setq appt-display-format 'mode)
 
-;; don't do a popup on activation of the diary.
-(setq appt-display-diary nil)
+  ;; don't do a popup on activation of the diary.
+  (setq appt-display-diary nil)
 
-;; Activate appointment notifications
-(appt-activate t)
+  ;; Activate appointment notifications
+  (appt-activate t))
 
 ;; Sort diary everything by time in fancy-diary. Mostly superseded by org-agenda
 (add-hook 'diary-list-entries-hook #'diary-sort-entries t)
@@ -1840,7 +1866,7 @@ dismissing the mode-line notice."
 ;; Terminal support requires some additions on the shell side to work best.
 
 ;; 1. Alias `eza --hyper-link`to `ls` which allows directly clicking on the output of ls to open a
-;; file.
+;; file or treat it like a single unit in my case for pasting.
 
 ;; 2. Also define a bash function for general file opens in your bashrc or zshrc
 ;; ```
@@ -2010,6 +2036,25 @@ A window created for the edit is deleted afterwards."
 
   (with-eval-after-load 'ghostel
     (add-to-list 'ghostel-eval-cmds '("git-edit" my-git-edit-file)))
+
+  (defun my-ghostel-click-link (event)
+    "Paste the path of the file link clicked in EVENT at the prompt.
+Other kinds of links are opened with `ghostel-open-link-at-click'."
+    (interactive "e")
+    (let* ((uri (ghostel--uri-at-pos (posn-point (event-start event))))
+           (file (cond
+                  ((and uri (string-match ghostel--fileref-regex uri))
+                   (match-string 1 uri))
+                  ((and uri (string-match "\\`file://\\(?:localhost\\)?\\(/.*\\)" uri))
+                   (url-unhex-string (match-string 1 uri))))))
+      (if file
+          (progn (ghostel--on-user-input)
+                 (ghostel--paste-text (concat (shell-quote-argument file) " ")))
+        (ghostel-open-link-at-click event))))
+
+  (with-eval-after-load 'ghostel-links
+    (define-key ghostel-link-map (kbd "<mouse-1>") #'my-ghostel-click-link)
+    (define-key ghostel-link-map (kbd "<mouse-2>") #'my-ghostel-click-link))
 
   ;; add onto project-switch
   (setq project-switch-commands  (cl-remove 'project-eshell  project-switch-commands :key #'car))
@@ -2853,6 +2898,15 @@ declaration if any such methods were found."
 
 ;; I don't want flymake info notes about 2 spaces after a period
 (setq sentence-end-double-space nil)
+
+;; Flymake byte-compiles in a bare `emacs -Q' process that can't see elpaca's packages, so every
+;; package needs a manual declaration. Hand it the lisp directory and elpaca's build directories.
+(setq elisp-flymake-byte-compile-load-path
+      (append '("./")
+              (list (expand-file-name "lisp" user-emacs-directory))
+              (when (file-directory-p elpaca-builds-directory)
+                (seq-filter #'file-directory-p
+                            (directory-files elpaca-builds-directory t "\\`[^.]")))))
 
 ;; Dock the diagnostics list as a bottom "problems panel" instead of
 ;; letting it split whatever window happens to be current.
