@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; package --- early-init     -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; This runs before init.el, before package.el initializes, and before the
