@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; byte-compile-warnings: (not free-vars unresolved); -*-
+;;; init.el --- Emacs configuration -*- lexical-binding: t; byte-compile-warnings: (not free-vars unresolved); -*-
 ;; ```
 ;;  oooooooooooo
 ;;  `888'     `8
@@ -12,6 +12,14 @@
 ;; Author: Benjamin Leis
 
 ;;; Commentary:
+;;
+;; ## Quick Start
+;;
+;; ```
+;; git clone <repo> ~/dev/emacs-init
+;; cd ~/dev/emacs-init
+;; ./install.sh              # or: ./install.sh -d /path/to/emacs.d
+;; ```
 ;;
 ;; ## Philosophy
 ;;
@@ -74,11 +82,11 @@
 
 ;;
 ;; Normally I run a gui standalone Emacs as well as an Emacs server for terminal
-;; mode editing My typical alias setup
+;; mode editing. My typical alias setup:
 ;;
 ;; ```
 ;; # launcher for terminal Emacs alias
-;; emacs='emacsclient -t -s default --alternate-editor=`
+;; emacs='emacsclient -t -s default --alternate-editor='
 ;;
 ;;  # launcher for gui Emacs
 ;;  function gemacs() {
@@ -155,7 +163,7 @@
 ;;   * `config-diagnostics.el` - `my-config-diagnostics`, which also runs standalone from install.sh.
 ;;   * `*-theme.el` - hand written themes such as `modus-vivendi-matrix`.
 ;; * `elpaca.lock` - pinned package versions (see below).
-;
+;;
 ;; ## Elpaca Bootstrap and Maintenance
 
 ;; * `elpaca.lock` lives in the emacs.d directory and is tracked in git.  Bring it along when setting
@@ -217,7 +225,7 @@
 ;;    these there since they must be set before the first frame is created.
 ;; 2. `custom.el` (emacs.d/custom.el) - where the Emacs Customize interface writes.  It is loaded
 ;;    after the theme and OS files, if it exists.  I mostly avoid Customize and set values directly
-;;    in this file with default values that can be overridden.x
+;;    in this file with default values that can be overridden.
 ;; 3. `lisp/local.el` (emacs.d/lisp/local.el) - an optional file loaded at the very end of init.el,
 ;;    after everything else is defined, so it can override any setting or add private or
 ;;    machine specific code.  It is not part of the repo; create it yourself.  For example:
@@ -3466,3 +3474,6 @@ tag, followed by the normal editable field."
 ;; deterministic after init completes.
 (my-profile-mark "elpaca-wait 3 (rest of init)")
 (elpaca-wait)
+
+(provide 'init)
+;;; init.el ends here
