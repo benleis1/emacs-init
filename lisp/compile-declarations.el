@@ -21,8 +21,13 @@
 ;; as function calls.  Only done while compiling: loading elpaca before init.el's bootstrap has
 ;; defined `elpaca-installer-version' triggers elpaca's "installer version does not match" warning.
 ;; This is a no-op when elpaca isn't on the `load-path'.
+;; elpaca.el has `(cl-declaim (optimize (safety 0)))', which sets `byte-compile-delete-errors' for
+;; the rest of the compile and silently drops bare top-level symbols (a stray `oops' goes
+;; unreported), so the loads below rebind it (and `byte-optimize') to undo that.
 (eval-when-compile
-  (when (bound-and-true-p byte-compile-current-file)
+  (let ((byte-compile-delete-errors byte-compile-delete-errors)
+        (byte-optimize byte-optimize))
+   (when (bound-and-true-p byte-compile-current-file)
     (add-to-list 'load-path (expand-file-name "elpaca/builds/elpaca" user-emacs-directory))
     (require 'elpaca nil t)
     ;; A bare `emacs -Q' compile (flymake) has no elpaca-use-package, so elpaca-style :ensure specs
@@ -32,18 +37,20 @@
       (require 'use-package)
       (when (require 'elpaca-use-package nil t)
         (elpaca-use-package-mode)
-        (with-no-warnings (setq use-package-always-ensure t))))))
+        (with-no-warnings (setq use-package-always-ensure t)))))))
 (eval-when-compile (require 'frameset))
 ;; Load the packages init.el configures lazily, at compile time only, so the compiler sees their
 ;; variables and functions without a declaration here.  Costs nothing at startup.  Load order
 ;; matters (`dape-java' needs `tab-line' first) and failures are ignored.
 (eval-when-compile
-  (dolist (feature '(tab-line ispell flyspell eglot jsonrpc flymake ediff ediff-util ediff-wind org org-agenda
+  (let ((byte-compile-delete-errors byte-compile-delete-errors)
+        (byte-optimize byte-optimize))
+   (dolist (feature '(tab-line ispell flyspell eglot jsonrpc flymake ediff ediff-util ediff-wind org org-agenda
                      org-clock org-element dape dape-java treesit treesit-fold pulsar diff-hl
                      markdown-mode imenu desktop dired diary-lib cl-lib zone
                      pixel-scroll profiler modus-themes excorporate wikimode ghostel ghostel-links
                      consult vertico marginalia yasnippet gcmh nerd-icons))
-    (condition-case nil (require feature nil t) (error nil))))
+    (condition-case nil (require feature nil t) (error nil)))))
 
 ;; elpaca
 (declare-function elpaca--expand-declaration "elpaca")

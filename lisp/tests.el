@@ -1151,3 +1151,38 @@ changes, which is why the refresh is deferred to a timer."
       (ghostel--osc133-marker "D" "0")
       (should (equal seen-finish '(t)))
       (should-not ghostel--command-running))))
+
+;;; Byte-compile warnings (flymake)
+;; Compiling the head of init.el (through `my-include-declarations') plus a few deliberate
+;; mistakes, the way flymake does, must still report them.  The declarations load elpaca, whose
+;; `cl-declaim' once leaked `byte-compile-delete-errors' and hid bare top-level symbols.
+(defun my/tests--compile-warnings-for-probes ()
+  "Return the flymake byte-compile warning strings for a probe file."
+  (let* ((init (expand-file-name "init.el" user-emacs-directory))
+         (file (make-temp-file "my-compile-probe" nil ".el"))
+         (emacs (expand-file-name invocation-name invocation-directory))
+         (marker "\n(my-include-declarations)\n"))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert-file-contents init)
+            (goto-char (point-min))
+            (search-forward marker)
+            (delete-region (point) (point-max))
+            (insert "\n(defun my-probe-fn ()\n"
+                    "  (my-probe-undefined-function 1)\n"
+                    "  my-probe-undefined-variable)\n"
+                    "\nmy-probe-bare-symbol\n"))
+          (with-temp-buffer
+            (call-process emacs nil t nil "-Q" "--batch"
+                          "--eval" (format "(setq user-emacs-directory %S)" user-emacs-directory)
+                          "-f" "elisp-flymake--batch-compile-for-flymake" file)
+            (buffer-string)))
+      (delete-file file))))
+
+(ert-deftest my/test-byte-compile-reports-undefined-function-and-variables ()
+  "Test that the init.el compile reports undefined functions and free variables."
+  (let ((output (my/tests--compile-warnings-for-probes)))
+    (should (string-match-p "function ‘my-probe-undefined-function’ is not known" output))
+    (should (string-match-p "free variable ‘my-probe-undefined-variable’" output))
+    (should (string-match-p "free variable ‘my-probe-bare-symbol’" output))))
