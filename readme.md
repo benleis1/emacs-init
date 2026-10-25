@@ -126,6 +126,36 @@ I have an optional `install.sh` script that will do basic symlinking of the Lisp
 emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 external dependencies once running.
 
+## File Layout
+
+```
+emacs-root/
+├── early-init.el
+├── init.el
+├── elpaca.lock
+├── install.sh
+└── lisp/
+    ├── macos.el
+    ├── linux.el
+    ├── tab-config.el
+    ├── modeline.el
+    ├── dape-java.el
+    ├── config-diagnostics.el
+    └── local.el              (optional, yours, not in the repo)
+```
+
+* `early-init.el` - runs before the GUI and package system start: startup fonts, GC and frame
+settings.
+* `init.el` - this file.  Nearly all configuration, grouped into sections by functional area.
+* `lisp/` - modules that grew large enough to leave init.el, plus the hand written themes.
+  * `macos.el` / `linux.el` - OS specific settings, loaded by `system-type`.
+  * `tab-config.el` - the tab-line and "views" system (see [doc](./docs/tab-config.md)).
+  * `modeline.el` - the custom mode line (see [doc](./docs/modeline.md)).
+  * `dape-java.el` - Java debugging and JUnit test support on top of dape and jdtls.
+  * `config-diagnostics.el` - `my-config-diagnostics`, which also runs standalone from install.sh.
+  * `*-theme.el` - hand written themes such as `modus-vivendi-matrix`.
+* `elpaca.lock` - pinned package versions (see below).
+
 ## Elpaca Bootstrap and Maintenance
 
 * `elpaca.lock` lives in the emacs.d directory and is tracked in git.  Bring it along when setting
@@ -180,6 +210,35 @@ each with its own tab list.  For more detailed explanations of the tabbing syste
   * `s-]` / `s-[` - next / previous view
   * `C-\` - toggle the imenu-list sidebar
 
+## Customization and Local Overrides
+Several places exist where you can change behavior without editing this file, which keeps `git pull`
+clean.  They load in this order:
+1. `early-init.el` variables - `my-default-fixed-pitch-font` and `my-default-font-size`.  Edit
+   these there since they must be set before the first frame is created.
+2. `custom.el` (emacs.d/custom.el) - where the Emacs Customize interface writes.  It is loaded
+   after the theme and OS files, if it exists.  I mostly avoid Customize and set values directly
+   in this file with default values that can be overridden.x
+3. `lisp/local.el` (emacs.d/lisp/local.el) - an optional file loaded at the very end of init.el,
+   after everything else is defined, so it can override any setting or add private or
+   machine specific code.  It is not part of the repo; create it yourself.  For example:
+
+   ```
+   ;; -*- lexical-binding: t; -*-
+   (setq my-org-root "~/Documents/org")
+   (setq my-java-home "/usr/lib/jvm/java-21-openjdk")
+   ```
+
+Variables worth knowing about:
+* `my-org-root` - directory holding org files, agenda, capture and meeting files (default `~/org`).
+* `my-java-home` - JDK used by jdtls and Java tooling.  Setting it through Customize or
+  `customize-set-variable` also updates the dependent jdtls settings; a plain `setq` in local.el
+  after startup will not, so use `customize-set-variable` there.
+* `my-max-auto-revert-size` - largest file that global auto-revert will watch.
+* `my-ghostel-escape-timeout` - delay for distinguishing a bare escape from an escape sequence
+  in ghostel terminals.
+* `my-default-fixed-pitch-font`, `my-default-font-size` - startup font (early-init.el).
+
+
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
@@ -190,10 +249,12 @@ each with its own tab list.  For more detailed explanations of the tabbing syste
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
   - [Installation](#installation)
+  - [File Layout](#file-layout)
   - [Elpaca Bootstrap and Maintenance](#elpaca-bootstrap-and-maintenance)
   - [Performance](#performance)
   - [Theming and Faces](#theming-and-faces)
   - [UX](#ux)
+  - [Customization and Local Overrides](#customization-and-local-overrides)
 - [Code:](#code)
 - [Profiling](#profiling)
   - [my-toggle-profiler](#my-toggle-profiler)
@@ -309,15 +370,17 @@ each with its own tab list.  For more detailed explanations of the tabbing syste
 Define an ignore macro that doesn't even evaluate the argument. This is useful for
 display purposes when using elispdoc rather than commenting whole regions out.
 ```
-(defmacro my-ignore (_form))
+(defmacro my-ignore (_form) "Ignore whatever follows." )
 ```
 
-install.sh symlinks everything under the repo's lisp/ (macos.el, linux.el, modeline.el,
-tab-config.el, dape-java.el, the local themes) here.
+Set up basic paths for the lisp subdirectory and themes before any are required. For now,
+install.sh symlinks themes and custom modules like tab-config all in the same lisp subdirectory.
+This directory must be manually compiled once.
 ```
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
+(setq trusted-content (expand-file-name "lisp" user-emacs-directory))
 ```
 
 # Profiling
@@ -586,11 +649,14 @@ to  use i.e with the  ` back tick operator.
 ```
 
 ## my-theme-margin-color
+>Define the color used in the left hand margin for the THEME.
+
 Margin color by background: dark -> gray, light -> tan.
 A theme's `theme-properties' only exist once it has loaded, so on its
 first load fall back to the modus naming convention (vivendi = dark).
 ```
 (defun my-theme-margin-color (theme)
+  "Define the color used in the left hand margin for the THEME."
   (if (or (modus-themes--background-p theme 'dark)
           (string-match-p "vivendi" (symbol-name theme)))
       margin-gray-bg
@@ -779,9 +845,12 @@ Give nano-like its own fixed/variable-pitch fonts (relies on
 ```
 
 ## my-reload-fonts
+>Reload all of the fonts for every buffer.
+
 Loop through all the buffers and force mixed-pitch-mode ones to reload.
 ```
 (defun my-reload-fonts ()
+  "Reload all of the fonts for every buffer."
   (interactive)
   (dolist (buf (buffer-list))
     (with-current-buffer buf
@@ -2662,7 +2731,7 @@ Set project boundary at the first build.gradle found as well
 ```
 
 ### treesit-fold-range-java-imports
->Fold the contiguous run of Java import declarations starting at NODE.
+>Fold the contiguous run of Java import declarations starting at NODE and OFFSET.
 
 ## treesit-fold - useful for folding things like imports in java
 
@@ -2674,7 +2743,7 @@ import_declaration (and interleaved comment) siblings so that folding
 on any import line collapses that line and every import after it.
 ```
 (defun treesit-fold-range-java-imports (node offset)
-  "Fold the contiguous run of Java import declarations starting at NODE."
+  "Fold the contiguous run of Java import declarations starting at NODE and OFFSET."
   (let ((last-node node)
         (sibling (treesit-node-next-sibling node t)))
     (while (member (treesit-node-type sibling)
@@ -2785,16 +2854,16 @@ set java home
 ```
 
 ### my-java-home-set
->Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
-Re-applies JAVA_HOME and the jdtls settings derived from it --
-so customizing `my-java-home' (e.g. via M-x customize-variable) takes
+>Set  SYMBOL : `my-java-home' to VALUE and propagate it to dependent Java tooling.
+Re-applies JAVA_HOME and the jdtls settings derived from it so
+customizing `my-java-home' (e.g. via \[customize-variable]) takes
 effect without a restart.
 
 ```
 (defun my-java-home-set (symbol value)
-  "Set `my-java-home' to VALUE and propagate it to dependent Java tooling.
-Re-applies JAVA_HOME and the jdtls settings derived from it --
-so customizing `my-java-home' (e.g. via M-x customize-variable) takes
+  "Set  SYMBOL : `my-java-home' to VALUE and propagate it to dependent Java tooling.
+Re-applies JAVA_HOME and the jdtls settings derived from it so
+customizing `my-java-home' (e.g. via \\[customize-variable]) takes
 effect without a restart."
   (set-default symbol value)
   (setenv "JAVA_HOME" value)
@@ -2803,7 +2872,7 @@ effect without a restart."
 
 (defcustom my-java-home
   (expand-file-name "~/.jenv/versions/21.0")
-  "Java path used by eglot/jdtls"
+  "Java path used by eglot/jdtls."
   :type 'directory
   :set #'my-java-home-set
   :group 'environment)
