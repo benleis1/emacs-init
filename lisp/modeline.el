@@ -68,7 +68,7 @@
 
 (defun my-modeline--icon (fn &rest args)
   "Call FN, a nerd-icons icon function (e.g. `nerd-icons-octicon'), with ARGS.
-This lets me set the `my-modeline-icon-font-family' around the call."
+This lets me set the `my-modeline-icon-font-family' artound the call."
   (let ((nerd-icons-font-family (or my-modeline-icon-font-family nerd-icons-font-family)))
     (apply fn args)))
 
@@ -90,10 +90,10 @@ icon set can never break the mode-line."
 
 (defface my-modeline-file-icon-face
   '((t :foreground "white" :background "gray60" :family "DejaVuSansM Nerd Font Propo" ))
-  "Background face for the powerline-style file-type badge. Its
-`:background' is kept in sync with the active modus theme's `cursor'
+  "Background face for the powerline-style file-type badge.
+Its`:background' is kept in sync with the active modus theme's `cursor'
 palette color by `my-modeline--sync-file-icon-face' whenever `modus-themes'
-is available; the \"gray60\" here is only the fallback otherwise.")
+is available. The \"gray60\"ed here is only the fallback otherwise.")
 
 (defface my-modeline-file-icon-divider-face
   '((t :foreground "gray60"))
@@ -120,7 +120,7 @@ it can't go stale."
         (set-face-attribute 'my-modeline-file-icon-divider-face nil :foreground bg)))))
 
 (defvar my-modeline-wellknown-buffers '((lisp-interaction-mode . "ELISP"))
-  "A map for translating well known buffers to a special name")
+  "A map for translating well known buffers to a special name.")
 
 (defun my-modeline--file-type-label ()
   "A short, upcased label for the current buffer's file type: its file
@@ -858,12 +858,24 @@ work the same way.")
                   'mouse-face 'mode-line-highlight
                   'local-map tab2-mode-line-view-map))))
 
+(defun my-flymake-toggle-buffer-diagnostics (event)
+  "Toggle the flymake diagnostics list for the buffer clicked in EVENT.
+Close the list if it is already visible, otherwise show it with
+`flymake-show-buffer-diagnostics'."
+  (interactive "e")
+  (with-selected-window (posn-window (event-start event))
+    (let* ((buf (get-buffer (flymake--diagnostics-buffer-name)))
+           (win (and buf (get-buffer-window buf))))
+      (if win
+          (quit-window nil win)
+        (flymake-show-buffer-diagnostics)))))
+
 (defvar my-flymake-modeline-map
-  (my-modeline-mouse-map '((mouse-1 . flymake-show-buffer-diagnostics))))
+  (my-modeline-mouse-map '((mouse-1 . my-flymake-toggle-buffer-diagnostics))))
 
 (defun my-flymake-segment ()
   "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
-Click (mouse-1) anywhere in the segment to pop up flymake's diagnostics
+Click (mouse-1) anywhere in the segment to toggle flymake's diagnostics
 list for the buffer, even when it's currently empty.
 While a backend is still running and hasn't reported yet, a ⟳ glyph is
 shown after the counters and the tooltip also says \"flymake is running\"."
@@ -876,10 +888,13 @@ shown after the counters and the tooltip also says \"flymake is running\"."
                          (if (string-empty-p counters) "  OK  " counters))
                         ((string-empty-p counters) (concat "  " busy "  "))
                         (t (concat (string-trim-right counters) " " busy " ")))
+                  ;; flymake's counters carry their own `keymap' property
+                  ;; (mouse-1 -> show-only), which outranks `local-map'.
+                  'keymap my-flymake-modeline-map
                   'local-map my-flymake-modeline-map
                   'mouse-face 'mode-line-highlight
                   'help-echo (concat (if checking "flymake is running\n" "")
-                                     "mouse-1: show flymake diagnostics")))))
+                                     "mouse-1: toggle flymake diagnostics")))))
 
 ;;; Zoom slider
 
