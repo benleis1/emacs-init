@@ -126,11 +126,59 @@
 ;; emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 ;; external dependencies once running.
 
+;; ## Elpaca Bootstrap and Maintenance
+
+;; * `elpaca.lock` lives in the emacs.d directory and is tracked in git.  Bring it along when setting
+;; up if you want to pin to the same package versions that I have run on.  It is only used if it exists;
+;; without it, every package resolves to its latest version.
+
+;; * To update the packages - run `elpaca-update-all`, then `M-x elpaca-write-lock-file` and give it
+;; the path to emacs.d/elpaca.lock.  From Lisp the path argument is required:
+;; `(elpaca-write-lock-file (locate-user-emacs-file "elpaca.lock"))`.
+
+;; * The lockfile should also be refreshed after adding any new packages.
+
+;; * If an update breaks something, `git checkout elpaca.lock` restores the previous pins; rebuild
+;; the affected packages afterwards.
+
+;; * `elpaca-log` is useful for debugging any package install failures.
+
+;; * `elpaca-wait` appears at three points in this file on purpose.  Each one synchronizes package
+;; installation before code that depends on those packages runs, so don't remove them.
+
 ;; ## Performance
 ;; * Using the elpaca lockfile and byte compiling the Lisp files will speed up startup times.
 ;; * See the profile section for more built in options for optimizing startup.
 ;; * I currently see start times around .6-.7 seconds. While another .1 seconds could be saved by not
 ;; doing an elpaca-wait at the end of this file, I prefer the consistency that synchronization provides
+
+;; ## Theming and Faces
+;; * folio is the current default theme. [Link](https://github.com/kn66/folio-theme.el) and set in the
+;; the  [modus theme](https://protesilaos.com/emacs/modus-themes) configuration section.
+;; * `load-theme` has been set to first unload any active themes and then activate the chosen new theme.
+;; * Do not generally update faces directly and instead tweak the modus palette overrides:
+;; `modus-themes-common-palette-overrides` for all themes, or a per-theme variable such as
+;; `folio-theme-palette-overrides`, `modus-vivendi-palette-overrides` or `nano-like-palette-overrides`.
+;; * Margin color follows the theme background: gray for dark themes and tan for light ones.  It is
+;; set through the `bg-margins` palette entry in `load-theme` advice (see `my-theme-margin-color`).  The
+;; first guess comes from the theme name (vivendi = dark); once the theme has loaded, a hook corrects
+;; it from the real background mode and reloads if the guess was wrong.
+;; * Face tweaks that the modus palette cannot express are applied in the `enable-theme-functions`
+;; hook in the modus section (e.g. tab-line inactive/modified colors, folio's `mode-line-highlight`,
+;; imenu highlight and modeline position faces).  Add any new per-theme face fixes there.
+;; * Any themes directly installed in the emacs.d/lisp directory are assumed to be hand written and
+;; trusted. `load-theme` skips the "Loading a theme can run Lisp code" prompt for them. Currently
+;; these are `modus-vivendi-matrix` (see [doc](./docs/modus-vivendi-matrix.md)) and
+;; `modus-vivendi-embers`. All other themes, such as folio should be loaded via elpaca.
+
+;; ## UX
+;; * Buffers are shown in a heavily customized `tab-line` organized into "views": named sets of buffers,
+;; each with its own tab list.  For more detailed explanations of the tabbing system see: [doc](./docs/tab-config.md)
+;; * For more detailed explanations of the modeline see: [doc](./docs/modeline.md)
+;; * Key bindings:
+;;   * `C-<tab>` / `C-S-<tab>` - next / previous tab
+;;   * `s-]` / `s-[` - next / previous view
+;;   * `C-\` - toggle the imenu-list sidebar
 
 ;;; Code:
 
@@ -224,11 +272,10 @@
 ;; Current packages are managed via Elpaca which allows loading directly from git where needed and
 ;; also does asynchronous installation. The elpaca lock file should be used both for predictable
 ;; package versions but also to short circuit version resolution which can take measurable time.
-
-;; elpaca bootstrap -- verbatim from the installed elpaca's own
-;; doc/installer.el (progfolio/elpaca), not a memorized/older copy, since
-;; the internal var names (`elpaca-sources-directory', `elpaca-activate')
-;; have changed across elpaca releases.
+;;
+;; What follows from here is the elpaca bootstrap -- verbatim from the installed elpaca's own
+;; doc/installer.el (progfolio/elpaca), not a memorized/older copy, since the internal var names
+;; (`elpaca-sources-directory', `elpaca-activate') have changed across elpaca releases.
 (defvar elpaca-installer-version 0.12)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
 (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
@@ -348,7 +395,7 @@
 	 (markdown-mode . mixed-pitch-mode)))
 
 (my-profile-mark "modus theme configuration")
-;;; modus theme configuration.
+;;; Modus theme configuration.
 
 ;;
 ;; Color name redirection for use with custom faces
@@ -1212,7 +1259,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;;; Appt setup
 
 ;; I use appt for managing notifications on the modeline. The primary source of events is my
-;;; calendar which is imported into org-agenda.
+;; calendar which is imported into org-agenda.
 
 ;; Set warning time in minutes before the event
 (setq appt-message-warning-time 10)

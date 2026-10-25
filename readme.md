@@ -126,11 +126,59 @@ I have an optional `install.sh` script that will do basic symlinking of the Lisp
 emacs.d directory and other prerequisite checking.  Run `my-config-diagnostics` to check on
 external dependencies once running.
 
+## Elpaca Bootstrap and Maintenance
+
+* `elpaca.lock` lives in the emacs.d directory and is tracked in git.  Bring it along when setting
+up if you want to pin to the same package versions that I have run on.  It is only used if it exists;
+without it, every package resolves to its latest version.
+
+* To update the packages - run `elpaca-update-all`, then `M-x elpaca-write-lock-file` and give it
+the path to emacs.d/elpaca.lock.  From Lisp the path argument is required:
+`(elpaca-write-lock-file (locate-user-emacs-file "elpaca.lock"))`.
+
+* The lockfile should also be refreshed after adding any new packages.
+
+* If an update breaks something, `git checkout elpaca.lock` restores the previous pins; rebuild
+the affected packages afterwards.
+
+* `elpaca-log` is useful for debugging any package install failures.
+
+* `elpaca-wait` appears at three points in this file on purpose.  Each one synchronizes package
+installation before code that depends on those packages runs, so don't remove them.
+
 ## Performance
 * Using the elpaca lockfile and byte compiling the Lisp files will speed up startup times.
 * See the profile section for more built in options for optimizing startup.
 * I currently see start times around .6-.7 seconds. While another .1 seconds could be saved by not
 doing an elpaca-wait at the end of this file, I prefer the consistency that synchronization provides
+
+## Theming and Faces
+* folio is the current default theme. [Link](https://github.com/kn66/folio-theme.el) and set in the
+the  [modus theme](https://protesilaos.com/emacs/modus-themes) configuration section.
+* `load-theme` has been set to first unload any active themes and then activate the chosen new theme.
+* Do not generally update faces directly and instead tweak the modus palette overrides:
+`modus-themes-common-palette-overrides` for all themes, or a per-theme variable such as
+`folio-theme-palette-overrides`, `modus-vivendi-palette-overrides` or `nano-like-palette-overrides`.
+* Margin color follows the theme background: gray for dark themes and tan for light ones.  It is
+set through the `bg-margins` palette entry in `load-theme` advice (see `my-theme-margin-color`).  The
+first guess comes from the theme name (vivendi = dark); once the theme has loaded, a hook corrects
+it from the real background mode and reloads if the guess was wrong.
+* Face tweaks that the modus palette cannot express are applied in the `enable-theme-functions`
+hook in the modus section (e.g. tab-line inactive/modified colors, folio's `mode-line-highlight`,
+imenu highlight and modeline position faces).  Add any new per-theme face fixes there.
+* Any themes directly installed in the emacs.d/lisp directory are assumed to be hand written and
+trusted. `load-theme` skips the "Loading a theme can run Lisp code" prompt for them. Currently
+these are `modus-vivendi-matrix` (see [doc](./docs/modus-vivendi-matrix.md)) and
+`modus-vivendi-embers`. All other themes, such as folio should be loaded via elpaca.
+
+## UX
+* Buffers are shown in a heavily customized `tab-line` organized into "views": named sets of buffers,
+each with its own tab list.  For more detailed explanations of the tabbing system see: [doc](./docs/tab-config.md)
+* For more detailed explanations of the modeline see: [doc](./docs/modeline.md)
+* Key bindings:
+  * `C-<tab>` / `C-S-<tab>` - next / previous tab
+  * `s-]` / `s-[` - next / previous view
+  * `C-\` - toggle the imenu-list sidebar
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
@@ -142,7 +190,10 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [Prerequisites](#prerequisites)
   - [Major areas configured](#major-areas-configured)
   - [Installation](#installation)
+  - [Elpaca Bootstrap and Maintenance](#elpaca-bootstrap-and-maintenance)
   - [Performance](#performance)
+  - [Theming and Faces](#theming-and-faces)
+  - [UX](#ux)
 - [Code:](#code)
 - [Profiling](#profiling)
   - [my-toggle-profiler](#my-toggle-profiler)
@@ -152,7 +203,7 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
 - [Font setup](#font-setup)
-- [modus theme configuration.](#modus-theme-configuration)
+- [Modus theme configuration.](#modus-theme-configuration)
   - [my-theme-margin-color](#my-theme-margin-color)
   - [my-reload-fonts](#my-reload-fonts)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
@@ -182,7 +233,6 @@ doing an elpaca-wait at the end of this file, I prefer the consistency that sync
   - [my-markdown-tags-line-value-start](#my-markdown-tags-line-value-start)
   - [my-markdown-tags-capf](#my-markdown-tags-capf)
 - [Appt setup](#appt-setup)
-- [calendar which is imported into org-agenda.](#calendar-which-is-imported-into-org-agenda)
   - [my-appt-mode-line-intensity](#my-appt-mode-line-intensity)
   - [my-appt-mode-line-color](#my-appt-mode-line-color)
   - [my-appt-due-list](#my-appt-due-list)
@@ -357,11 +407,11 @@ already includes the nested :init and :config times.
 ```
 
 ## my-profile-init-finish
->Show the init section timings, use-package report and profiler report.
+>Show the init section timings, `use-package' report and profiler report.
 
 ```
 (defun my-profile-init-finish ()
-  "Show the init section timings, use-package report and profiler report."
+  "Show the init section timings, `use-package' report and profiler report."
   (my-profile-mark "init done")
   (my-profile-report-phases)
   (use-package-report)
@@ -375,10 +425,9 @@ Current packages are managed via Elpaca which allows loading directly from git w
 also does asynchronous installation. The elpaca lock file should be used both for predictable
 package versions but also to short circuit version resolution which can take measurable time.
 
-elpaca bootstrap -- verbatim from the installed elpaca's own
-doc/installer.el (progfolio/elpaca), not a memorized/older copy, since
-the internal var names (`elpaca-sources-directory', `elpaca-activate')
-have changed across elpaca releases.
+What follows from here is the elpaca bootstrap -- verbatim from the installed elpaca's own
+doc/installer.el (progfolio/elpaca), not a memorized/older copy, since the internal var names
+(`elpaca-sources-directory', `elpaca-activate') have changed across elpaca releases.
 ```
 (defvar elpaca-installer-version 0.12)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
@@ -522,7 +571,7 @@ Tooltips are set to 1.3 for readability
 
 (my-profile-mark "modus theme configuration")
 ```
-# modus theme configuration.
+# Modus theme configuration.
 
 
 Color name redirection for use with custom faces
@@ -1108,7 +1157,9 @@ Brief pulse/highlight for various motions
   (setq pulsar-highlight-face 'pulsar-magenta)
   ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
   ;; generic for the pulsar-pulse-functions list
-  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t))
+  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t)
+  ;; Likewise, clicking a diagnostic runs `push-button', not a command pulsar watches.
+  (advice-add 'flymake-goto-diagnostic :after (lambda (&rest _) (pulsar-pulse-line))))
 
 (my-profile-mark "Dired")
 ```
@@ -1184,6 +1235,8 @@ Control + a number key which are closer than the function keys.
 (global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
+(global-set-key (kbd "s-]") 'tab2-next-view)
+(global-set-key (kbd "s-[") 'tab2-prev-view)
 (global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
 ```
 ```
@@ -1283,13 +1336,15 @@ to check all text.  If flyspell is already enabled, does nothing."
 ```
 
 ## flyspell-toggle
->Turn Flyspell on if it is off, or off if it is on.  When turning on, it
-uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately.
+>Turn Flyspell on if it is off, or off if it is on.
+When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text
+is handled appropriately.
 
 ```
 (defun flyspell-toggle ()
-  "Turn Flyspell on if it is off, or off if it is on.  When turning on, it
-uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
+  "Turn Flyspell on if it is off, or off if it is on.
+When turning on, it uses `flyspell-on-for-buffer-type' so code-vs-text
+is handled appropriately."
   (interactive)
   (if (symbol-value flyspell-mode)
       (progn ; flyspell is on, turn it off
@@ -1300,15 +1355,15 @@ uses `flyspell-on-for-buffer-type' so code-vs-text is handled appropriately."
 ```
 
 ## my-flyspell-defer-enable
->Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
-is next idle, so opening a buffer doesn't block on starting Aspell.
+>Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs is idle.
+So opening a buffer doesn't block on starting Aspell.
 
 preset modes to have flyspell on. Deferred to the next idle moment rather
 than enabled directly in the hook
 ```
 (defun my-flyspell-defer-enable ()
-  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs
-is next idle, so opening a buffer doesn't block on starting Aspell."
+  "Defer `flyspell-on-for-buffer-type' for the current buffer until Emacs is idle.
+So opening a buffer doesn't block on starting Aspell."
   (let ((buf (current-buffer)))
     (run-with-idle-timer 0.1 nil
                           (lambda ()
@@ -1463,11 +1518,11 @@ the raw buffer text instead and otherwise defer to the original function.
 ```
 
 ## my-markdown-follow-liquid-post-url
->Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN.
+>Browse a resolved liquid link at point, else call ORIG-FN with ARGS.
 
 ```
 (defun my-markdown-follow-liquid-post-url (orig-fn &rest args)
-  "Browse a resolved {% post_url %} liquid link at point, else call ORIG-FN."
+  "Browse a resolved liquid link at point, else call ORIG-FN with ARGS."
   (let ((name (my-markdown-liquid-post-url-at-point)))
     (if name
         (markdown--browse-url name)
@@ -1604,7 +1659,7 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 # Appt setup
 
 I use appt for managing notifications on the modeline. The primary source of events is my
-# calendar which is imported into org-agenda.
+calendar which is imported into org-agenda.
 
 Set warning time in minutes before the event
 ```
@@ -1749,43 +1804,30 @@ entering its warning window.")
   "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
 (defvar my-appt-beeped-keys nil
-  "Track if appointment KEYs (see `my-appt-due-list') were already announced with the glass
-bell sound. Unlike `my-appt-dismissed-keys', this is set automatically --
-the first `appt-check' cycle in which a key enters its warning window adds
-it here, so later cycles stay silent for that same occurrence without
-requiring a manual dismiss. Reset daily alongside `my-appt-dismissed-keys'.")
+  "Track if appointment KEYs (see `my-appt-due-list') were already
+announced with the glass bell sound. Unlike `my-appt-dismissed-keys',
+this is set automatically -- the first `appt-check' cycle in which a key
+enters its warning window adds it here, so later cycles stay silent for
+that same occurrence without requiring a manual dismiss. Reset daily
+alongside `my-appt-dismissed-keys'.")
 
 (defvar my-appt--pre-check-due nil
-  "Snapshot of `my-appt-due-list', taken just before `appt-check' mutates
-`appt-time-msg-list', so `my-appt-mode-line-update' can tell which
-appointment -- if any -- just matured and was deleted by this check.")
+  "This holds a snapshot of `my-appt-due-list' taken just before
+`appt-check' mutates `appt-time-msg-list'. So `my-appt-mode-line-update'
+can tell which appointment, if any, just matured and was deleted by
+this check.")
 ```
 
 ## my-appt-glass-bell
->Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-but only when an appointment is newly entering its warning window this
-check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
-`my-appt-beeped-keys'. This keeps the sound from firing again on every
-subsequent `appt-check' cycle for the same still-pending appointment,
-which would otherwise repeat for as long as it stays undismissed (e.g.
-while away from the frame with nobody around to dismiss it).
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check.
+>Advice for appt-active that changes the sound and then calls ORIG-FUN with ARGS.
+The actual sound is platform specific and defined under `my-play-appt-sound'.
 
 ```
 (defun my-appt-glass-bell (orig-fun &rest args)
-  "Around advice: make `beep' play the Glass sound for the duration of ORIG-FUN,
-but only when an appointment is newly entering its warning window this
-check -- i.e. its key isn't already in `my-appt-dismissed-keys' or
-`my-appt-beeped-keys'. This keeps the sound from firing again on every
-subsequent `appt-check' cycle for the same still-pending appointment,
-which would otherwise repeat for as long as it stays undismissed (e.g.
-while away from the frame with nobody around to dismiss it).
-Also snapshots the due list into `my-appt--pre-check-due' before ORIG-FUN
-runs, so `my-appt-mode-line-update' can detect appointments that matured
-during this check."
+  "Advice for appt-active that changes the sound and then calls ORIG-FUN with ARGS.
+The actual sound is platform specific and defined under `my-play-appt-sound'."
   (setq my-appt--pre-check-due (my-appt-due-list))
+  ;; Compute new appointments and only chime if there are any.
   (let* ((newly-due (seq-remove (lambda (entry)
                                    (let ((key (nth 3 entry)))
                                      (or (member key my-appt-dismissed-keys)
@@ -3710,7 +3752,7 @@ the difference between diary direct mode vs org-agenda mode
 this would frankly be better if we directly added into a org-file and brought to front
 
 ## my-agenda-update-diary
->call excorporate to update the diary for today
+>Call excorporate to update the diary for today.
 
 Advice function to run before org-agenda and download the calendar
 args are unused
@@ -3719,7 +3761,7 @@ Issues: the initial excorporate setup triggers a diary download without a callba
 The agenda itself loads the diary buffer - we should probably just leave it off the tab-line?
 ```
 (defun my-agenda-update-diary (&optional _args)
-  "call excorporate to update the diary for today"
+  "Call excorporate to update the diary for today."
 
   ;; onetime setup
   (if (not my-calendar-init)
