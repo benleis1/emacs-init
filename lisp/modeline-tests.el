@@ -145,12 +145,12 @@
 (ert-deftest modeline-test/flymake-segment-tooltip-while-checking ()
   (modeline-tests--with-flymake t "" '(a) nil
     (should (equal (get-text-property 0 'help-echo (my-flymake-segment))
-                   "flymake is running\nmouse-1: show flymake diagnostics"))))
+                   "flymake is running\nmouse-1: toggle flymake diagnostics"))))
 
 (ert-deftest modeline-test/flymake-segment-tooltip-when-idle ()
   (modeline-tests--with-flymake t "" '(a) '(a)
     (should (equal (get-text-property 0 'help-echo (my-flymake-segment))
-                   "mouse-1: show flymake diagnostics"))))
+                   "mouse-1: toggle flymake diagnostics"))))
 
 (ert-deftest modeline-test/flymake-segment-idle-once-all-backends-reported ()
   (modeline-tests--with-flymake t "" '(a b) '(b a)

@@ -824,6 +824,7 @@
 
 ;; Generally remove trailing white space except on markdown where trailing space is meaningful
 (defun my-before-save-hook ()
+  "Hook that takes care of removing trailing whitespace for most modes."
   (unless (equal major-mode 'markdown-mode)
     (delete-trailing-whitespace)))
 
@@ -857,6 +858,8 @@
 
 ;; Function to check if the file is small enough to be considered stale/revertible
 (defun my-skip-large-files-stale-p (buffer)
+  "Check if the BUFFER is too large for auto revert.
+Customize the thresholds via `my-max-auto-revert-size'."
   (let* ((filename (buffer-file-name buffer))
 	 (size (and filename (nth  7 (file-attributes filename)))))
     (and size (> size my-max-auto-revert-size))))
@@ -1257,6 +1260,7 @@ So opening a buffer doesn't block on starting Aspell."
 ;; entry with a literal "." leaf but I prefer the larger dot glyph for
 ;; readability.
 (defun my-markdown-imenu-dot-glyph (index-alist)
+  "Overrides the markdown mode heading dot with a larger glyph in INDEX-ALIST."
   (dolist (entry index-alist index-alist)
     (when (equal (car entry) ".")
       (setcar entry ""))
@@ -1264,6 +1268,7 @@ So opening a buffer doesn't block on starting Aspell."
       (my-markdown-imenu-dot-glyph (cdr entry)))))
 
 (defun my-markdown-imenu-create-nested-index ()
+  "Overrides markdown imenu creation to transform dot glyphs."
   (my-markdown-imenu-dot-glyph (markdown-imenu-create-nested-index)))
 
 (add-hook 'markdown-mode-hook
@@ -1440,18 +1445,18 @@ entering its warning window.")
   "Day (per `time-to-days') that `my-appt-dismissed-keys' was last reset for.")
 
 (defvar my-appt-beeped-keys nil
-  "Track if appointment KEYs (see `my-appt-due-list') were already
-announced with the glass bell sound. Unlike `my-appt-dismissed-keys',
-this is set automatically -- the first `appt-check' cycle in which a key
-enters its warning window adds it here, so later cycles stay silent for
-that same occurrence without requiring a manual dismiss. Reset daily
-alongside `my-appt-dismissed-keys'.")
+  "Track if appointment KEYs were already announced with a sound.
+Unlike `my-appt-dismissed-keys', this is set automatically -- the first
+`appt-check' cycle in which a key enters its warning window adds it
+here, so later cycles stay silent for that same occurrence without
+requiring a manual dismiss. Reset daily alongside
+`my-appt-dismissed-keys'.")
 
 (defvar my-appt--pre-check-due nil
-  "This holds a snapshot of `my-appt-due-list' taken just before
-`appt-check' mutates `appt-time-msg-list'. So `my-appt-mode-line-update'
-can tell which appointment, if any, just matured and was deleted by
-this check.")
+  "This holds a snapshot of `my-appt-due-list'.
+It's taken just before `appt-check' mutates `appt-time-msg-list'. So
+`my-appt-mode-line-update' can tell which appointment, if any, just
+matured and was deleted by this check.")
 
 (defun my-appt-glass-bell (orig-fun &rest args)
   "Advice for appt-active that changes the sound and then calls ORIG-FUN with ARGS.
@@ -1482,17 +1487,17 @@ The actual sound is platform specific and defined under `my-play-appt-sound'."
 ;; TODO: should this move to modeline.el?
 
 (defun my-appt-mode-line-open-agenda (_event)
-  "Open org-agenda from the appointment mode-line segment and select its window."
+  "Open `org-agenda' from the appointment mode-line segment and select its window."
   (interactive "e")
   (org-agenda-list))
 
 (defun my-appt-mode-line-dismiss (_event)
-  "Dismiss the appointment(s) currently shown in the mode line, whether
-still counting down or already overdue, logging clocked time for each
-newly-dismissed one via `my-meeting-log-record-dismissed-appointments'.
-Each stays dismissed until it ages out of the warning window on its own;
-the dismissed-keys check also keeps a repeat dismiss click from logging
-the same appointment twice."
+  "Dismiss the appointment(s) currently shown in the mode line.
+It will also log clocked time for each newly-dismissed one via
+`my-meeting-log-record-dismissed-appointmeants'. Each stays dismissed
+until it ages out of the warning window on its own. The dismissed-keys
+check also keeps a repeat dismiss click from logging the same
+appointment twice."
   (interactive "e")
   (let* ((due-keys (mapcar (lambda (entry) (nth 3 entry)) (my-appt-due-list)))
          (overdue-keys (mapcar #'cdr my-appt-overdue-list))
@@ -1512,10 +1517,11 @@ the same appointment twice."
   "Keymap for mouse clicks on the appointment mode-line segment.")
 
 (defun my-appt-mode-line-update (&optional _force)
-  "Replace `appt-mode-string' with an alarm-clock glyph and countdown, or with
-a lingering \"Due\" glyph for an appointment whose time has passed.
-Takes an optional, ignored argument so it tolerates being called as
-:after advice on `appt-check', which itself takes an optional FORCE arg."
+  "Replace `appt-mode-string' with a custom one.
+I use an alarm-clock glyph and countdown or a lingering \"Due\" glyph
+  for an appointment whose time has passed. Takes an optional, ignored
+  argument so it tolerates being called as
+  :after advice on `appt-check', which itself takes an optional FORCE arg."
   (let ((today (time-to-days nil)))
     (unless (equal today my-appt-dismissed-day)
       (setq my-appt-dismissed-keys nil
@@ -1586,7 +1592,8 @@ Takes an optional, ignored argument so it tolerates being called as
 
 ;; Define an org root directory
 
-(defcustom my-org-root "~/org" "Root location for org files"
+(defcustom my-org-root "~/org"
+  "Root location for org files."
   :type 'string
   :group 'environment)
 
@@ -1594,7 +1601,7 @@ Takes an optional, ignored argument so it tolerates being called as
 ;; once excorporate is settled again it will be done there.
 (defconst my-meetings-file (file-name-concat my-org-root "calendar.org")
   "Org file holding external meetings from outlook in my case.
-Part of `org-agenda-files' so meetings show up in the agenda, the
+Part of `'org-agenda-files' so meetings show up in the agenda, the
 org-timegrid strip/week view, and via `org-agenda-to-appt' in the
 mode-line appointment countdown.")
 
@@ -1609,12 +1616,13 @@ Unlike `my-meetings-file', this file is never overwritten so entries
 logged here persist. See `my-meeting-log-record-dismissed-appointments'.")
 
 (defconst my-meeting-log-excluded-title-regexp "\\`Declined: "
-  "Regexp matching `my-meetings-file' headings to exclude from clocked
-meeting-log entries -- e.g. meetings the Outlook sync marks as
-declined, which the user never actually attended.")
+  "Regexp for headings that excludes meeting from clocked meeting-log entries.
+Currently used for meetings the Outlook sync marks as declined, which
+the I never actually attended.")
 
 (defun my-meeting-log--parse-calendar-entries (&optional buffer)
-  "Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
+  "Parse the calendar entries in BUFFER.
+Return (START-MINUTES TITLE START-TIME END-TIME) for every timed,
 non-excluded (see `my-meeting-log-excluded-title-regexp') heading in
 BUFFER (default the current buffer), which is expected to hold
 `my-meetings-file''s layout: a heading followed by a timestamp."
@@ -1652,10 +1660,7 @@ text org hands to `appt-add' may be a prefix/suffix of the full heading."
             entries))
 
 (defun my-meeting-log--ensure-week-summary (week)
-  "Ensure the current buffer ends with a clock-summary section for WEEK
-\(an ISO \"YYYY-Www\" string), inserting one at `point-max' if absent.
-The clocktable uses a fixed `:block' rather than `thisweek' so each
-week's summary keeps reporting that week after the week rolls over."
+  "Ensure the current buffer ends with a clock-summary section for this WEEK."
   (let ((heading (format "* Clock Summary %s" week)))
     (unless (save-excursion
               (goto-char (point-min))
@@ -1666,10 +1671,10 @@ week's summary keeps reporting that week after the week rolls over."
                       heading week)))))
 
 (defun my-meeting-log--append-clock (title start-time end-time)
-  "Append a clocked heading for TITLE to `my-meeting-log-file', clocked
-from START-TIME to END-TIME, then refresh its clock-summary dynamic
-blocks and save. A new per-week clock-summary section is added the first
-time a given ISO week is logged."
+  "Append a clocked entry for TITLE clocked from START-TIME to END-TIME.
+Then refresh its clock-summary dynamic blocks and save. A new per-week
+clock-summary section is added the first time a given ISO week is logged."
+
   ;; `org-clock-into-drawer' and `org-duration-from-minutes' have no
   ;; autoload cookie, so org-clock.el/org-duration.el must be required
   ;; explicitly -- plain `(require 'org)' at the top of this file doesn't
@@ -1696,12 +1701,12 @@ time a given ISO week is logged."
     (save-buffer)))
 
 (defun my-meeting-log-record-dismissed-appointments (keys)
-  "Log clocked time for each dismissed appointment in KEYS, a list of
-\(START-MINUTES . TITLE) conses (see `my-appt-due-list' above).
-Looks up each appointment's scheduled start/end in `my-meetings-file'
-and records that range as a CLOCK entry in `my-meeting-log-file'. A
-lookup miss or write failure is reported to *Messages* and otherwise
-ignored -- this must never block dismissing the mode-line notice."
+  "Log clocked time for each dismissed appointment in KEYS.
+See `my-appt-due-list' above for the format. Looks up each appointment's
+scheduled start/end in `my-meetings-file' and records that range as a
+CLOCK entry in `my-meeting-log-file'. A lookup miss or write failure is
+reported to *Messages* and otherwise ignored. This must never block
+dismissing the mode-line notice."
   (let* ((today (time-to-days nil))
          (all-entries (my-meeting-log--parse-calendar-entries (find-file-noselect my-meetings-file)))
 	 ;; filter to today first.
@@ -1748,6 +1753,7 @@ ignored -- this must never block dismissing the mode-line notice."
 ;; first digit of the padded time, from our " %-12t " prefix format)
 ;; unfaced. Extend the face to cover the whole line.
 (defun my-org-agenda-extend-current-time-face (list)
+  "Face for the prefix of the `org-agenda' time portion in LIST."
   (dolist (item list list)
     (when (and (stringp item)
                (> (length item) 2)
@@ -2041,6 +2047,7 @@ the next prompt reports its title."
           (unless (string-empty-p title) title))))
 
 (defun my-ghostel-buffer-name (title)
+  "Set the current ghostel buffer name based on TITLE and a user override."
   (if my-ghostel-user-title
       (format "*ghostel: %s*" my-ghostel-user-title)
     (ghostel-buffer-name-by-title title)))
@@ -2071,14 +2078,17 @@ terminal icon plus input-needed / command-running status."
   (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))
   (setq ghostel-buffer-name-function #'my-ghostel-buffer-name))
 
-(defun my-ghostel-desktop-misc (_dirname)
+(defun my-ghostel-desktop-persistent-info (_dirname)
+  "Create a list for serialization of ghostel buffers to the desktop file."
   (list :directory default-directory :identity ghostel--buffer-identity
         :title my-ghostel-user-title :project tab2-pinned-project))
 
 (add-hook 'ghostel-mode-hook
-          (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-misc)))
+          (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-persistent-info)))
 
 (defun my-ghostel-desktop-restore (_file-name buffer-name misc)
+  "Custom desktop restore function for ghostel BUFFER-NAME with MISC info.
+See `my-ghostel-desktop-persistent-info' for the format."
   (require 'ghostel)
   (let* ((default-directory (or (plist-get misc :directory) default-directory))
          ;; Prefix arg forces a new buffer (never reuses a live one); `ghostel'
@@ -2115,6 +2125,7 @@ terminal icon plus input-needed / command-running status."
 ;; and turnoff the fringe line overflow markers since the line numbers show the same
 ;; thing and are much easier to see.
 (defun my-common-prog-mode-setup ()
+  "Common setup for all programming modes."
   (display-line-numbers-mode)
   (setq-local fringe-indicator-alist
               (delq (assq 'continuation fringe-indicator-alist)
@@ -2246,7 +2257,7 @@ terminal icon plus input-needed / command-running status."
   :group 'environment)
 
 (defun my-java-home-set (symbol value)
-  "Set  SYMBOL : `my-java-home' to VALUE and propagate it to dependent Java tooling.
+  "Set SYMBOL `my-java-home' to VALUE and propagate it to dependent Java tooling.
 Re-applies JAVA_HOME and the jdtls settings derived from it so
 customizing `my-java-home' (e.g. via \\[customize-variable]) takes
 effect without a restart."
@@ -2268,6 +2279,7 @@ effect without a restart."
 (my-java-home-set 'my-java-home my-java-home)
 
 (defun setup-common-java ()
+  "Common setup for java."
   (setq c-basic-offset 4
         tab-width 4
         indent-tabs-mode t)
@@ -2312,17 +2324,17 @@ effect without a restart."
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
 
 (defvar eglot-suppressed-progress-titles '("Publish Diagnostics")
-  "$/progress titles are never reported to the message bar or mode line,
+"A list of progress title to suppress showing on the modeline.
+$/progress titles are never reported to the message bar or mode line,
 not even the `report' updates. jdtls fires its \"Publish
 Diagnostics\" task on essentially every edit, which drowns out
 everything else `eglot-report-progress' shows, and none of its
 begin/report/end carries anything useful anyway.")
 
 (defvar eglot--suppressed-progress-tokens (make-hash-table :test #'equal)
-  "Tokens of in-flight $/progress tasks currently being fully suppressed
-per `eglot-suppressed-progress-titles'. LSP guarantees a task's token
-is stable across its begin/report/end notifications, so membership
-here is tracked from begin to end.")
+  "Tokens of in-flight $/progress tasks currently being fully suppressed.
+LSP guarantees a task's token is stable across its begin/report/end
+notifications, so membership here is tracked from begin to end.")
 
 (with-eval-after-load 'eglot
   (advice-add 'eglot-handle-notification :around
@@ -2358,8 +2370,7 @@ here is tracked from begin to end.")
 (defvar my-jdtls-suppressed-error-messages
   '("Cannot refresh bundle org.eclipse.jdt.ls.core because its dependency closure includes the org.eclipse.jdt.ls.core bundle."
     "at com.microsoft.java.test.plugin.searcher.JUnit5TestSearcher")
-  "Substrings of jdtls ERROR `window/logMessage' text that are known-benign
-false positives, never worth a `display-warning'.")
+  "List of jdtls messages to suppress.")
 
 ;; Report back warnings of interest after eglot loads
 (with-eval-after-load 'eglot
@@ -2377,7 +2388,7 @@ false positives, never worth a `display-warning'.")
 
 ;; Context menu additions for eglot/dape
 (defun my-eglot-dape-context-menu (menu _click)
-  "Augment context menu with Eglot (LSP) and Dape (Debug) commands."
+  "Augment context MENU with Eglot (LSP) and Dape (Debug) commands."
   (when (derived-mode-p 'prog-mode)
     ;; --- EGLOT (LSP) SECTIONS ---
     (when (bound-and-true-p eglot--managed-mode)
@@ -2470,7 +2481,7 @@ anything as useful as the `report' messages in between."
   "Cache directory for source decompiled by jdtls from jar files.")
 
 (defun my-jdt-uri-handler (operation &rest args)
-  "Handle file operations on jdtls's `jdt://' URIs.
+  "Handle a file OPERATION with ARGS on jdtls's `jdt://' URIs.
 
 jdtls returns these for definitions/references that resolve into a
 class inside a jar (library code, JDK classes) rather than a project
@@ -2496,7 +2507,7 @@ via the `java/classFileContents' request, the first time it's seen."
                            (jsonrpc-request server :java/classFileContents
                                              (list :uri uri)))))
         (unless content
-          (error "jdtls: no class file contents for %s" uri))
+          (error "jdtls: No class file contents for %s" uri))
         (make-directory (file-name-directory cache-file) t)
         (with-temp-file cache-file (insert content))))
     (if (memq operation '(expand-file-name file-truename file-local-name))
@@ -2511,18 +2522,19 @@ via the `java/classFileContents' request, the first time it's seen."
 (add-to-list 'file-name-handler-alist '("\\`jdt://" . my-jdt-uri-handler))
 
 (defun my-jdtls-cache-dir (&optional project)
-  "Return the jdtls `-data' workspace directory for PROJECT (or
-`default-directory' if PROJECT is nil) -- the same path
-`eglot-server-programs' launches jdtls with, keyed by project root so
-each project gets its own persistent jdtls workspace."
+  "Return the jdtls `-data' workspace directory.
+Either find for the current PROJECT (or `default-directory' if PROJECT
+is nil). The workspace is unique per project. This will be the same path
+`eglot-server-programs' launches jdtls with."
   (expand-file-name (md5 (or (and project (project-root project))
                               default-directory))
                      (locate-user-emacs-file "jdtls-cache")))
 
 ;; Clean function for the jdtls workspace.
 (defun my-jdtls-clean-workspace ()
-  "Shut down the current buffer's jdtls connection, delete its cached
-`-data' workspace, and reconnect."
+  "Do a full cleanup of the current workspace.
+This shots down the current buffer's jdtls connection, deletes its
+cached `-data' workspace, and reconnects."
   (interactive)
   (unless (derived-mode-p 'java-mode 'java-ts-mode)
     (user-error "Not in a Java buffer"))
@@ -2857,7 +2869,8 @@ declaration if any such methods were found."
 ;; just focuses it instead of closing it. Override that specifically
 ;; for this mode.
 (defun flymake-buffer-quit (event)
-  "Close the flymake diagnostics window clicked on in its mode-line."
+  "Handle an EVENT for the flymake diagnostics window.
+The only action we do is close on click."
   (interactive "e")
   (quit-window nil (posn-window (event-start event))))
 
@@ -2954,6 +2967,7 @@ declaration if any such methods were found."
 ;; Persist only the primary frame in the desktop.  Any frame made while another
 ;; real frame already exists (tear-offs, C-x 5 2, ...) is marked `desktop-dont-save'.
 (defun my-desktop-mark-secondary-frame (frame)
+  "Mark a FRAME as secondary."
   (when (seq-some (lambda (f)
                     (and (not (eq f frame))
                          ;; framep is t for TTY and the daemon's initial frame; only GUI frames count.
@@ -2987,11 +3001,13 @@ declaration if any such methods were found."
 (defvar my-desktop-autosave-timer nil)
 
 (defun my-desktop-autosave ()
+  "Wrapper around `#'desktop-save'."
   (when desktop-dirname
     (let ((inhibit-message t))
       (desktop-save desktop-dirname nil t))))
 
 (defun my-desktop-start-autosave ()
+  "Set up a periodic timer that saves the desktop."
   (unless (timerp my-desktop-autosave-timer)
     (setq my-desktop-autosave-timer
           (run-with-timer 3600 3600 #'my-desktop-autosave))))
@@ -3041,6 +3057,7 @@ declaration if any such methods were found."
 
 ;; setup a callback to cleanup the diary buffers for use below
 (defun my-diary-cleanup ()
+  "Cleanup the excorporate diary."
   (when (get-buffer "diary")
     (kill-buffer "diary"))
   (when (get-buffer "diary-excorporate-transient")
@@ -3090,6 +3107,7 @@ declaration if any such methods were found."
 ;; for emacsclient a different strategy is needed
 ;; a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
 (defun command-line-diff (_switch)
+  "Do an ediff for the current command line arguments."
   (let ((file1 (pop command-line-args-left))
         (file2 (pop command-line-args-left)))
     (ediff file1 file2)))
@@ -3224,6 +3242,7 @@ declaration if any such methods were found."
 ;; Some GC analytics to see if tuning GC is interesting
 ;; this is a bit intrusive so I'll turnoff most of the time
 (defun gc-notification ()
+  "Notification message."
   (message "Garbage Collection occurred"))
 
 (my-ignore (add-hook 'post-gc-hook #'gc-notification))
@@ -3315,8 +3334,9 @@ falling back to `mouse-select-font'."
   widget)
 
 (defun my-customize-face-set-font (button &rest _)
-  "Pick a font with `my-select-font' and fill its family, height, weight,
-and slant into the enclosing custom-face-edit widget's attributes."
+  "Customize the font UX in the customize buffers with BUTTON.
+Pick a font with `my-select-font' and fill its family, height, weight,
+and slant into the enclosing `custom-face-edit' widget's attributes."
   (unless (display-graphic-p)
     (user-error "Selecting a font requires a graphical frame"))
   (let ((edit-widget (my-widget-find-ancestor button 'custom-face-edit)))
@@ -3334,8 +3354,9 @@ and slant into the enclosing custom-face-edit widget's attributes."
         (widget-setup)))))
 
 (defun my-face-family-value-create (widget)
-  "Render an inline \"Set Font...\" button right after the Font Family
-tag, followed by the normal editable field."
+  "Render an inline \"Set Font...\" button inside the WIDGET.
+Located to the right after the Font Family tag, followed by the normal
+editable field."
   (let ((buttons (widget-get widget :buttons)))
     (push (widget-create-child-and-convert
            widget 'push-button
