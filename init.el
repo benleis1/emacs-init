@@ -450,7 +450,11 @@
 ;; Note: font sets are to some extent os dependent
 
 ;; Mixed-pitch mode. I use this in markdown and org modes currently.
-;; `my-default-fixed-pitch-font' is defined in early-init.el.
+;; `my-default-fixed-pitch-font' is defined in early-init.el.  This fallback (keep the value in sync)
+;; only matters when init.el is loaded without early-init.el, e.g. `emacs -Q --batch -l init.el'
+;; for tests, where the use-package blocks below would otherwise hit a void variable.
+(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
+  "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font (if (eq system-type 'gnu/linux) "Sans" "Helvetica")
   "Default variable-pitch font family.")
 

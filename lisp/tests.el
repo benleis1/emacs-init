@@ -123,6 +123,7 @@ Deliberately omits generic names like `all' and `any' that would false-positive.
   (cond
    ((eq form sym) (not guarded))
    ((not (consp form)) nil)
+   ((eq (car form) 'declare-function) nil)
    ((not (proper-list-p form))
     (or (my/find-unguarded-symbol (car form) sym guarded)
         (my/find-unguarded-symbol (cdr form) sym guarded)))
