@@ -145,6 +145,7 @@ entries.")
   (setf (alist-get mode tab2-buffer-name-functions) function))
 
 (defun tab2-space-tab-name (buffer &optional _buffers)
+  "Add display spaces around the tab name for BUFFER."
   (let ((name (buffer-name buffer)))
     (when-let* ((fn (alist-get (buffer-local-value 'major-mode buffer)
                                tab2-buffer-name-functions)))
@@ -171,15 +172,15 @@ entries.")
 (unless (frame-parameter nil 'tab-line-sel-view)
   (set-frame-parameter nil 'tab-line-sel-view 0))
 
-;; Return the current view
 (defun tab2-get-current-view ()
+  "Return the current view."
   ;; Use the frame of the window being rendered, not the selected frame:
   ;; tab lines of unselected frames are redisplayed too.
   (let ((pos (frame-parameter (window-frame) 'tab-line-sel-view)))
     (nth (or pos 0) tab2-views)))
 
-;; Return if the current view is the default view
 (defun tab2-default-view-p ()
+  "Return if the current view is the default one."
   (equal (frame-parameter (window-frame) 'tab-line-sel-view)  0))
 
 ;; Save any state - currently just the window configuration but I expect to add more.

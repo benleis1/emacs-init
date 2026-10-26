@@ -68,7 +68,7 @@
 
 (defun my-modeline--icon (fn &rest args)
   "Call FN, a nerd-icons icon function (e.g. `nerd-icons-octicon'), with ARGS.
-This lets me set the `my-modeline-icon-font-family' artound the call."
+This lets me set the `my-modeline-icon-font-family' around the call."
   (let ((nerd-icons-font-family (or my-modeline-icon-font-family nerd-icons-font-family)))
     (apply fn args)))
 
@@ -91,9 +91,9 @@ icon set can never break the mode-line."
 (defface my-modeline-file-icon-face
   '((t :foreground "white" :background "gray60" :family "DejaVuSansM Nerd Font Propo" ))
   "Background face for the powerline-style file-type badge.
-Its`:background' is kept in sync with the active modus theme's `cursor'
+Its `:background' is kept in sync with the active modus theme's `cursor'
 palette color by `my-modeline--sync-file-icon-face' whenever `modus-themes'
-is available. The \"gray60\"ed here is only the fallback otherwise.")
+is available. The \"gray60\" here is only the fallback otherwise.")
 
 (defface my-modeline-file-icon-divider-face
   '((t :foreground "gray60"))
