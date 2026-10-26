@@ -217,4 +217,4 @@ on automatically in elisp mode.
 
 # References
 
-[my compile declaration file](../lisp/compile-tdeclarations.el)
+[my compile declaration file](../lisp/compile-declarations.el)
