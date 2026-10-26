@@ -185,6 +185,7 @@ entries.")
 
 ;; Save any state - currently just the window configuration but I expect to add more.
 (defun tab2-save-view-state ()
+  "Save the current view state in memory."
   (let ((view (tab2-get-current-view)))
     (setf (tab2-view-wc view) (current-window-configuration)
           (tab2-view-wstate view) (window-state-get (frame-root-window) t))))
