@@ -218,3 +218,4 @@ on automatically in elisp mode.
 # References
 
 [my compile declaration file](../lisp/compile-declarations.el)
+[fly-make general setup](https://github.com/benleis1/emacs-init/blob/3e586f4c05873d399abb027eca89660349ed0a0f/init.el#L2910)
