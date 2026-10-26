@@ -254,19 +254,34 @@ rather than at position 0."
 ;; nothing else worth switching to it for. Add a major mode here (or a
 ;; derived-mode-p-style symbol) to opt it into that behavior.
 
-(defcustom my-modeline-dedicated-window-modes '(flymake-diagnostics-buffer-mode)
-  "Major modes whose buffers get a click-to-close mode-line/header-line,
-via `my-modeline--buffer-id', instead of the usual buffer-name bindings."
-  :type '(repeat symbol)
+(defcustom my-modeline-dedicated-window-modes
+  '((flymake-diagnostics-buffer-mode . t) (messages-buffer-mode . nil))
+  "Major modes whose buffers get a click-to-close mode-line/header-line.
+Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
+window is closed, nil just closes the window."
+  :type '(alist :key-type symbol :value-type boolean)
   :group 'my-modeline)
 
+(defun my-modeline--dedicated-window-entry ()
+  "The `my-modeline-dedicated-window-modes' entry matching the current buffer."
+  (seq-find (lambda (entry) (derived-mode-p (car entry)))
+            my-modeline-dedicated-window-modes))
+
 (defun my-modeline--dedicated-window-p ()
-  (apply #'derived-mode-p my-modeline-dedicated-window-modes))
+  "Predicate that determines if the current window is a dedicated window."
+  (and (my-modeline--dedicated-window-entry) t))
 
 (defun my-modeline-close-dedicated-window (event)
-  "Close the dedicated window clicked on in its mode-line/header-line."
+  "Close the dedicated window after the click EVENT.
+Kills its buffer too if the mode's entry in
+`my-modeline-dedicated-window-modes' says so."
   (interactive "e")
-  (quit-window nil (posn-window (event-start event))))
+  (let ((window (posn-window (event-start event)))
+        ;; init.el sets this to t globally, which would kill every buffer.
+        (quit-window-kill-buffer nil))
+    (quit-window (with-current-buffer (window-buffer window)
+                   (cdr (my-modeline--dedicated-window-entry)))
+                 window)))
 
 (defvar my-modeline-dedicated-window-map
   (my-modeline-mouse-map '((mouse-1 . my-modeline-close-dedicated-window))))

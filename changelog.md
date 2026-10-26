@@ -74,4 +74,4 @@ mode glyph which I'm leveraging on the far left
 * The desktop auto-saves hourly once it has been loaded, so views and terminals
   survive a crash.
 * The flymake modeline segment is now universal and shows an indicator while
-  flymake is running.
+  flymake is running. Flymake itself is working properly now with elisp. q
