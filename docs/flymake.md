@@ -188,9 +188,9 @@ byte-compile behavior was left untouched.
 
 ### Load all the deferred packages
 After all of this I was still having to define a group of symbols that I knew should be present. The
-common link was that these were all deferred packages in `use-package`, which meant that during compilation
-they weren't loaded before references. The quick solution I had was to just manually require them
-when doing a byte-compile.
+common link was that these were all deferred packages in `use-package`, which meant that during
+compilation they weren't loaded before references. The quick solution I had was to just manually
+require them when doing a byte-compile.
 
 ```
 (eval-when-compile
@@ -205,7 +205,13 @@ when doing a byte-compile.
 ```
 
 ## Conclusion
-After doing all these steps, Flymake was finally showing as clean and quickly reflected an expected error, as shown below, complete with the line number!
+After doing all these steps, Flymake results were  finally showing as clean and quickly reflected an expected
+error, as shown below, complete with the line number!  For the future, I've added a hook to turn it
+on automatically in elisp mode. 
+
+`(add-hook 'emacs-lisp-mode-hook #'flymake-mode)`
+
+  The modeline notifications will hopefully keep me honest and not letting warnings and errors creep back in.
 
 ![](../images/flymake.png)
 
