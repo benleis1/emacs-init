@@ -2235,8 +2235,6 @@ See `my-ghostel-desktop-persistent-info' for the format."
        (cons (treesit-node-start node) (treesit-node-end last-node))
        offset))))
 
-x
-
 ;; Automatically fold the import block when a Java buffer is opened, called
 ;; from `setup-common-java' below.
 (defun treesit-fold-close-java-imports ()
