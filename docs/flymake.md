@@ -208,3 +208,7 @@ when doing a byte-compile.
 After doing all these steps, Flymake was finally showing as clean and quickly reflected an expected error, as shown below, complete with the line number!
 
 ![](../images/flymake.png)
+
+# References
+
+[my compile declaration file](../lisp/compile-tdeclarations.el)
