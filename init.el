@@ -2912,27 +2912,48 @@ declaration if any such methods were found."
 (defvar-local my-ert-gutter-overlays nil
   "Overlays placed by `my-ert-gutter-refresh'.")
 
+(defvar-local my-ert-gutter-margin-set nil
+  "Non-nil when the gutter widened this buffer's left margin itself.")
+
+(defun my-ert-gutter--set-margin (width)
+  "Set the current buffer's left margin to WIDTH, including its windows."
+  (setq left-margin-width width)
+  (dolist (win (get-buffer-window-list nil nil t))
+    (set-window-margins win width (cdr (window-margins win)))))
+
 (defun my-ert-gutter-clear ()
-  "Remove all ert-test gutter overlays from the current buffer."
+  "Remove all ert-test gutter overlays, and the margin we added, from the buffer."
   (mapc #'delete-overlay my-ert-gutter-overlays)
-  (setq my-ert-gutter-overlays nil))
+  (setq my-ert-gutter-overlays nil)
+  (when my-ert-gutter-margin-set
+    (setq my-ert-gutter-margin-set nil)
+    (my-ert-gutter--set-margin 0)))
+
+(defun my-ert-gutter--find-tests ()
+  "Return a list of (NAME . LINE-START) for each `ert-deftest' in the buffer."
+  (let (tests)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (while (re-search-forward "^(ert-deftest[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)" nil t)
+          (push (cons (intern (match-string-no-properties 1))
+                      (line-beginning-position))
+                tests))))
+    (nreverse tests)))
 
 (defun my-ert-gutter-refresh ()
-  "Mark every `ert-deftest' in the buffer with a clickable margin arrow."
+  "Mark every `ert-deftest' in the buffer with a clickable margin arrow.
+The left margin is only opened up when the buffer has at least one test."
   (interactive)
   (my-ert-gutter-clear)
-  (setq left-margin-width (max (or left-margin-width 0) 2))
-  (dolist (win (get-buffer-window-list nil nil t))
-    (set-window-margins win left-margin-width (cdr (window-margins win))))
-  (save-excursion
-    (save-restriction
-      (widen)
-      (goto-char (point-min))
-      (while (re-search-forward "^(ert-deftest[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)" nil t)
-        (let* ((name (intern (match-string-no-properties 1)))
-               (pos (line-beginning-position))
-               (arrow (concat (make-string (max 0 (1- left-margin-width)) ?\s) "▶"))
-               (ov (make-overlay pos pos)))
+  (when-let* ((tests (my-ert-gutter--find-tests)))
+    (when (< (or left-margin-width 0) 2)
+      (setq my-ert-gutter-margin-set t)
+      (my-ert-gutter--set-margin 2))
+    (let ((arrow (concat (make-string (max 0 (1- left-margin-width)) ?\s) "▶")))
+      (pcase-dolist (`(,name . ,pos) tests)
+        (let ((ov (make-overlay pos pos)))
           (overlay-put
            ov 'before-string
            (propertize
