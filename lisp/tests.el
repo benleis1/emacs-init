@@ -847,6 +847,8 @@ also holds machine-local files (local.el and the like) that aren't ours."
 ;; Catches typos, wrong arity, unknown functions and the like in every config
 ;; file, which also guards the byte-compile cleanups in the commit history.
 
+(require 'bytecomp)
+
 (defun my/byte-compile-warnings (file)
   "Byte-compile FILE into a temp dir and return its warning/error lines."
   (let* ((tmpdir (make-temp-file "my-bytecomp" t))
