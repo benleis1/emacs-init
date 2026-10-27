@@ -2901,6 +2901,82 @@ declaration if any such methods were found."
                (if (and eglot--managed-mode (derived-mode-p 'java-mode 'java-ts-mode))
                    1 -1)))))
 
+;; Left-margin arrows next to every `ert-deftest' in elisp buffers --
+;; clicking one evaluates that test's definition (so unsaved edits are
+;; picked up) and runs it with `ert'. Same margin sharing and mouse-1
+;; dispatch approach as the dape JUnit arrows above.
+(defface my-ert-run-gutter-face
+  '((t :inherit success))
+  "Face for the clickable ert-test margin arrows.")
+
+(defvar-local my-ert-gutter-overlays nil
+  "Overlays placed by `my-ert-gutter-refresh'.")
+
+(defun my-ert-gutter-clear ()
+  "Remove all ert-test gutter overlays from the current buffer."
+  (mapc #'delete-overlay my-ert-gutter-overlays)
+  (setq my-ert-gutter-overlays nil))
+
+(defun my-ert-gutter-refresh ()
+  "Mark every `ert-deftest' in the buffer with a clickable margin arrow."
+  (interactive)
+  (my-ert-gutter-clear)
+  (setq left-margin-width (max (or left-margin-width 0) 2))
+  (dolist (win (get-buffer-window-list nil nil t))
+    (set-window-margins win left-margin-width (cdr (window-margins win))))
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (while (re-search-forward "^(ert-deftest[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)" nil t)
+        (let* ((name (intern (match-string-no-properties 1)))
+               (pos (line-beginning-position))
+               (arrow (concat (make-string (max 0 (1- left-margin-width)) ?\s) "▶"))
+               (ov (make-overlay pos pos)))
+          (overlay-put
+           ov 'before-string
+           (propertize
+            " " 'display
+            `((margin left-margin)
+              ,(propertize arrow 'face 'my-ert-run-gutter-face
+                           'mouse-face 'highlight
+                           'help-echo "mouse-1: run this ert test"))))
+          (overlay-put ov 'my-ert-gutter-test name)
+          (push ov my-ert-gutter-overlays))))))
+
+(defun my-ert-gutter-run-clicked (event)
+  "Evaluate and run the `ert-deftest' whose margin arrow EVENT was clicked on."
+  (interactive "e")
+  (let* ((posn (event-start event))
+         (pos (posn-point posn)))
+    (with-selected-window (posn-window posn)
+      (goto-char pos)
+      ;; Zero-length overlays are excluded by `overlays-at'.
+      (if-let* ((name (seq-some (lambda (ov) (overlay-get ov 'my-ert-gutter-test))
+                                (overlays-in pos pos))))
+          (progn
+            (require 'ert)
+            (save-excursion
+              (end-of-line)
+              (eval-defun nil))
+            (ert name))
+        (user-error "No ert test at point")))))
+
+(define-minor-mode my-ert-run-gutter-mode
+  "Show clickable arrows in the left margin next to each `ert-deftest'."
+  :lighter nil
+  :keymap (let ((m (make-sparse-keymap)))
+            (define-key m [left-margin mouse-1] #'my-ert-gutter-run-clicked)
+            m)
+  (if my-ert-run-gutter-mode
+      (progn
+        (add-hook 'after-save-hook #'my-ert-gutter-refresh nil t)
+        (my-ert-gutter-refresh))
+    (remove-hook 'after-save-hook #'my-ert-gutter-refresh t)
+    (my-ert-gutter-clear)))
+
+(add-hook 'emacs-lisp-mode-hook #'my-ert-run-gutter-mode)
+
 ;; In process - a treesitter mechanism to find test annotations instead.
 (defun my-get-test-annotations ()
   "Get all @Test marker_annotation nodes inside methods of a class."
