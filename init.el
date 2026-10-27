@@ -2991,6 +2991,9 @@ The only action we do is close on click."
       `((error   ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-error)
 	(warning ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-warning)
 	(note    ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-info)))
+;; Note: flymake copies these strings into symbol properties when it loads, so
+;; this `setq' must run before anything requires flymake (don't `require' it
+;; from modeline.el; declare its functions instead).
 
 ;;;; elisp
 
