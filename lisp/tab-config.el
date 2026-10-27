@@ -868,6 +868,7 @@ This formats the built tab structure for a group."
                    (set-window-parameter nil 'tab-line-hscroll nil))))))
 
 (defun tab2-make-view-tab (selected-view viewname)
+  "Make a tab for VIEWNAME for the SELECTED-VIEW."
   (let* ((formatted-name (format " %s " viewname))
 	 (new-view (tab2-get-view-by-name viewname))
 	 (new-view-pos (cl-position new-view tab2-views)))
@@ -894,6 +895,7 @@ This formats the built tab structure for a group."
 
 ;; predicate to determine if a buffer is modified and backed by a file
 (defun tab2-buffer-modified-file-p (buffer)
+  "Predicate for whether a tab is for a modified BUFFER."
   (and (buffer-file-name buffer) (buffer-modified-p buffer)))
 
 ;; Per-buffer cache of project membership: (PATH ROOT . MEMBERP).  Membership is
@@ -907,7 +909,7 @@ This formats the built tab structure for a group."
 
 (defun tab2-buffer-in-project-p (buffer root)
   "Return non-nil if BUFFER belongs to the project rooted at ROOT.
-  ROOT must already be normalized with `tab2--normalize-root'."
+ROOT must already be normalized with `tab2--normalize-root'."
   (when root
     ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
     (if-let* ((pinned (buffer-local-value 'tab2-pinned-project buffer)))
@@ -943,17 +945,18 @@ This formats the built tab structure for a group."
                          (equal (tab-line-tabs-buffer-group-name b) curgroup))
                        buffers))))
 
-(defun find-first (fn ls)
-  (cond ((null ls) nil)
-        ((funcall fn (car ls)) (car ls))
-        (t (find-first fn (cdr ls)))))
+(defun find-first (filter list)
+  "Find the first match from FILTER on the LIST."
+  (cond ((null list) nil)
+        ((funcall filter (car list)) (car list))
+        (t (find-first filter (cdr list)))))
 
 ;; Setup the list of tabs to be displayed.
 ;; Note: these will returned in the tab list format
 ;; tab2-format-tab is then responsible for formatting each one i.e faces / close icons etc.
 (defun tab2-get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
-  This version is based on tab-line-tabs-buffers-groups but changes first
+This version is based on tab-line-tabs-buffers-groups but changes first
   group to an icon and adds on all files"
 
   (cond
@@ -1014,6 +1017,7 @@ This formats the built tab structure for a group."
 ;; set - switch the selected group to match it.
 ;; TODO: make configurable?
 (defun tab2-auto-track-selected-window (&optional _frame)
+  "Switch the tab group to match the current window."
   (let ((bufgroup (tab-line-tabs-buffer-group-name (current-buffer)))
 	(filep (buffer-file-name (current-buffer)))
 	(valid (tab2-buffer-filter (current-buffer)))
@@ -1104,7 +1108,7 @@ This formats the built tab structure for a group."
 
 (defcustom tab2-desktop-save-views-only t
   "When non-nil, only save tab-tracked buffers that are in a saved view.
-  Buffers that were opened but never joined a view (and buffers in tear-off
+Buffers that were opened but never joined a view (and buffers in tear-off
 							views) are then left out of the desktop file."
   :type 'boolean
   :group 'tab2)
@@ -1200,7 +1204,8 @@ This formats the built tab structure for a group."
 ;; counter and the current tab2 view) are defined in modeline.el, alongside
 ;; the rest of the modeline segment code, and included there unconditionally.
 
-;; bunch of code from nicolas rougier adapted to use the header-line
+;; A bunch of code from nicolas rougier adapted to use the header-line
+;; The command-buffer is the transient one used for input.
 (defface quick-command-face
   `((t :foreground ,(face-foreground 'default)
        :background ,(face-background 'highlight nil t)
@@ -1229,7 +1234,7 @@ This formats the built tab structure for a group."
   "Face for cursor.")
 
 (defun tab2-quick-command--update (current-buffer command-buffer)
-  "Update header-line with current command."
+  "Update header-line for the CURRENT-BUFFER and COMMAND-BUFFER."
 
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
@@ -1316,7 +1321,7 @@ This formats the built tab structure for a group."
 
 (defun tab2--buffer-project-root (buffer)
   "Return the project root BUFFER belongs to, or nil.
-  A terminal's pinned `tab2-pinned-project' wins over its directory."
+A terminal's pinned `tab2-pinned-project' wins over its directory."
   (or (tab2--normalize-root (buffer-local-value 'tab2-pinned-project buffer))
       (with-current-buffer buffer
         (when-let* ((pr (project-current nil)))
@@ -1324,7 +1329,7 @@ This formats the built tab structure for a group."
 
 (defun tab2--buffer-groups (buffer root)
   "Return the list of tab group names BUFFER is assigned to.
-  ROOT is the project root used for the virtual \"Project\" group."
+ROOT is the project root used for the virtual \"Project\" group."
   (seq-filter (lambda (g) (and g (not (equal g ""))))
               (list (when (buffer-file-name buffer) "Files")
                     (when (and root (tab2-buffer-in-project-p buffer root)) "Project")
@@ -1339,7 +1344,7 @@ This formats the built tab structure for a group."
 
 (defun tab2-dump-state ()
   "Show all tab2 state in the *tab2-state* buffer.
-  Lists frames, windows, views and every tracked buffer with the groups it is
+Lists frames, windows, views and every tracked buffer with the groups it is
   assigned to and its project root."
   (interactive)
   (let ((buf (get-buffer-create "*tab2-state*"))
