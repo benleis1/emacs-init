@@ -239,6 +239,7 @@ entries.")
   (force-mode-line-update))
 
 (defun tab2-prompt-new-view ()
+  "Prompt the user for a new view name."
   (interactive)
   (let ((name (tab2-quick-command "New view name:")))
     (when name (tab2-new-view name))))
@@ -248,28 +249,30 @@ entries.")
   "RET" #'tab2-new-view)
 
 (defvar tab2-new-view-button
-      (propertize " + "
-		  'display '(image :type xpm
-				   :file "tabs/new.xpm"
-				   :height (0.8 . em)
-				   :margin (2 . 0)
-				   :ascent center)
-		  'keymap tab2-new-view-keymap
-		  'mouse-face 'tab-line-highlight
-		  'help-echo "Click to add a view")
+  (propertize " + "
+	      'display '(image :type xpm
+			       :file "tabs/new.xpm"
+			       :height (0.8 . em)
+			       :margin (2 . 0)
+			       :ascent center)
+	      'keymap tab2-new-view-keymap
+	      'mouse-face 'tab-line-highlight
+	      'help-echo "Click to add a view")
   "Propertized \"+\" button appended to the tab line to create a new view.")
 
-;; View enumeration by name.
 (defun tab2-list-views ()
+  "Return a list of all the view names."
   (interactive)
   (mapcar 'tab2-view-name tab2-views))
 
 ;; Number of views currently tracked
 (defun tab2-num-views ()
+  "Return the number of current views."
   (length tab2-views))
 
 ;; Switch between views
 (defun tab2-switch-view-by-name (name)
+  "Switch to a given view named NAME."
   (interactive (list (completing-read "Switch to view: " (tab2-list-views))))
   (let* ((new-view (tab2-get-view-by-name name))
 	 (new-view-pos (cl-position new-view tab2-views))
@@ -290,6 +293,7 @@ entries.")
 
 ;; Close a view and revert back to default
 (defun tab2-close-view-by-name (name)
+  "Close the view named NAME."
   (interactive (list (completing-read "Close view: " (tab2-list-views))))
   (let* ((closing-view (tab2-get-view-by-name name))
 	 (current-view (tab2-get-current-view)))
@@ -312,8 +316,8 @@ entries.")
     (setq tab2-views (remove closing-view tab2-views))
     ))
 
-;; Switch to the next view in the list
 (defun tab2-next-view()
+  "Switch to the new view in the list."
   (interactive)
   (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (+ 1 oldpos) (length tab2-views)))
@@ -322,8 +326,8 @@ entries.")
     ;;    (message "next %s to %s:%s" oldpos newpos  new-view-name)
     (tab2-switch-view-by-name  new-view-name)))
 
-;; Switch to the prev view in the list
 (defun tab2-prev-view()
+  "Switch to the previous view in the list."
   (interactive)
   (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (- oldpos 1) (length tab2-views)))
@@ -334,28 +338,28 @@ entries.")
 
 ;; categorize a buffer's mode
 (defun tab2-buffer-mode (buffer-or-string)
-  "Returns the major mode associated with a buffer."
+  "Returns the major mode associated with a BUFFER-OR-STRING."
   (with-current-buffer buffer-or-string
     major-mode))
 
 (defvar tab2-white-list-modes
   '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode eshell-mode)
-  "List of modes that will be tracked even if the buffer is not a file")
+  "List of modes that will be tracked even if the buffer is not a file.")
 
 (defvar tab2-white-list-buffer-names
   '()
-  "List of buffer names that will be tracked even if the buffer is not a file")
+  "List of buffer names that will be tracked even if the buffer is not a file.")
 
-;; Filter which buffers we'll track in the tabs
 (defun tab2-buffer-filter (buffer)
+  "Filter whether the given BUFFER is tracked."
   (or (buffer-file-name buffer)
       (member (tab2-buffer-mode buffer) tab2-white-list-modes)
       (member (buffer-name buffer) tab2-white-list-buffer-names)))
 
-;; Function that returns the current buffer-list.
 ;; This filters out all special buffers and leaves only files and whitelisted buffers by mode
-;; Adds on the current buffer its filters and isn't in the list
+;; Also adds on the current buffer if it filters and isn't in the list
 (defun tab2-get-filtered-buffer-list ()
+  "Return the current filtered buffer list."
   (let* ((current-bufs (seq-filter 'tab2-buffer-filter (buffer-list)))
 	 (intersect-tabs (seq-filter (lambda (it) (member it current-bufs)) (tab2-get-buffer-list)))
 	 (new-tab (when (and (not (member (current-buffer) (tab2-get-buffer-list)))
@@ -381,11 +385,12 @@ entries.")
 
 ;; tabs may just be a buffer or an alist depending on the mode.
 (defun tab2-get-buffer-from-tab (tab)
+  "Get the buffer behind a TAB."
   (if (bufferp tab) tab (alist-get 'buffer tab)))
 
 ;; Custom shift tab right tab2-shift-tab-right (&optional event)
 (defun tab2-shift-tab-right (&optional event)
-  "Shift current buffer or selected tab right"
+  "Shift current buffer or selected tab right after the EVENT."
   (interactive (list last-nonmenu-event))
   ;;  (when (tab-line-track-tap event)
   (let* ((posnp (and (listp event)
@@ -407,7 +412,7 @@ entries.")
 
 ;; Custom tab shift left
 (defun tab2-shift-tab-left (&optional event)
-  "Shift current buffer or selected tab left"
+  "Shift current buffer or selected tab left after the EVENT."
   (interactive (list last-nonmenu-event))
   ;;  (when (tab-line-track-tap event)
   (let* ((posnp (and (listp event)
@@ -429,10 +434,10 @@ entries.")
             (seq-drop (tab2-get-buffer-list) (+ n 1)))))))
     (force-mode-line-update)))
 
-;; copy current buffer name to kill ring
-(defun tab2-copy-current-filename-to-clipboard (&optional e)
-  (interactive "e" )
-  (let* ((posnp (event-start e))
+(defun tab2-copy-current-filename-to-clipboard (&optional event)
+  "Copy the current buffer name to the kill ring after EVENT."
+  (interactive "e")
+  (let* ((posnp (event-start event))
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab2-get-buffer-from-tab tab))
 	 (filename (and buffer (buffer-file-name buffer))))
@@ -540,7 +545,8 @@ shows it, and delete WINDOW if that was its only tab."
 
       (popup-menu menu))))
 
-(defun tab2-buffer-in-multiple-viewsp (buffer)
+(defun tab2-buffer-in-multiple-views-p (buffer)
+  "Predicate that tests if a BUFFER belongs to multiple views."
   (let ((count 0))
     (dolist (view tab2-views)
       (when (member buffer (tab2-view-buffers view)) (setq count (+ 1 count))))
@@ -549,13 +555,14 @@ shows it, and delete WINDOW if that was its only tab."
 
 
 ;; Logic to carefully close a tab. buffer is only killed if its the last one.
-(defun tab2-close-tab (&optional e)
-  (let* ((posnp (event-start e))
+(defun tab2-close-tab (&optional event)
+  "Close a tab after an EVENT."
+  (let* ((posnp (event-start event))
          (window (posn-window posnp))
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab2-get-buffer-from-tab tab)))
 
-    (if (tab2-buffer-in-multiple-viewsp buffer)
+    (if (tab2-buffer-in-multiple-views-p buffer)
 	;; The buffer is in other views so only:
 	;; remove this buffer from the buffer list for this view and switch
 	(let* ((view (tab2-get-current-view))
@@ -656,7 +663,7 @@ A tear-off frame left without tabs is deleted."
 
 ;; todo may need to force update more expansively for multiple windows when split
 (defun tab2-mouse-move-tab (event)
-  "Move a tab to a different position on the tab line.
+  "Move a tab to a different position on the tab line after an EVENT.
 This command should be bound to a drag event.  It moves the tab
 at the mouse-down event to the position at mouse-up event."
   (interactive "e")
@@ -751,6 +758,7 @@ at the mouse-down event to the position at mouse-up event."
   "Seconds a cached result from `tab2-git-state' is considered fresh.")
 
 (defun tab2-git-state (buffer)
+  "Find the git state for BUFFER."
   (with-current-buffer buffer
     (let ((now (float-time)))
       (unless (and tab2-git-state-cache
@@ -837,6 +845,9 @@ TABS contains the whole set of tabs."
 
 ;; Group of tab constructors
 (defun tab2-make-group-tab (selected-group groupname)
+  "Setup a tabgroup named GROUPNAME for SELECTED-GROUP.
+This formats the built tab structure for a group."
+
   (let ((formatted-name   (format " %s " groupname)))
     `(tab
       (name . ,formatted-name)
@@ -847,6 +858,7 @@ TABS contains the whole set of tabs."
                    (set-window-parameter nil 'tab-line-hscroll nil))))))
 
 (defun tab2-make-view-category-tab (selected-view viewname)
+  "Make a view tab named VIEWNAME for the SELECTED-VIEW."
   (let ((formatted-name   (format " %s " viewname)))
     `(tab
       (name . ,formatted-name)
@@ -895,7 +907,7 @@ TABS contains the whole set of tabs."
 
 (defun tab2-buffer-in-project-p (buffer root)
   "Return non-nil if BUFFER belongs to the project rooted at ROOT.
-ROOT must already be normalized with `tab2--normalize-root'."
+  ROOT must already be normalized with `tab2--normalize-root'."
   (when root
     ;; A pinned project (e.g. a terminal's) wins over its (cd-able) directory.
     (if-let* ((pinned (buffer-local-value 'tab2-pinned-project buffer)))
@@ -914,6 +926,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 ;; if Files then return all of the file based buffers.
 ;; if Project then return all buffers in the curent project.
 (defun  tab2-filter-buffers-by-group (buffers curgroup)
+  "Filter the list of BUFFERS for ones in the CURGROUP."
   (cond ((or (not curgroup) (equal curgroup "All")) buffers)
         ((equal curgroup "Files")
          (seq-filter (lambda (b) (buffer-file-name b)) buffers))
@@ -940,7 +953,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 ;; tab2-format-tab is then responsible for formatting each one i.e faces / close icons etc.
 (defun tab2-get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
-This version is based on tab-line-tabs-buffers-groups but changes first
+  This version is based on tab-line-tabs-buffers-groups but changes first
   group to an icon and adds on all files"
 
   (cond
@@ -1091,8 +1104,8 @@ This version is based on tab-line-tabs-buffers-groups but changes first
 
 (defcustom tab2-desktop-save-views-only t
   "When non-nil, only save tab-tracked buffers that are in a saved view.
-Buffers that were opened but never joined a view (and buffers in tear-off
-views) are then left out of the desktop file."
+  Buffers that were opened but never joined a view (and buffers in tear-off
+							views) are then left out of the desktop file."
   :type 'boolean
   :group 'tab2)
 
@@ -1303,7 +1316,7 @@ views) are then left out of the desktop file."
 
 (defun tab2--buffer-project-root (buffer)
   "Return the project root BUFFER belongs to, or nil.
-A terminal's pinned `tab2-pinned-project' wins over its directory."
+  A terminal's pinned `tab2-pinned-project' wins over its directory."
   (or (tab2--normalize-root (buffer-local-value 'tab2-pinned-project buffer))
       (with-current-buffer buffer
         (when-let* ((pr (project-current nil)))
@@ -1311,7 +1324,7 @@ A terminal's pinned `tab2-pinned-project' wins over its directory."
 
 (defun tab2--buffer-groups (buffer root)
   "Return the list of tab group names BUFFER is assigned to.
-ROOT is the project root used for the virtual \"Project\" group."
+  ROOT is the project root used for the virtual \"Project\" group."
   (seq-filter (lambda (g) (and g (not (equal g ""))))
               (list (when (buffer-file-name buffer) "Files")
                     (when (and root (tab2-buffer-in-project-p buffer root)) "Project")
@@ -1326,8 +1339,8 @@ ROOT is the project root used for the virtual \"Project\" group."
 
 (defun tab2-dump-state ()
   "Show all tab2 state in the *tab2-state* buffer.
-Lists frames, windows, views and every tracked buffer with the groups it is
-assigned to and its project root."
+  Lists frames, windows, views and every tracked buffer with the groups it is
+  assigned to and its project root."
   (interactive)
   (let ((buf (get-buffer-create "*tab2-state*"))
         (frames (frame-list))
