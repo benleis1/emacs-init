@@ -205,7 +205,7 @@ require them when doing a byte-compile.
 ```
 
 ## Making byte compilation actually happen
-After all of this I started testing by injecting errors and watching to see how quickly flymake
+At this point I started testing by injecting errors and watching to see how quickly flymake
 caught them. Initially many never showed up which surprised me. It turns out that flymake will
 silently turn off most (but not all of the backend if code is not trusted). So while the missing
 docstring errors will get flagged, the undefined variables won't. Its critical to set the
