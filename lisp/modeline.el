@@ -289,6 +289,8 @@ window is closed, nil just closes the window."
   "Predicate that determines if the current window is a dedicated window."
   (and (my-modeline--dedicated-window-entry) t))
 
+(defvar quit-window-kill-buffer)        ; Emacs 31+; absent on 30
+
 (defun my-modeline-close-dedicated-window (event)
   "Close the dedicated window after the click EVENT.
 Kills its buffer too if the mode's entry in
