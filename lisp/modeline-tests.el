@@ -160,7 +160,8 @@
   (modeline-tests--with-flymake t "" '(a) nil
     (let* ((s (my-flymake-segment))
            (pos (string-match "⟳" s)))
-      (should (eq (get-text-property pos 'face s) 'compilation-mode-line-run)))))
+      (should (memq 'compilation-mode-line-run
+                    (ensure-list (get-text-property pos 'face s)))))))
 
 (ert-deftest modeline-test/flymake-segment-click-properties ()
   (dolist (state '(("" (a) (a)) ("" (a) nil) ("E:1" (a) (a))))
@@ -169,3 +170,17 @@
         (should (eq (get-text-property 0 'local-map s) my-flymake-modeline-map))
         (should (eq (get-text-property 0 'mouse-face s) 'mode-line-highlight))
         (should (stringp (get-text-property 0 'help-echo s)))))))
+
+(ert-deftest modeline-test/flymake-counts-lead-with-glyphs-without-pills ()
+  (let ((my-modeline-flymake-pills nil)
+        (counters (concat "[" (propertize "2" 'face 'compilation-error
+                                          'flymake--diagnostic-type :error)
+                          (propertize " " 'face nil)
+                          (propertize "3" 'face 'compilation-warning
+                                      'flymake--diagnostic-type :warning)
+                          "]")))
+    (let ((out (my-flymake--pillify counters)))
+      (should (string-match-p "\\`.+ 2 .+ 3\\'" out))
+      (should (eq (get-text-property 0 'flymake--diagnostic-type out) :error))
+      (should (eq (get-text-property (1- (length out)) 'flymake--diagnostic-type out)
+                  :warning)))))
