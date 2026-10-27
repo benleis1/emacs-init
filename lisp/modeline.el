@@ -28,6 +28,7 @@
 
 (require 'nerd-icons nil t)
 (require 'tab-line)
+(require 'xml)
 
 ;; Modeline loads before tab-config but needs to reference a few functions.
 (declare-function tab2-view-name "tab-config")
@@ -91,10 +92,10 @@ This lets me set the `my-modeline-icon-font-family' around the call."
 (defun my-modeline--icon-safe (fn &rest args)
   "Wrap `my-modeline--icon' for FN and ARGS and swallow errors.
 Like `my-modeline--icon', but nil instead of an error when FN isn't a
-  bound function (e.g. its icon set's package isn't installed) or the
-  call itself errors (e.g. a renamed/missing glyph name) -- every
-  icon-drawing segment in this file guards its nerd-icons calls this
-  way, so a missing icon set can never break the mode-line."
+bound function (e.g. its icon set's package isn't installed) or the
+call itself errors (e.g. a renamed/missing glyph name) -- every
+icon-drawing segment in this file guards its nerd-icons calls this
+way, so a missing icon set can never break the mode-line."
   (and (fboundp fn) (ignore-errors (apply #'my-modeline--icon fn args))))
 
 ;;; Powerline-style file-type badge
@@ -109,22 +110,26 @@ Like `my-modeline--icon', but nil instead of an error when FN isn't a
   '((t :foreground "white" :background "gray60" :family "DejaVuSansM Nerd Font Propo" ))
   "Background face for the powerline-style file-type badge.
 Its `:background' is kept in sync with the active modus theme's `cursor'
-  palette color by `my-modeline--sync-file-icon-face' whenever
-  `modus-themes' is available. The \"gray60\" here is only the fallback
-  otherwise.")
+palette color by `my-modeline--sync-file-icon-face' whenever
+`modus-themes' is available. The \"gray60\" here is only the fallback
+otherwise.")
 
 (defface my-modeline-file-icon-divider-face
   '((t :foreground "gray60"))
-  "Foreground-only face for the divider glyph.
-This caps off the powerline-style file-type badge.")
+  "Foreground-only face for the divider glyph capping the file-type badge.
+Kept in sync with `my-modeline-file-icon-face''s `:background' by
+`my-modeline--sync-file-icon-face'.  (A raw color plist can't be passed
+as nerd-icons' `:face' argument: nerd-icons puts it straight into an
+`:inherit' slot, which only accepts a face symbol -- hence syncing real
+named faces instead of computing an ad hoc one per call.)")
 
 (defun my-modeline--sync-file-icon-face ()
   "Refresh `my-modeline-file-icon-face' and `my-modeline-file-icon-divider-face'.
 Use the active modus theme's `cursor' palette color, when `modus-themes'
-  is available. A no-op otherwise, leaving each face's own static
-  `:background'/`:foreground'. Called fresh on every render -- like every
-  other segment in this file -- instead of hooked to theme-change events, so
-  it can't go stale."
+is available. A no-op otherwise, leaving each face's own static
+`:background'/`:foreground'. Called fresh on every render -- like every
+other segment in this file -- instead of hooked to theme-change events, so
+it can't go stale."
   (when (fboundp 'modus-themes-get-color-value)
     (let ((bg (modus-themes-get-color-value 'cursor))
 	  (fg (modus-themes-get-color-value 'bg-main)))
@@ -137,8 +142,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline--file-type-label ()
   "A short, upcased label for the current buffer's file type: its file
-  extension when visiting a file, or the first few letters of `mode-name'
-  otherwise."
+extension when visiting a file, or the first few letters of `mode-name'
+otherwise."
   (let* ((mode (or (cdr (assoc major-mode my-modeline-wellknown-buffers)) (format-mode-line mode-name)))
 	 (shortmode (upcase (substring mode 0 (min 9 (length mode))))))
 
@@ -160,8 +165,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline--file-type-divider ()
   "A solid right-pointing divider glyph, on `my-modeline-file-icon-divider-face',
-  capping off the powerline-style file-type badge as it fades into the plain
-  mode-line."
+capping off the powerline-style file-type badge as it fades into the plain
+mode-line."
   (my-modeline--icon-safe #'nerd-icons-powerline "nf-pl-left_hard_divider"
                           :face 'my-modeline-file-icon-divider-face))
 
@@ -190,10 +195,10 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 (defface my-modeline-buffer-modified-face
   '((t :inherit (warning bold)))
   "Face for the modified-buffer icon in `my-modeline--buffer-state-icon'.
-  Forked from doom-modeline's own `doom-modeline-buffer-modified'
-  (effectively `(warning bold)', its `doom-modeline' base face being an
-	       empty placeholder), rather than depending on the doom-modeline package
-  for it.")
+Forked from doom-modeline's own `doom-modeline-buffer-modified'
+(effectively `(warning bold)', its `doom-modeline' base face being an
+empty placeholder), rather than depending on the doom-modeline package
+for it.")
 
 (defun my-modeline--buffer-state-icon ()
   "Small icon noting whether the buffer is read-only or modified. The
@@ -210,8 +215,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline-mouse-map (bindings)
   "Return a keymap for BINDINGS, an alist of (MOUSE-EVENT . COMMAND), bound
-  under both the `mode-line' and `header-line' event prefixes, so it works
-  regardless of which one this modeline ends up displayed in."
+under both the `mode-line' and `header-line' event prefixes, so it works
+regardless of which one this modeline ends up displayed in."
   (let ((map (make-sparse-keymap)))
     (dolist (prefix '(mode-line header-line))
       (dolist (binding bindings)
@@ -233,8 +238,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline--dualize-local-maps (string)
   "Copy STRING with every `local-map' text property dualized via
-  `my-modeline--dualize-keymap', so mouse bindings baked in by code that only
-  thought about the mode-line (e.g. `vc-mode') still work in the header-line."
+`my-modeline--dualize-keymap', so mouse bindings baked in by code that only
+thought about the mode-line (e.g. `vc-mode') still work in the header-line."
   (let ((s (copy-sequence string))
         (pos 0)
         (len (length string)))
@@ -253,9 +258,9 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline--first-property (string prop)
   "The first non-nil value of text property PROP found anywhere in STRING,
-  or nil if it has none. Useful for lifting a click binding off of a stock
-  construct (e.g. `vc-mode') whose properties start a character or two in,
-  rather than at position 0."
+or nil if it has none. Useful for lifting a click binding off of a stock
+construct (e.g. `vc-mode') whose properties start a character or two in,
+rather than at position 0."
   (let ((pos (text-property-not-all 0 (length string) prop nil string)))
     (and pos (get-text-property pos prop string))))
 
@@ -270,8 +275,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 (defcustom my-modeline-dedicated-window-modes
   '((flymake-diagnostics-buffer-mode . t) (messages-buffer-mode . nil))
   "Major modes whose buffers get a click-to-close mode-line/header-line.
-  Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
-  window is closed, nil just closes the window."
+Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
+window is closed, nil just closes the window."
   :type '(alist :key-type symbol :value-type boolean)
   :group 'my-modeline)
 
@@ -286,8 +291,8 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline-close-dedicated-window (event)
   "Close the dedicated window after the click EVENT.
-  Kills its buffer too if the mode's entry in
-  `my-modeline-dedicated-window-modes' says so."
+Kills its buffer too if the mode's entry in
+`my-modeline-dedicated-window-modes' says so."
   (interactive "e")
   (let ((window (posn-window (event-start event)))
         ;; init.el sets this to t globally, which would kill every buffer.
@@ -303,9 +308,9 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline--icon-badge ()
   "Icon/state badge for the current buffer: the powerline-style file-type
-  badge from `my-modeline--buffer-icon' plus a small modified/read-only
-  indicator. Shared by the full mode-line's buffer-info segment and the
-  dedicated-window reduced one."
+badge from `my-modeline--buffer-icon' plus a small modified/read-only
+indicator. Shared by the full mode-line's buffer-info segment and the
+dedicated-window reduced one."
   (concat (my-modeline--buffer-icon) " " (my-modeline--buffer-state-icon) " "))
 
 (defun my-modeline--buffer-id ()
@@ -331,9 +336,9 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 
 (defun my-modeline-segment-buffer-info ()
   "Buffer icon/state badge, followed by the buffer name. No extra pad on
-  the left -- the badge's own colored chip (see `my-modeline--buffer-icon')
-  already starts with a 1-space inset, and an unstyled space in front of it
-  would just show up as a mismatched sliver against the chip's background."
+the left -- the badge's own colored chip (see `my-modeline--buffer-icon')
+already starts with a 1-space inset, and an unstyled space in front of it
+would just show up as a mismatched sliver against the chip's background."
   (concat (my-modeline--icon-badge)
           (format-mode-line (my-modeline--buffer-id))))
 
@@ -346,9 +351,9 @@ Use the active modus theme's `cursor' palette color, when `modus-themes'
 (defun my-modeline--scroll-percent ()
   "Return a scroll percentage string.
 Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
-  a number with a trailing `%' in between. Computed directly from
-  `window-start'/`window-end'/`point-min'/`point-max' with enough
-  escaped % signs to work with multiple levels of evaluation."
+a number with a trailing `%' in between. Computed directly from
+`window-start'/`window-end'/`point-min'/`point-max' with enough
+escaped % signs to work with multiple levels of evaluation."
 
   (let ((top (point-min))
         (bot (point-max))
@@ -374,8 +379,8 @@ Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
 (defface my-modeline-position-face-inactive
   '((t :inherit mode-line-inactive :weight semi-bold))
   "Face for `my-modeline-segment-position' in a non-selected window.
-  Unlike `my-modeline-position-face', `:background' is left unspecified so
-  the segment blends into the rest of the toned down modeline.")
+Unlike `my-modeline-position-face', `:background' is left unspecified so
+the segment blends into the rest of the toned down modeline.")
 
 (defun my-modeline--position-face ()
   "Face to use for `my-modeline-segment-position': `my-modeline-position-face'
@@ -387,15 +392,15 @@ Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
 
 (defun my-modeline-segment-position ()
   "Line/column position, per `my-modeline-position-format', followed by
-  the window scroll percentage and, when `size-indication-mode' is on, a
-  buffer size indication -- all with the same right-click menu (toggle
-								line/column/size display) stock `mode-line-position' has, see
-  `mode-line-column-line-number-mode-map'. The whole segment is boxed via
-  `my-modeline--position-face' to look slightly depressed. Nested
-  `:propertize' forms don't inherit an enclosing one's `face' -- each covers
-  only the text it directly wraps -- so `face ,face' is listed explicitly in
-  every one of them below, including the plain leading/trailing spaces,
-  rather than relying on a single outer wrapper."
+the window scroll percentage and, when `size-indication-mode' is on, a
+buffer size indication -- all with the same right-click menu (toggle
+line/column/size display) stock `mode-line-position' has, see
+`mode-line-column-line-number-mode-map'. The whole segment is boxed via
+`my-modeline--position-face' to look slightly depressed. Nested
+`:propertize' forms don't inherit an enclosing one's `face' -- each covers
+only the text it directly wraps -- so `face ,face' is listed explicitly in
+every one of them below, including the plain leading/trailing spaces,
+rather than relying on a single outer wrapper."
   (let ((face (my-modeline--position-face)))
     (my-modeline--render-dual
      `((:propertize " " face ,face)
@@ -434,10 +439,10 @@ Window scroll percentage: \"Top\"/\"All\" at the ends of the buffer, or
 
 (defun my-modeline-segment-misc-info ()
   "Whatever third-party packages (flycheck, ...) publish via
-  `mode-line-misc-info', except eglot's own bracketed text indicator --
-  filtered out (non-destructively, via `remq'; no hook touches the shared
-				   global list) since `my-modeline-segment-eglot' replaces it with a
-  colorized rocket icon instead."
+`mode-line-misc-info', except eglot's own bracketed text indicator --
+filtered out (non-destructively, via `remq'; no hook touches the shared
+global list) since `my-modeline-segment-eglot' replaces it with a
+colorized rocket icon instead."
   (my-modeline--render-dual
    (remq (assq 'eglot--managed-mode mode-line-misc-info) mode-line-misc-info)))
 
@@ -932,23 +937,39 @@ contrast. A no-op when modus-themes isn't loaded."
 (add-hook 'enable-theme-functions #'my-flymake--refresh-pill-faces)
 (my-flymake--refresh-pill-faces)
 
-(defun my-flymake--pill-svg (text face)
-  "An SVG image of TEXT in a fully rounded pill colored from FACE, or nil
-when this Emacs can't display SVG."
-  (when (and (display-graphic-p) (image-type-available-p 'svg))
-    (let* ((h (frame-char-height))
-           (fsize (* h 0.78))
-           (w (round (+ (* fsize 0.62 (string-width text)) (* h 0.6))))
-           (bg (face-attribute face :background nil t))
-           (fg (face-attribute face :foreground nil t))
-           (family (face-attribute 'default :family nil t)))
-      (create-image
-       (format "<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d'>\
+(defun my-flymake--pill-svg-source (text bg fg family h)
+  "SVG source for a pill of height H showing TEXT in FG on BG using FAMILY.
+Every interpolated string is XML-escaped."
+  (let* ((fsize (* h 0.78))
+         (w (round (+ (* fsize 0.62 (string-width text)) (* h 0.6)))))
+    (format "<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d'>\
 <rect width='%d' height='%d' rx='%f' ry='%f' fill='%s'/>\
 <text x='50%%' y='50%%' dy='.35em' text-anchor='middle' font-family='%s' \
 font-size='%f' font-weight='800' fill='%s'>%s</text></svg>"
-               w h w h (/ h 2.0) (/ h 2.0) bg family fsize fg text)
-       'svg t :ascent 'center :scale 1))))
+            w h w h (/ h 2.0) (/ h 2.0) (xml-escape-string bg)
+            (xml-escape-string family) fsize (xml-escape-string fg)
+            (xml-escape-string text))))
+
+(defvar my-flymake--pill-svg-cache (make-hash-table :test #'equal)
+  "Pill images keyed by (TEXT BG FG FAMILY HEIGHT), so redisplay reuses them.
+Reusing the same image object also lets Emacs's image cache hit.")
+
+(defun my-flymake--pill-svg (text face)
+  "An SVG image of TEXT in a fully rounded pill colored from FACE, or nil
+when this Emacs can't display SVG. Images are cached per text, colors,
+font and height."
+  (when (and (display-graphic-p) (image-type-available-p 'svg))
+    (let* ((h (frame-char-height))
+           (bg (face-attribute face :background nil t))
+           (fg (face-attribute face :foreground nil t))
+           (family (face-attribute 'default :family nil t))
+           (key (list text bg fg family h)))
+      (or (gethash key my-flymake--pill-svg-cache)
+          (puthash key
+                   (create-image
+                    (my-flymake--pill-svg-source text bg fg family h)
+                    'svg t :ascent 'center :scale 1)
+                   my-flymake--pill-svg-cache)))))
 
 (defun my-flymake--pill (text face counter)
   "A pill for the flymake COUNTER string (plain TEXT) in FACE.
