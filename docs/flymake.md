@@ -204,6 +204,30 @@ require them when doing a byte-compile.
       (condition-case nil (require feature nil t) (error nil)))))
 ```
 
+## Making byte compilation actually happen
+After all of this I started testing by injecting errors and watching to see how quickly flymake
+caught them. Initially many never showed up which surprised me. It turns out that flymake will
+silently turn off most (but not all of the backend if code is not trusted). So while the missing
+docstring errors will get flagged, the undefined variables won't. Its critical to set the
+`trusted-content` variable for where ever your code is besides in .emacs.d directory. Also if like
+me you symlink your configuration files into place, the resolved file sources are needed. So I set
+up the following script.
+ 
+
+```
+;; Trust everything in the lisp subdirectory.
+;; `trusted-content-p' compares the symlink-resolved, `abbreviate-file-name'd path, so files in
+;; lisp/ that are symlinks into other checkouts must be listed by their truenames.
+(let ((lisp-dir (file-name-as-directory (expand-file-name "lisp" user-emacs-directory))))
+  (setq trusted-content
+        (cons (abbreviate-file-name lisp-dir)
+              (mapcar (lambda (file) (abbreviate-file-name (file-truename file)))
+                      (seq-filter #'file-symlink-p
+                                  (directory-files lisp-dir t "\\.el\\'"))))))
+
+```
+
+
 ## Conclusion
 After doing all these steps, Flymake results were  finally showing as clean and quickly reflected an expected
 error, as shown below, complete with the line number!  For the future, I've added a hook to turn it
