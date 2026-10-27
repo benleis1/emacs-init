@@ -957,7 +957,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 (defun tab2-get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
 This version is based on tab-line-tabs-buffers-groups but changes first
-  group to an icon and adds on all files"
+group to an icon and adds on all files"
 
   (cond
    ;; views view
@@ -1109,7 +1109,7 @@ This version is based on tab-line-tabs-buffers-groups but changes first
 (defcustom tab2-desktop-save-views-only t
   "When non-nil, only save tab-tracked buffers that are in a saved view.
 Buffers that were opened but never joined a view (and buffers in tear-off
-							views) are then left out of the desktop file."
+views) are then left out of the desktop file."
   :type 'boolean
   :group 'tab2)
 
@@ -1345,7 +1345,7 @@ ROOT is the project root used for the virtual \"Project\" group."
 (defun tab2-dump-state ()
   "Show all tab2 state in the *tab2-state* buffer.
 Lists frames, windows, views and every tracked buffer with the groups it is
-  assigned to and its project root."
+assigned to and its project root."
   (interactive)
   (let ((buf (get-buffer-create "*tab2-state*"))
         (frames (frame-list))
