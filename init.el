@@ -156,6 +156,7 @@
 ;;     ├── linux.el
 ;;     ├── tab-config.el
 ;;     ├── modeline.el
+;;     ├── menu-config.el
 ;;     ├── dape-java.el
 ;;     ├── config-diagnostics.el
 ;;     └── local.el              (optional, yours, not in the repo)
@@ -168,6 +169,7 @@
 ;;   * `macos.el` / `linux.el` - OS specific settings, loaded by `system-type`.
 ;;   * `tab-config.el` - the tab-line and "views" system (see [doc](./docs/tab-config.md)).
 ;;   * `modeline.el` - the custom mode line (see [doc](./docs/modeline.md)).
+;;   * `menu-config.el` - menu bar reorganization (Help, Edit and Text menus) adapted from anju.
 ;;   * `dape-java.el` - Java debugging and JUnit test support on top of dape and jdtls.
 ;;   * `config-diagnostics.el` - `my-config-diagnostics`, which also runs standalone from install.sh.
 ;;   * `*-theme.el` - hand written themes such as `modus-vivendi-matrix`.
@@ -877,6 +879,8 @@
 ;; Override the default value so isearch is always full screen. If set too low emacs
 ;; tries to render less
 (setq baud-rate 19200)
+;; turn on M-< M-> inside isearch.
+(setq isearch-allow-motion t)
 
 ;; Use short y or no prompts.
 (setopt use-short-answers t)
@@ -1884,6 +1888,13 @@ dismissing the mode-line notice."
 
 (my-profile-mark "Terminal support")
 ;;; Terminal support via ghostel
+;; Modifications include:
+;; 1. Support for the capslock key used as ESC to flow through to ghostel.
+;; 2. Disabling pixel scrolling in ghostel mode which interacts poorly.
+;; 3. Kill/Yank integration for readline i.e. bash.
+;; 4. OSC hyperlink handling (cut/paste semantics)
+;; 5. OSC notification integration for busy/needs input.
+
 ;; Terminal support requires some additions on the shell side to work best.
 
 ;; 1. Alias `eza --hyper-link`to `ls` which allows directly clicking on the output of ls to open a
@@ -2489,7 +2500,7 @@ notifications, so membership here is tracked from begin to end.")
         (thing-at-point 'word t)))))
 
 (defun my-context-menu-dictionary (menu click)
-  "Add dictionary and thesaurus lookups to MENU in `text-mode' buffers.
+  "Add dictionary and thesaurus lookups to MENU in `text-mode' buffers on CLICK.
 They go right after the main undo/cut/copy/paste block."
   (when-let* (((derived-mode-p 'text-mode))
               (word (my-context-menu-lookup-word click)))
@@ -3246,28 +3257,6 @@ The only action we do is close on click."
 
 (add-hook 'desktop-after-read-hook #'my-desktop-start-autosave)
 
-;; Add zoom in/out to buffer menu
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [zoom-in]
-  '("Zoom in" . text-scale-increase)
-  'next-buffer)
-
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [zoom-out]
-  '("Zoom out" . text-scale-decrease)
-  'zoom-in)
-
-;; Some gymnastics to place things in the order I want since
-;; I haven't found a way to directly place after a separator
-(define-key global-map [menu-bar buffer next-buffer] nil)
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [next-buffer]
-  '("Next Buffer" . next-buffer)
-  'zoom-out)
-
 (my-profile-mark "Excorporate setup")
 ;;; Excorporate setup.
 
@@ -3702,6 +3691,11 @@ editable field."
 ;;; Config diagnostics
 ;; These are separate from here to make them easier to call independently.
 (require 'config-diagnostics)
+
+(my-profile-mark "menu config")
+;;; Menu bar reorganization
+(require 'menu-config)
+(my-menu-config)
 
 (my-profile-mark "Local.el loading")
 ;;; Local.el loading
