@@ -2060,7 +2060,8 @@ A window created for the edit is deleted afterwards."
 
   (defun my-ghostel-click-link (event)
     "Paste the path of the file link clicked in EVENT at the prompt.
-Other kinds of links are opened with `ghostel-open-link-at-click'."
+Other kinds of links are opened with `ghostel-open-link-at-click'.
+Either way the file path or URI is also added to the kill ring."
     (interactive "e")
     (let* ((uri (ghostel--uri-at-pos (posn-point (event-start event))))
            (file (cond
@@ -2068,6 +2069,7 @@ Other kinds of links are opened with `ghostel-open-link-at-click'."
                    (match-string 1 uri))
                   ((and uri (string-match "\\`file://\\(?:localhost\\)?\\(/.*\\)" uri))
                    (url-unhex-string (match-string 1 uri))))))
+      (when (or file uri) (kill-new (or file uri)))
       (if file
           (progn (ghostel--on-user-input)
                  (ghostel--paste-text (concat (shell-quote-argument file) " ")))
@@ -2475,6 +2477,42 @@ notifications, so membership here is tracked from begin to end.")
 
 ;; Hook it into the native context menu system
 (add-hook 'context-menu-functions #'my-eglot-dape-context-menu)
+
+;; Dictionary/thesaurus lookups for text modes
+(defun my-context-menu-lookup-word (click)
+  "Return the active region's text, or the word at CLICK, or nil."
+  (if (use-region-p)
+      (buffer-substring-no-properties (region-beginning) (region-end))
+    (let ((pos (and click (posn-point (event-end click)))))
+      (save-excursion
+        (when pos (goto-char pos))
+        (thing-at-point 'word t)))))
+
+(defun my-context-menu-dictionary (menu click)
+  "Add dictionary and thesaurus lookups to MENU in `text-mode' buffers.
+They go right after the main undo/cut/copy/paste block."
+  (when-let* (((derived-mode-p 'text-mode))
+              (word (my-context-menu-lookup-word click)))
+    (let* ((keys-in-menu (mapcar (lambda (e) (and (consp e) (car e))) (cdr menu)))
+           (anchor (car (memq 'middle-separator keys-in-menu)))
+           (after-anchor (and anchor (cdr (memq anchor keys-in-menu))))
+           (keys (list (cons 'my-lookup-dictionary
+                             `(menu-item ,(format "Look up \"%s\" in dictionary" (truncate-string-to-width word 20 nil nil "…"))
+                                         ,(lambda () (interactive) (dictionary-search word))
+                                         :help "Look up in the dictionary"))
+                       (cons 'my-lookup-thesaurus
+                             `(menu-item ,(format "Look up \"%s\" in thesaurus" (truncate-string-to-width word 20 nil nil "…"))
+                                         ,(lambda () (interactive) (dictionary-search word "moby-thesaurus"))
+                                         :help "Look up synonyms in the Moby thesaurus"))))
+           (prev anchor))
+      (dolist (k keys)
+        (define-key-after menu (vector (car k)) (cdr k) prev)
+        (setq prev (car k)))
+      (when after-anchor
+        (define-key-after menu [my-lookup-separator] '(menu-item "---") prev))))
+  menu)
+
+(add-hook 'context-menu-functions #'my-context-menu-dictionary 50)
 
 ;; my-jsonrpc--log-event's `short' branch is just the preamble
 ;; (direction/method/id) -- :log-text is only ever populated for
