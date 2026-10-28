@@ -75,3 +75,11 @@ mode glyph which I'm leveraging on the far left
   survive a crash.
 * The flymake modeline segment is now universal and shows an indicator while
   flymake is running. Flymake itself is working properly now with elisp. q
+
+# 10/2026
+
+* menu-config.el: menu bar reorganization adapted from anju. Help is replaced
+  wholesale with a short menu (manual opens in a new frame), consult/ghostel
+  replacements fall back to stock entries when those packages are absent, Edit gains
+  Rectangle/Transpose/Delete submenus plus Flush/Keep Lines, Align Regexp and
+  Duplicate, and the Text menu gets Transform Text/Center/Fill submenus.

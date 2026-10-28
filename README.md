@@ -156,6 +156,7 @@ emacs-root/
     ├── linux.el
     ├── tab-config.el
     ├── modeline.el
+    ├── menu-config.el
     ├── dape-java.el
     ├── config-diagnostics.el
     └── local.el              (optional, yours, not in the repo)
@@ -168,6 +169,7 @@ settings.
   * `macos.el` / `linux.el` - OS specific settings, loaded by `system-type`.
   * `tab-config.el` - the tab-line and "views" system (see [doc](./docs/tab-config.md)).
   * `modeline.el` - the custom mode line (see [doc](./docs/modeline.md)).
+  * `menu-config.el` - menu bar reorganization (Help, Edit and Text menus) adapted from anju.
   * `dape-java.el` - Java debugging and JUnit test support on top of dape and jdtls.
   * `config-diagnostics.el` - `my-config-diagnostics`, which also runs standalone from install.sh.
   * `*-theme.el` - hand written themes such as `modus-vivendi-matrix`.
@@ -346,6 +348,8 @@ Variables worth knowing about:
     - [setup-common-java](#setup-common-java)
   - [eglot](#eglot)
     - [my-eglot-dape-context-menu](#my-eglot-dape-context-menu)
+    - [my-context-menu-lookup-word](#my-context-menu-lookup-word)
+    - [my-context-menu-dictionary](#my-context-menu-dictionary)
     - [my-jsonrpc-elide-text-document](#my-jsonrpc-elide-text-document)
     - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
     - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
@@ -355,6 +359,11 @@ Variables worth knowing about:
     - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
   - [eglot for Python](#eglot-for-python)
   - [DAPE debugging](#dape-debugging)
+    - [my-ert-gutter--set-margin](#my-ert-gutter--set-margin)
+    - [my-ert-gutter-clear](#my-ert-gutter-clear)
+    - [my-ert-gutter--find-tests](#my-ert-gutter--find-tests)
+    - [my-ert-gutter-refresh](#my-ert-gutter-refresh)
+    - [my-ert-gutter-run-clicked](#my-ert-gutter-run-clicked)
     - [my-get-test-annotations](#my-get-test-annotations)
   - [flymake](#flymake)
     - [flymake-buffer-quit](#flymake-buffer-quit)
@@ -381,6 +390,7 @@ Variables worth knowing about:
 - [Consult navigation package](#consult-navigation-package)
 - [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
 - [Config diagnostics](#config-diagnostics)
+- [Menu bar reorganization](#menu-bar-reorganization)
 - [Local.el loading](#localel-loading)
 - [GC tuning](#gc-tuning)
 - [init.el ends here](#initel-ends-here)
@@ -400,8 +410,16 @@ This directory must be manually compiled once.
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
-(setq trusted-content
-      (list (file-name-as-directory (expand-file-name "lisp" user-emacs-directory))))
+```
+`trusted-content-p' compares the symlink-resolved, `abbreviate-file-name'd path, so files in
+lisp/ that are symlinks into other checkouts must be listed by their truenames.
+```
+(let ((lisp-dir (file-name-as-directory (expand-file-name "lisp" user-emacs-directory))))
+  (setq trusted-content
+        (cons (abbreviate-file-name lisp-dir)
+              (mapcar (lambda (file) (abbreviate-file-name (file-truename file)))
+                      (seq-filter #'file-symlink-p
+                                  (directory-files lisp-dir t "\\.el\\'"))))))
 ```
 
 # Byte-compile warning fixups
@@ -624,8 +642,12 @@ This needs to be done prior to theme setup.
 Note: font sets are to some extent os dependent
 
 Mixed-pitch mode. I use this in markdown and org modes currently.
-`my-default-fixed-pitch-font' is defined in early-init.el.
+`my-default-fixed-pitch-font' is defined in early-init.el.  This fallback (keep the value in sync)
+only matters when init.el is loaded without early-init.el, e.g. `emacs -Q --batch -l init.el'
+for tests, where the use-package blocks below would otherwise hit a void variable.
 ```
+(defvar my-default-fixed-pitch-font "DejaVuSansM Nerd Font"
+  "Default fixed-pitch font family.")
 (defvar my-default-variable-pitch-font (if (eq system-type 'gnu/linux) "Sans" "Helvetica")
   "Default variable-pitch font family.")
 ```
@@ -1123,6 +1145,10 @@ tries to render less
 ```
 (setq baud-rate 19200)
 ```
+turn on M-< M-> inside isearch.
+```
+(setq isearch-allow-motion t)
+```
 
 Use short y or no prompts.
 ```
@@ -1340,14 +1366,14 @@ fully activated first.
 
 Load all of my custom tab-line config.
 ```
-(load  "tab-config")
+(load "tab-config")
 
 (my-profile-mark "Global key bindings")
 ```
 # Global key bindings
 After some analysis I have altered a couple of top level chords below.
 my preference is for short key strokes and to usually bind other global things to
-Control + a number key which are closer than the function keys.
+Control + a number key which are closer than the function keys and not in use.
 
 ```
 (global-set-key (kbd "C-1") 'treemacs)
@@ -1358,15 +1384,17 @@ Control + a number key which are closer than the function keys.
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
 (global-set-key (kbd "s-]") 'tab2-next-view)
 (global-set-key (kbd "s-[") 'tab2-prev-view)
-(global-set-key (kbd "<pinch>") 'ignore) ;; this also causes chaos for me so disable.
-```
-```
 (global-set-key (kbd "C-c t") 'ghostel)
 ```
 
 I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 ```
 (global-set-key (kbd "s-x") 'execute-extended-command)
+```
+
+pinching on a trackpad also causes chaos for me so disable.
+```
+(global-set-key (kbd "<pinch>") 'ignore)
 ```
 
 Don't lose a paste from outside emacs because you killed a line
@@ -1442,18 +1470,18 @@ to check all text.  If flyspell is already enabled, does nothing.
 
 ```
 (defun flyspell-on-for-buffer-type ()
-      "Enable Flyspell appropriately for the major mode of the current buffer.
+  "Enable Flyspell appropriately for the major mode of the current buffer.
 Uses `flyspell-prog-mode' for modes derived from `prog-mode', so only
 strings and comments get checked.  All other buffers get `flyspell-mode'
 to check all text.  If flyspell is already enabled, does nothing."
-      (interactive)
-      (if (not (symbol-value flyspell-mode)) ; if not already on
-        (progn
-          (if (derived-mode-p 'prog-mode)
-              (my-flyspell-prog-mode)
-            ;; else
-            (flyspell-mode 1))
-          )))
+  (interactive)
+  (if (not (symbol-value flyspell-mode)) ; if not already on
+      (progn
+        (if (derived-mode-p 'prog-mode)
+            (my-flyspell-prog-mode)
+          ;; else
+          (flyspell-mode 1))
+        )))
 ```
 
 ## flyspell-toggle
@@ -1487,10 +1515,10 @@ than enabled directly in the hook
 So opening a buffer doesn't block on starting Aspell."
   (let ((buf (current-buffer)))
     (run-with-idle-timer 0.1 nil
-                          (lambda ()
-                            (when (buffer-live-p buf)
-                              (with-current-buffer buf
-                                (flyspell-on-for-buffer-type)))))))
+                         (lambda ()
+                           (when (buffer-live-p buf)
+                             (with-current-buffer buf
+                               (flyspell-on-for-buffer-type)))))))
 
 (add-hook 'text-mode-hook #'my-flyspell-defer-enable)
 (add-hook 'prog-mode-hook #'my-flyspell-defer-enable)
@@ -1550,12 +1578,12 @@ the current theme and the hook keeps it current across theme switches.
 
 ```
 (use-package markdown-mode
-   :ensure t
-   :defer t)
+  :ensure t
+  :defer t)
 
 (use-package stripe-buffer
-   :ensure t
-   :defer t)
+  :ensure t
+  :defer t)
 
 (use-package markdown-toc
   :ensure t
@@ -1664,12 +1692,12 @@ Prettify check boxes to use Unicode characters.
 I've also adjusted the faces to scale these up quite a bit so they're more visible
 ```
 (add-hook 'markdown-mode-hook (lambda ()
-  "Beautify md Checkbox Symbol"
-  (push '("[ ]" . "☐" ) prettify-symbols-alist)
-  (push '("[X]" . "☑" ) prettify-symbols-alist)
-  (push '("[x]" . "☑" ) prettify-symbols-alist)
-  (push '("[-]" . "❍" ) prettify-symbols-alist)
-  (prettify-symbols-mode)))
+				"Beautify md Checkbox Symbol"
+				(push '("[ ]" . "☐" ) prettify-symbols-alist)
+				(push '("[X]" . "☑" ) prettify-symbols-alist)
+				(push '("[x]" . "☑" ) prettify-symbols-alist)
+				(push '("[-]" . "❍" ) prettify-symbols-alist)
+				(prettify-symbols-mode)))
 ```
 
 
@@ -1878,7 +1906,7 @@ color can't be resolved to RGB -- e.g. `face-foreground' returns nil for
 the `default' face when called before any frame exists, as happens while
 a daemon is still starting up."
   (let ((from (color-name-to-rgb (or my-appt-mode-line-color-far
-                                      (face-foreground 'default nil t))))
+                                     (face-foreground 'default nil t))))
         (to (color-name-to-rgb my-appt-mode-line-color-near)))
     (if (and from to)
         (apply #'color-rgb-to-hex
@@ -1953,10 +1981,10 @@ The actual sound is platform specific and defined under `my-play-appt-sound'."
   (setq my-appt--pre-check-due (my-appt-due-list))
   ;; Compute new appointments and only chime if there are any.
   (let* ((newly-due (seq-remove (lambda (entry)
-                                   (let ((key (nth 3 entry)))
-                                     (or (member key my-appt-dismissed-keys)
-                                         (member key my-appt-beeped-keys))))
-                                 my-appt--pre-check-due))
+                                  (let ((key (nth 3 entry)))
+                                    (or (member key my-appt-dismissed-keys)
+                                        (member key my-appt-beeped-keys))))
+                                my-appt--pre-check-due))
          (ring-bell-function (if newly-due
                                  #'my-play-appt-sound
                                #'ignore)))
@@ -2008,7 +2036,7 @@ appointment twice."
   (let* ((due-keys (mapcar (lambda (entry) (nth 3 entry)) (my-appt-due-list)))
          (overdue-keys (mapcar #'cdr my-appt-overdue-list))
          (new-keys (seq-remove (lambda (key) (member key my-appt-dismissed-keys))
-                                (append due-keys overdue-keys))))
+                               (append due-keys overdue-keys))))
     (my-meeting-log-record-dismissed-appointments new-keys)
     (setq my-appt-dismissed-keys (append new-keys my-appt-dismissed-keys)))
   (setq my-appt-overdue-list nil)
@@ -2045,7 +2073,7 @@ I use an alarm-clock glyph and countdown or a lingering \"Due\" glyph
             my-appt-dismissed-day today)))
   (let* ((raw-post (my-appt-due-list))
          (due (seq-remove (lambda (entry) (member (nth 3 entry) my-appt-dismissed-keys))
-                           raw-post)))
+                          raw-post)))
     ;; `appt-check' deletes an appointment from `appt-time-msg-list' the moment
     ;; it matures, so anything that was in the pre-check snapshot at 0 minutes
     ;; and is now simply gone from `raw-post' just matured this check.
@@ -2065,34 +2093,34 @@ I use an alarm-clock glyph and countdown or a lingering \"Due\" glyph
           (cond
            (due
             (let* ((soonest-entry (car (sort (copy-sequence due)
-                                              (lambda (a b) (< (car a) (car b))))))
+                                             (lambda (a b) (< (car a) (car b))))))
                    (soonest (nth 0 soonest-entry))
                    (warn-time (nth 2 soonest-entry))
                    (titles (mapconcat (lambda (entry) (nth 1 entry)) due "\n"))
                    (intensity (my-appt-mode-line-intensity soonest warn-time))
                    (color (my-appt-mode-line-color intensity)))
               (concat (propertize (format "⏰ %s" (if (zerop soonest) "now"
-                                                  (format "%dm" soonest)))
-                                   'face (list :inherit 'appt-notification
-                                               :foreground color
-                                               :weight (if (>= intensity my-appt-mode-line-bold-intensity)
-                                                           'bold
-                                                         'normal))
-                                   'help-echo (concat titles
-                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
-                                   'mouse-face 'mode-line-highlight
-                                   'keymap my-appt-mode-line-keymap)
+                                                    (format "%dm" soonest)))
+                                  'face (list :inherit 'appt-notification
+                                              :foreground color
+                                              :weight (if (>= intensity my-appt-mode-line-bold-intensity)
+                                                          'bold
+                                                        'normal))
+                                  'help-echo (concat titles
+                                                     "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                  'mouse-face 'mode-line-highlight
+                                  'keymap my-appt-mode-line-keymap)
                       " ")))
            (my-appt-overdue-list
             (let ((titles (mapconcat #'car my-appt-overdue-list "\n")))
               (concat (propertize "⏰ Due"
-                                   'face (list :inherit 'appt-notification
-                                               :foreground my-appt-mode-line-color-near
-                                               :weight 'bold)
-                                   'help-echo (concat titles
-                                                       "\n\nmouse-1: open agenda\nmouse-3: dismiss")
-                                   'mouse-face 'mode-line-highlight
-                                   'keymap my-appt-mode-line-keymap)
+                                  'face (list :inherit 'appt-notification
+                                              :foreground my-appt-mode-line-color-near
+                                              :weight 'bold)
+                                  'help-echo (concat titles
+                                                     "\n\nmouse-1: open agenda\nmouse-3: dismiss")
+                                  'mouse-face 'mode-line-highlight
+                                  'keymap my-appt-mode-line-keymap)
                       " ")))))
     (force-mode-line-update t)))
 
@@ -2161,9 +2189,9 @@ BUFFER (default the current buffer), which is expected to hold
           (org-map-entries
            (lambda ()
              (let* ((heading (org-trim
-                               (replace-regexp-in-string
-                                org-link-bracket-re "\\2"
-                                (org-get-heading t t t t))))
+                              (replace-regexp-in-string
+                               org-link-bracket-re "\\2"
+                               (org-get-heading t t t t))))
                     (ts (save-excursion
                           (end-of-line)
                           (skip-chars-forward " \t\n")
@@ -2238,15 +2266,15 @@ clock-summary section is added the first time a given ISO week is logged."
       (let* ((drawer (org-clock-into-drawer))
              (minutes (max 0 (round (/ (float-time (time-subtract end-time start-time)) 60))))
              (clock-line (format "CLOCK: %s--%s =>  %s\n"
-                                  (format-time-string (org-time-stamp-format t t) start-time)
-                                  (format-time-string (org-time-stamp-format t t) end-time)
-                                  (org-duration-from-minutes minutes))))
+                                 (format-time-string (org-time-stamp-format t t) start-time)
+                                 (format-time-string (org-time-stamp-format t t) end-time)
+                                 (org-duration-from-minutes minutes))))
         (insert (format "* %s\n%s\n%s\n"
-                         title
-                         (format-time-string (org-time-stamp-format t) start-time)
-                         (if (stringp drawer)
-                             (format ":%s:\n%s:END:" drawer clock-line)
-                           clock-line)))))
+                        title
+                        (format-time-string (org-time-stamp-format t) start-time)
+                        (if (stringp drawer)
+                            (format ":%s:\n%s:END:" drawer clock-line)
+                          clock-line)))))
     (org-update-all-dblocks)
     (save-buffer)))
 ```
@@ -2271,7 +2299,7 @@ dismissing the mode-line notice."
          (all-entries (my-meeting-log--parse-calendar-entries (find-file-noselect my-meetings-file)))
 	 ;; filter to today first.
          (entries (seq-filter (lambda (entry) (= (time-to-days (nth 2 entry)) today))
-                               all-entries)))
+                              all-entries)))
     (dolist (key keys)
       (condition-case err
           (let ((entry (my-meeting-log--match-entry (car key) (cdr key) entries)))
@@ -2298,20 +2326,20 @@ word wrap for normal text and stripe mode for tables
 ```
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook #'visual-line-mode)
-;; this overstripes things. Revisit table formatting
-;;  (add-hook 'org-mode-hook #'stripe-buffer-mode)
+  ;; this overstripes things. Revisit table formatting
+  ;;  (add-hook 'org-mode-hook #'stripe-buffer-mode)
   (my-ignore (add-hook 'org-mode-hook (lambda() (setq line-spacing 0.5)))))
 ```
 
 set the org-agenda prefix to skip printing the source files
 ```
 (setq org-agenda-prefix-format '(
-  ;; (agenda  . " %i %-12:c%?-12t% s") ;; file name + org-agenda-entry-type
-  (agenda  . " %-12t ")
-  (timeline  . "  % s")
-  (todo  . " %i %-12:c")
-  (tags  . " %i %-12:c")
-  (search . " %i %-12:c")))
+				 ;; (agenda  . " %i %-12:c%?-12t% s") ;; file name + org-agenda-entry-type
+				 (agenda  . " %-12t ")
+				 (timeline  . "  % s")
+				 (todo  . " %i %-12:c")
+				 (tags  . " %i %-12:c")
+				 (search . " %i %-12:c")))
 ```
 
 Meetings live in Org now (`my-meetings-file'), not the diary.
@@ -2383,15 +2411,15 @@ Setup the standup summary capture template
 ```
 (defconst my-capturefile (file-name-concat my-org-root "standup.org") "Standup summary filename.")
 (setq org-capture-templates
-  '(    ;; ... other templates
+      '(    ;; ... other templates
 
-    ("s" "Standup Entry"
+	("s" "Standup Entry"
          entry (file+datetree my-capturefile )
          "* %?"
          :empty-lines 1)
 
         ;; ... other templates
-    ))
+	))
 ```
 
 Show up to 4 levels of org headings in the imenu and imenu-list
@@ -2407,7 +2435,7 @@ because it works better
   :ensure (:host github :repo "Fuco1/org-pretty-table")
   :config
   :hook (org-mode . org-pretty-table-mode)
-)
+  )
 ```
 
 SVG calendar view
@@ -2431,6 +2459,13 @@ SVG calendar view
 (my-profile-mark "Terminal support")
 ```
 # Terminal support via ghostel
+Modifications include:
+1. Support for the capslock key used as ESC to flow through to ghostel.
+2. Disabling pixel scrolling in ghostel mode which interacts poorly.
+3. Kill/Yank integration for readline i.e. bash.
+4. OSC hyperlink handling (cut/paste semantics)
+5. OSC notification integration for busy/needs input.
+
 Terminal support requires some additions on the shell side to work best.
 
 1. Alias `eza --hyper-link`to `ls` which allows directly clicking on the output of ls to open a
@@ -2608,7 +2643,8 @@ A window created for the edit is deleted afterwards."
 
   (defun my-ghostel-click-link (event)
     "Paste the path of the file link clicked in EVENT at the prompt.
-Other kinds of links are opened with `ghostel-open-link-at-click'."
+Other kinds of links are opened with `ghostel-open-link-at-click'.
+Either way the file path or URI is also added to the kill ring."
     (interactive "e")
     (let* ((uri (ghostel--uri-at-pos (posn-point (event-start event))))
            (file (cond
@@ -2616,6 +2652,7 @@ Other kinds of links are opened with `ghostel-open-link-at-click'."
                    (match-string 1 uri))
                   ((and uri (string-match "\\`file://\\(?:localhost\\)?\\(/.*\\)" uri))
                    (url-unhex-string (match-string 1 uri))))))
+      (when (or file uri) (kill-new (or file uri)))
       (if file
           (progn (ghostel--on-user-input)
                  (ghostel--paste-text (concat (shell-quote-argument file) " ")))
@@ -2836,7 +2873,7 @@ on any import line collapses that line and every import after it.
   (let ((last-node node)
         (sibling (treesit-node-next-sibling node t)))
     (while (member (treesit-node-type sibling)
-                    '("import_declaration" "line_comment" "block_comment"))
+                   '("import_declaration" "line_comment" "block_comment"))
       (when (equal (treesit-node-type sibling) "import_declaration")
         (setq last-node sibling))
       (setq sibling (treesit-node-next-sibling sibling t)))
@@ -2903,16 +2940,16 @@ the gutter when its X is less than the line-number display's pixel width.
                  (< x (line-number-display-width t))
                  (treesit-fold--foldable-node-at-pos pos))
         (define-key menu [treesit-fold-line]
-          `(menu-item "Fold Line"
-                      ,(lambda ()
-                         (interactive)
-                         ;; `treesit-fold-summary-java' recovers the folded
-                         ;; node from `point', so move there rather than
-                         ;; passing the node to `esit-fold-close' directly.
-                         (save-excursion
-                           (goto-char pos)
-                           (treesit-fold-close)))
-                      :help "Fold the code at this line")))))
+		    `(menu-item "Fold Line"
+				,(lambda ()
+				   (interactive)
+				   ;; `treesit-fold-summary-java' recovers the folded
+				   ;; node from `point', so move there rather than
+				   ;; passing the node to `esit-fold-close' directly.
+				   (save-excursion
+				     (goto-char pos)
+				     (treesit-fold-close)))
+				:help "Fold the code at this line")))))
   menu)
 
 (use-package treesit-fold
@@ -3036,7 +3073,7 @@ messages buffer but still easier to parse
 (setq eglot-events-buffer-config '(:size 2000000 :format short))
 
 (defvar eglot-suppressed-progress-titles '("Publish Diagnostics")
-"A list of progress title to suppress showing on the modeline.
+  "A list of progress title to suppress showing on the modeline.
 $/progress titles are never reported to the message bar or mode line,
 not even the `report' updates. jdtls fires its \"Publish
 Diagnostics\" task on essentially every edit, which drowns out
@@ -3136,6 +3173,53 @@ Hook it into the native context menu system
 (add-hook 'context-menu-functions #'my-eglot-dape-context-menu)
 ```
 
+### my-context-menu-lookup-word
+>Return the active region's text, or the word at CLICK, or nil.
+
+Dictionary/thesaurus lookups for text modes
+```
+(defun my-context-menu-lookup-word (click)
+  "Return the active region's text, or the word at CLICK, or nil."
+  (if (use-region-p)
+      (buffer-substring-no-properties (region-beginning) (region-end))
+    (let ((pos (and click (posn-point (event-end click)))))
+      (save-excursion
+        (when pos (goto-char pos))
+        (thing-at-point 'word t)))))
+```
+
+### my-context-menu-dictionary
+>Add dictionary and thesaurus lookups to MENU in `text-mode' buffers on CLICK.
+They go right after the main undo/cut/copy/paste block.
+
+```
+(defun my-context-menu-dictionary (menu click)
+  "Add dictionary and thesaurus lookups to MENU in `text-mode' buffers on CLICK.
+They go right after the main undo/cut/copy/paste block."
+  (when-let* (((derived-mode-p 'text-mode))
+              (word (my-context-menu-lookup-word click)))
+    (let* ((keys-in-menu (mapcar (lambda (e) (and (consp e) (car e))) (cdr menu)))
+           (anchor (car (memq 'middle-separator keys-in-menu)))
+           (after-anchor (and anchor (cdr (memq anchor keys-in-menu))))
+           (keys (list (cons 'my-lookup-dictionary
+                             `(menu-item ,(format "Look up \"%s\" in dictionary" (truncate-string-to-width word 20 nil nil "…"))
+                                         ,(lambda () (interactive) (dictionary-search word))
+                                         :help "Look up in the dictionary"))
+                       (cons 'my-lookup-thesaurus
+                             `(menu-item ,(format "Look up \"%s\" in thesaurus" (truncate-string-to-width word 20 nil nil "…"))
+                                         ,(lambda () (interactive) (dictionary-search word "moby-thesaurus"))
+                                         :help "Look up synonyms in the Moby thesaurus"))))
+           (prev anchor))
+      (dolist (k keys)
+        (define-key-after menu (vector (car k)) (cdr k) prev)
+        (setq prev (car k)))
+      (when after-anchor
+        (define-key-after menu [my-lookup-separator] '(menu-item "---") prev))))
+  menu)
+
+(add-hook 'context-menu-functions #'my-context-menu-dictionary 50)
+```
+
 ### my-jsonrpc-elide-text-document
 >Copy of PARAMS with params.textDocument.text elided.
 That field carries a whole file's contents (e.g. on
@@ -3193,9 +3277,9 @@ otherwise flood the short log format with noise."
          ;; preamble already shows the method name (e.g. "--> $/progress"),
          ;; so only contribute the params here.
          (format "%s" (or (my-jsonrpc-elide-token
-                            (my-jsonrpc-elide-text-document
-                             (plist-get message :params)))
-                           "")))
+                           (my-jsonrpc-elide-text-document
+                            (plist-get message :params)))
+                          "")))
         ((plist-get message :result)
          (format "=> %s" (plist-get message :result)))
         ((plist-get message :error)
@@ -3216,7 +3300,7 @@ just opens a task and `end' just closes it, neither carries
 anything as useful as the `report' messages in between."
   (and (equal (plist-get message :method) "$/progress")
        (member (plist-get (plist-get (plist-get message :params) :value)
-                           :kind)
+                          :kind)
                '("begin" "end"))))
 
 (with-eval-after-load 'jsonrpc
@@ -3226,7 +3310,7 @@ anything as useful as the `report' messages in between."
                   (unless (my-jsonrpc-skip-message-p message)
                     (when (and message (not (plist-get plist :log-text)))
                       (setq plist (plist-put plist :log-text
-                                              (my-jsonrpc-log-text message))))
+                                             (my-jsonrpc-log-text message))))
                     (apply orig connection origin plist))))))
 
 (defvar my-jdt-uri-cache-dir
@@ -3269,7 +3353,7 @@ via the `java/classFileContents' request, the first time it's seen."
       (let* ((server (eglot-current-server))
              (content (and server
                            (jsonrpc-request server :java/classFileContents
-                                             (list :uri uri)))))
+                                            (list :uri uri)))))
         (unless content
           (error "jdtls: No class file contents for %s" uri))
         (make-directory (file-name-directory cache-file) t)
@@ -3299,8 +3383,8 @@ Either find for the current PROJECT (or `default-directory' if PROJECT
 is nil). The workspace is unique per project. This will be the same path
 `eglot-server-programs' launches jdtls with."
   (expand-file-name (md5 (or (and project (project-root project))
-                              default-directory))
-                     (locate-user-emacs-file "jdtls-cache")))
+                             default-directory))
+                    (locate-user-emacs-file "jdtls-cache")))
 ```
 
 ### my-jdtls-clean-workspace
@@ -3390,8 +3474,8 @@ Use dape after eglot is loaded
   :config
 
   (set-face-attribute 'dape-breakpoint-face nil
-                    :foreground (modus-themes-get-color-value 'red-syntax t)
-		    :weight 'bold)
+                      :foreground (modus-themes-get-color-value 'red-syntax t)
+		      :weight 'bold)
   ;; turn on support for adding breakpoints via clicking on the fringe
   (dape-breakpoint-global-mode))
 ```
@@ -3491,7 +3575,7 @@ dape config to run, so the one binding can dispatch either arrow.
         ;; The gutter arrows are zero-length overlays -- `overlays-at'
         ;; explicitly excludes those, so `overlays-in' is required here.
         (if-let* ((config (seq-some (lambda (ov) (overlay-get ov 'my-dape-gutter-config))
-                                     (overlays-in pos pos))))
+                                    (overlays-in pos pos))))
             (progn
               ;; `dape-restart' falls back to replaying `(car dape-history)'
               ;; once a run's one-shot JVM has already exited -- but that
@@ -3567,7 +3651,7 @@ arrows is a more reliable signal."
        (lambda (items)
          (my-class-run-gutter-clear)
          (let ((class-item (and (seq-some (lambda (it) (eql (dape-java-junit-item-testlevel it) 6)) items)
-                                 (seq-find (lambda (it) (eql (dape-java-junit-item-testlevel it) 5)) items))))
+                                (seq-find (lambda (it) (eql (dape-java-junit-item-testlevel it) 5)) items))))
            (when class-item
              (my-dape--gutter-ensure-margin)
              (let ((pos (save-excursion
@@ -3623,6 +3707,131 @@ declaration if any such methods were found."
                    1 -1)))))
 ```
 
+Left-margin arrows next to every `ert-deftest' in elisp buffers --
+clicking one evaluates that test's definition (so unsaved edits are
+picked up) and runs it with `ert'. Same margin sharing and mouse-1
+dispatch approach as the dape JUnit arrows above.
+```
+(defface my-ert-run-gutter-face
+  '((t :inherit success))
+  "Face for the clickable ert-test margin arrows.")
+
+(defvar-local my-ert-gutter-overlays nil
+  "Overlays placed by `my-ert-gutter-refresh'.")
+
+(defvar-local my-ert-gutter-margin-set nil
+  "Non-nil when the gutter widened this buffer's left margin itself.")
+```
+
+### my-ert-gutter--set-margin
+>Set the current buffer's left margin to WIDTH, including its windows.
+
+```
+(defun my-ert-gutter--set-margin (width)
+  "Set the current buffer's left margin to WIDTH, including its windows."
+  (setq left-margin-width width)
+  (dolist (win (get-buffer-window-list nil nil t))
+    (set-window-margins win width (cdr (window-margins win)))))
+```
+
+### my-ert-gutter-clear
+>Remove all ert-test gutter overlays, and the margin we added, from the buffer.
+
+```
+(defun my-ert-gutter-clear ()
+  "Remove all ert-test gutter overlays, and the margin we added, from the buffer."
+  (mapc #'delete-overlay my-ert-gutter-overlays)
+  (setq my-ert-gutter-overlays nil)
+  (when my-ert-gutter-margin-set
+    (setq my-ert-gutter-margin-set nil)
+    (my-ert-gutter--set-margin 0)))
+```
+
+### my-ert-gutter--find-tests
+>Return a list of (NAME . LINE-START) for each `ert-deftest' in the buffer.
+
+```
+(defun my-ert-gutter--find-tests ()
+  "Return a list of (NAME . LINE-START) for each `ert-deftest' in the buffer."
+  (let (tests)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (while (re-search-forward "^(ert-deftest[ \t]+\\(\\(?:\\sw\\|\\s_\\)+\\)" nil t)
+          (push (cons (intern (match-string-no-properties 1))
+                      (line-beginning-position))
+                tests))))
+    (nreverse tests)))
+```
+
+### my-ert-gutter-refresh
+>Mark every `ert-deftest' in the buffer with a clickable margin arrow.
+The left margin is only opened up when the buffer has at least one test.
+
+```
+(defun my-ert-gutter-refresh ()
+  "Mark every `ert-deftest' in the buffer with a clickable margin arrow.
+The left margin is only opened up when the buffer has at least one test."
+  (interactive)
+  (my-ert-gutter-clear)
+  (when-let* ((tests (my-ert-gutter--find-tests)))
+    (when (< (or left-margin-width 0) 2)
+      (setq my-ert-gutter-margin-set t)
+      (my-ert-gutter--set-margin 2))
+    (let ((arrow (concat (make-string (max 0 (1- left-margin-width)) ?\s) "▶")))
+      (pcase-dolist (`(,name . ,pos) tests)
+        (let ((ov (make-overlay pos pos)))
+          (overlay-put
+           ov 'before-string
+           (propertize
+            " " 'display
+            `((margin left-margin)
+              ,(propertize arrow 'face 'my-ert-run-gutter-face
+                           'mouse-face 'highlight
+                           'help-echo "mouse-1: run this ert test"))))
+          (overlay-put ov 'my-ert-gutter-test name)
+          (push ov my-ert-gutter-overlays))))))
+```
+
+### my-ert-gutter-run-clicked
+>Evaluate and run the `ert-deftest' whose margin arrow EVENT was clicked on.
+
+```
+(defun my-ert-gutter-run-clicked (event)
+  "Evaluate and run the `ert-deftest' whose margin arrow EVENT was clicked on."
+  (interactive "e")
+  (let* ((posn (event-start event))
+         (pos (posn-point posn)))
+    (with-selected-window (posn-window posn)
+      (goto-char pos)
+      ;; Zero-length overlays are excluded by `overlays-at'.
+      (if-let* ((name (seq-some (lambda (ov) (overlay-get ov 'my-ert-gutter-test))
+                                (overlays-in pos pos))))
+          (progn
+            (require 'ert)
+            (save-excursion
+              (end-of-line)
+              (eval-defun nil))
+            (ert name))
+        (user-error "No ert test at point")))))
+
+(define-minor-mode my-ert-run-gutter-mode
+  "Show clickable arrows in the left margin next to each `ert-deftest'."
+  :lighter nil
+  :keymap (let ((m (make-sparse-keymap)))
+            (define-key m [left-margin mouse-1] #'my-ert-gutter-run-clicked)
+            m)
+  (if my-ert-run-gutter-mode
+      (progn
+        (add-hook 'after-save-hook #'my-ert-gutter-refresh nil t)
+        (my-ert-gutter-refresh))
+    (remove-hook 'after-save-hook #'my-ert-gutter-refresh t)
+    (my-ert-gutter-clear)))
+
+(add-hook 'emacs-lisp-mode-hook #'my-ert-run-gutter-mode)
+```
+
 ### my-get-test-annotations
 >Get all @Test marker_annotation nodes inside methods of a class.
 
@@ -3658,6 +3867,27 @@ package needs a manual declaration. Hand it the lisp directory and elpaca's buil
               (when (file-directory-p elpaca-builds-directory)
                 (seq-filter #'file-directory-p
                             (directory-files elpaca-builds-directory t "\\`[^.]")))))
+```
+
+The same bare process also expands every `use-package' form with `:ensure t' through package.el
+(elpaca-use-package isn't there), which refreshes the archives and tries to install each package
+over the network. That can take minutes, during which flymake just sits "running" with no
+diagnostics. Turn the ensure step into a no-op in that process only.
+```
+(define-advice elisp-flymake-byte-compile (:around (fn &rest args) my-no-package-install)
+  "Make the byte-compile subprocess skip `use-package' package installation."
+  (let ((make-process (symbol-function 'make-process)))
+    (cl-letf (((symbol-function 'make-process)
+               (lambda (&rest plist)
+                 (let ((cmd (plist-get plist :command)))
+                   ;; CMD is (EXECUTABLE "-Q" "--batch" ...); add our --eval after --batch.
+                   (apply make-process
+                          (plist-put (copy-sequence plist) :command
+                                     (append (seq-take cmd 3)
+                                             (list "--eval"
+                                                   "(with-eval-after-load 'use-package-ensure (setq use-package-ensure-function #'ignore))")
+                                             (nthcdr 3 cmd))))))))
+      (apply fn args))))
 ```
 
 Dock the diagnostics list as a bottom "problems panel" instead of
@@ -3711,10 +3941,13 @@ within it, so it lines up with `my-dape-run-gutter-mode''s arrow.
 (setq flymake-autoresize-margins nil)
 (setq-default left-margin-width 2)
 (setq flymake-margin-indicators-string
- `((error   ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-error)
-   (warning ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-warning)
-   (note    ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-info)))
+      `((error   ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-error)
+	(warning ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-warning)
+	(note    ,(concat " " (nerd-icons-mdicon "nf-md-lightbulb")) compilation-info)))
 ```
+Note: flymake copies these strings into symbol properties when it loads, so
+this `setq' must run before anything requires flymake (don't `require' it
+from modeline.el; declare its functions instead).
 
 ## elisp
 
@@ -3792,7 +4025,7 @@ restore too, so already-saved desktop files are fixed as well.
 ```
 (with-eval-after-load 'frameset
   (dolist (param '(background-color foreground-color background-mode
-                   border-color cursor-color mouse-color))
+				    border-color cursor-color mouse-color))
     (setf (alist-get param frameset-filter-alist) :never)))
 ```
 
@@ -3865,32 +4098,6 @@ Auto-save the desktop hourly, but only after one has been loaded via desktop-rea
           (run-with-timer 3600 3600 #'my-desktop-autosave))))
 
 (add-hook 'desktop-after-read-hook #'my-desktop-start-autosave)
-```
-
-Add zoom in/out to buffer menu
-```
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [zoom-in]
-  '("Zoom in" . text-scale-increase)
-  'next-buffer)
-
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [zoom-out]
-  '("Zoom out" . text-scale-decrease)
-  'zoom-in)
-```
-
-Some gymnastics to place things in the order I want since
-I haven't found a way to directly place after a separator
-```
-(define-key global-map [menu-bar buffer next-buffer] nil)
-(define-key-after
-  (lookup-key global-map [menu-bar buffer])
-  [next-buffer]
-  '("Next Buffer" . next-buffer)
-  'zoom-out)
 
 (my-profile-mark "Excorporate setup")
 ```
@@ -3952,12 +4159,12 @@ The agenda itself loads the diary buffer - we should probably just leave it off 
 
   ;; onetime setup
   (if (not my-calendar-init)
-    (progn
-      (message "excorporate setup starting")
-      ;; turn off diarying for this call
-      (excorporate)
-      (message "excorporate setup done")
-      (setq my-calendar-init t))
+      (progn
+	(message "excorporate setup starting")
+	;; turn off diarying for this call
+	(excorporate)
+	(message "excorporate setup done")
+	(setq my-calendar-init t))
 
     ;; skip if the file was updated within the last minute
     (message "my diary update started %s" (current-time-string))
@@ -4192,13 +4399,13 @@ Trying out orderless completion
 Turned off while I try out the built in completion framework in emacs 31
 ```
 (my-ignore (use-package corfu
-  :ensure t
-  ;; `global-corfu-mode' is commented out below, so nothing currently
-  ;; activates corfu and it can be deferred.
-  :defer t
-  :init
-  (global-corfu-mode)
-  ))
+	     :ensure t
+	     ;; `global-corfu-mode' is commented out below, so nothing currently
+	     ;; activates corfu and it can be deferred.
+	     :defer t
+	     :init
+	     (global-corfu-mode)
+	     ))
 
 (my-profile-mark "Font name completion for customize buffers")
 ```
@@ -4349,14 +4556,14 @@ No key binding for now.
   (add-to-list 'consult-buffer-filter "\\`\\*ghostel")
   (defvar my-consult-source-ghostel
     `(:name "Terminal"
-      :narrow ?t
-      :category buffer
-      :face consult-buffer
-      :history buffer-name-history
-      :state ,#'consult--buffer-state
-      :items ,(lambda ()
-                (consult--buffer-query :mode 'ghostel-mode :filter nil
-                                       :sort 'visibility :as #'consult--buffer-pair))))
+	    :narrow ?t
+	    :category buffer
+	    :face consult-buffer
+	    :history buffer-name-history
+	    :state ,#'consult--buffer-state
+	    :items ,(lambda ()
+                      (consult--buffer-query :mode 'ghostel-mode :filter nil
+					     :sort 'visibility :as #'consult--buffer-pair))))
   (unless (memq 'my-consult-source-ghostel consult-buffer-sources)
     (setq consult-buffer-sources
           (cl-loop for src in consult-buffer-sources
@@ -4399,6 +4606,13 @@ No key binding for now.
 These are separate from here to make them easier to call independently.
 ```
 (require 'config-diagnostics)
+
+(my-profile-mark "menu config")
+```
+# Menu bar reorganization
+```
+(require 'menu-config)
+(my-menu-config)
 
 (my-profile-mark "Local.el loading")
 ```

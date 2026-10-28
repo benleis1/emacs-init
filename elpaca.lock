@@ -1,4 +1,9 @@
-((clutch :source "elpaca-menu-lock-file" :recipe
+((apheleia :source "elpaca-menu-lock-file" :recipe
+	   (:package "apheleia" :fetcher github :repo "radian-software/apheleia" :files
+		     (:defaults ("scripts" "scripts/formatters")) :source "MELPA" :id apheleia :type
+		     git :protocol https :inherit t :depth treeless :ref
+		     "4ba89aea2266c51400bee0489165ef334f81bac5"))
+ (clutch :source "elpaca-menu-lock-file" :recipe
 	 (:package "clutch" :fetcher github :repo "LuciusChen/clutch" :files
 		   ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo" "doc/dir" "doc/*.info"
 		    "doc/*.texi" "doc/*.texinfo" "lisp/*.el" "docs/dir" "docs/*.info" "docs/*.texi"
@@ -117,8 +122,8 @@
  (ghostel :source "elpaca-menu-lock-file" :recipe
 	  (:package "ghostel" :fetcher github :repo "dakra/ghostel" :files
 		    (:defaults "etc" "src" "vendor" "build.zig" "build.zig.zon" "symbols.map")
-		    :source "MELPA" :id ghostel :type git :protocol https :inherit t :depth treeless
-		    :ref "037378b44ceedf1c8bf15e365fc62c7f5c92363d"))
+		    :source "elpaca-menu-lock-file" :id ghostel :type git :protocol https :inherit t
+		    :depth treeless :ref "037378b44ceedf1c8bf15e365fc62c7f5c92363d"))
  (ilist-plus :source "elpaca-menu-lock-file" :recipe
 	     (:source "elpaca-menu-lock-file" :package "ilist-plus" :id ilist-plus :host github
 		      :repo "benleis1/ilist-plus" :type git :protocol https :inherit t :depth
