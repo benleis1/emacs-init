@@ -1064,10 +1064,12 @@ group to an icon and adds on all files"
 (cl-defstruct tab2-persist-view name buffernames wstate)
 
 (defun tab2--tear-off-view-names ()
+  "Return all the tear off window view names."
   (delq nil (mapcar (lambda (f) (frame-parameter f 'tab2-tear-off-view)) (frame-list))))
 
 ;; serialize a view
 (defun tab2-convert-to-persist-format (view)
+  "Serialize VIEW for persistence to the desktop."
   (make-tab2-persist-view
    :name (tab2-view-name view)
    :buffernames (mapcar #'buffer-name (seq-filter #'buffer-live-p (tab2-view-buffers view)))
@@ -1075,29 +1077,32 @@ group to an icon and adds on all files"
 
 ;; serialize all views except tear-off ones, which belong to frames that aren't restored
 (defun tab2-serialize-views ()
+  "Serialize all of the views."
   (let ((skip (tab2--tear-off-view-names)))
     (mapcar #'tab2-convert-to-persist-format
             (seq-remove (lambda (v) (member (tab2-view-name v) skip)) tab2-views))))
 
 ;; Deserialize a view, dropping buffers that desktop didn't recreate
 (defun tab2-convert-from-persist-format (view)
+  "Desieralize the desktop and create a new tab for VIEW."
   (make-tab2-view :name (tab2-persist-view-name view)
                   :buffers (delq nil (mapcar #'get-buffer (tab2-persist-view-buffernames view)))
                   :wstate (tab2-persist-view-wstate view)))
 
 (defun tab2-deserialize-views (views)
+  "Deserialize all the VIEWS from the desktop file."
   (mapcar #'tab2-convert-from-persist-format views))
 
-;; persist views and the selected view's name to the frame for reload
 (defun tab2-save-to-frame ()
+  "Save all view data in the current frame prior to desktop save."
   (tab2-save-view-state)
   (set-frame-parameter nil 'tab2-views (tab2-serialize-views))
   (set-frame-parameter nil 'tab2-sel-view-name
                        (let ((name (tab2-view-name (tab2-get-current-view))))
                          (unless (member name (tab2--tear-off-view-names)) name))))
 
-;; process the saved views in the frame parameters and set up to match
 (defun tab2-rebuild-buffer-list-from-frame-params ()
+  "Process the saved views in the frame parameters and set up live frame to match."
   (let* ((views (tab2-deserialize-views (frame-parameter nil 'tab2-views)))
          (sel (frame-parameter nil 'tab2-sel-view-name)))
     (when views
@@ -1140,9 +1145,8 @@ views) are then left out of the desktop file."
   "<tab-line> <mouse-1>" #'tab2-select-filter-button
   "RET" #'tab2-select-filter-button)
 
-;; Add on filter button at the front of the tab list via advice to
-;; tab-line-format-template
 (defun tab2-add-on-filter-button (tabs)
+  "Add on filter button at the front of the TABS list via advice."
   (let* ((group-view (window-parameter nil 'tab-line-groups))
 	 (viewp (window-parameter nil 'tab-line-views))
 	 (icon-file (cond (viewp "desktop2.png")
