@@ -173,9 +173,9 @@ it can't go stale."
   "A map for translating well known buffers to a special name.")
 
 (defun my-modeline--file-type-label ()
-  "A short, upcased label for the current buffer's file type: its file
-extension when visiting a file, or the first few letters of `mode-name'
-otherwise."
+  "A short, upcased label for the current buffer's file type.
+Its file extension when visiting a file, or the first few letters of
+`mode-name' otherwise."
   (let* ((mode (or (cdr (assoc major-mode my-modeline-wellknown-buffers)) (format-mode-line mode-name)))
 	 (shortmode (upcase (substring mode 0 (min 9 (length mode))))))
 
@@ -185,8 +185,7 @@ otherwise."
       shortmode)))
 
 (defun my-modeline--file-type-icon ()
-  "Plain file/mode icon glyph, recolored to `my-modeline-file-icon-face' to
-  match the badge it renders inside of."
+  "Plain file/mode icon glyph, recolored to `my-modeline-file-icon-face'."
   (if buffer-file-name
       (my-modeline--icon-safe #'nerd-icons-icon-for-file
                               (file-name-nondirectory buffer-file-name)
