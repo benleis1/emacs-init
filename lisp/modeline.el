@@ -2,12 +2,12 @@
 
 ;;; Commentary:
 
-;; A  small mode-line built directly out of stock  Emacs mode-line machinery
-;; (`format-mode-line', `mode-line-modes', `vc-mode', nerd-icons).  Each segment is a plain function
-;; re-evaluated on every redisplay via `:eval', so there's no advice and no
-;; `enable-theme-functions' hook: theme-conditional rendering (the squared icon
-;; badge under the nano-like theme) just checks the live theme state each time
-;; it runs instead of being patched in and out when a theme (de)activates.
+;; A small mode-line built directly out of stock Emacs mode-line machinery (`format-mode-line',
+;; `mode-line-modes', `vc-mode', nerd-icons). Each segment is a plain function re-evaluated on every
+;; redisplay via `:eval', so there's no advice and no `enable-theme-functions' hook:
+;; theme-conditional rendering (the squared icon badge under the nano-like theme) just checks the
+;; live theme state each time it runs instead of being patched in and out when a theme
+;; (de)activates.
 ;;
 ;; The result, `my-modeline-format', is an ordinary mode-line-format spec, so
 ;; it works verbatim as either `mode-line-format' or `header-line-format':
@@ -23,6 +23,38 @@
 ;; whatever it finds onto both prefixes, and custom segments in this file
 ;; build their keymaps dual-bound from the start -- so no segment cares which
 ;; line it ends up displayed in.
+;;
+;; # Design principles
+;;
+;; These principles are still a work in progress, but I am aiming for consistency across all of
+;; Emacs.
+;;
+;; 1. Minimalism. Include only segments that are useful and avoid redundancy. For
+;; instance, I don't include the display size indication because I have the scroll bars on, which
+;; already give a visual indication. Likewise I have consolidated all major mode indicators into one
+;; segment on the far left. Where possible I prefer a glyph for conciseness. An example is the
+;; modified-file glyph.
+;;
+;; 2. Main vs dedicated buffers. Regular buffers produce a full mode-line and support the regular
+;; Emacs notion of switching to the next one when clicking on their name. Dedicated buffers, which
+;; are used for all sidecars like imenu-ilist, help buffers, compile buffers and any kind of status
+;; popup, should have a reduced mode-line and right-click to quit rather than switch. I use the pin
+;; icon to distinguish them.
+;;
+;; 3. Details on hover. Additional information should pop up when hovering over a segment, for
+;; example the full path for a buffer name or the branch for the git segment.
+;;
+;; 4. Contextual click and right-click actions. There is a natural action for almost every
+;; segment. For example, clicking on the mode segment brings up the major mode menu while clicking
+;; on the flymake icon toggles the flymake diagnostics window.
+;;
+;; 5. Indicate status in realtime. If a segment is asynchronous like eglot or flymake, indicate
+;; through color or additional glyphs when it's working in the background.
+;;
+;; ![sample](../images/sample-modeline.png)
+;;> basic UX
+
+
 
 ;;; Code:
 
