@@ -195,18 +195,16 @@ Its file extension when visiting a file, or the first few letters of
 			    )))
 
 (defun my-modeline--file-type-divider ()
-  "A solid right-pointing divider glyph, on `my-modeline-file-icon-divider-face',
-capping off the powerline-style file-type badge as it fades into the plain
-mode-line."
+  "Return a solid right-pointing divider glyph.
+Uses `my-modeline-file-icon-divider-face' and caps off the
+powerline-style file-type badge as it fades into the plain mode-line."
   (my-modeline--icon-safe #'nerd-icons-powerline "nf-pl-left_hard_divider"
                           :face 'my-modeline-file-icon-divider-face))
 
 (defun my-modeline--buffer-icon ()
-  "Powerline-style file-type badge: an icon and a short, upcased,
-  bold file-extension label on `my-modeline-file-icon-face', ending in
-  `my-modeline--file-type-divider'. Carries the same help text and keymap as
-  the major mode name in `my-modeline-segment-modes', since the badge
-  represents the mode too."
+  "Powerline-style file-type badge: an icon and a short, up cased extension label.
+This carries the same help text and keymap as the major mode name in
+  `my-modeline-segment-modes', since the badge represents the mode too."
   (when my-modeline-icon
     (ignore-errors
       (my-modeline--sync-file-icon-face)
@@ -304,7 +302,8 @@ rather than at position 0."
 ;; derived-mode-p-style symbol) to opt it into that behavior.
 
 (defcustom my-modeline-dedicated-window-modes
-  '((flymake-diagnostics-buffer-mode . t) (messages-buffer-mode . nil))
+  '((flymake-diagnostics-buffer-mode . t) (messages-buffer-mode . nil)
+    (emacs-lisp-compilation-mode . t) (help-mode . t) (occur-mode . t))
   "Major modes whose buffers get a click-to-close mode-line/header-line.
 Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
 window is closed, nil just closes the window."
@@ -696,7 +695,7 @@ prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
 backend it is, so showing it twice is redundant."
   (and vc-mode (cadr (split-string (string-trim vc-mode) "^[A-Z]+[-:]+"))))
 
-(defvar my-modeline-vcs-collapsed nil
+(defvar my-modeline-vcs-collapsed t
   "When non-nil, `my-modeline-segment-vcs' shows only its icon, with the
 branch name omitted from the text (it's still available in the segment's
 help-echo tooltip). Toggled by mouse-3 on the segment, via
@@ -1028,7 +1027,7 @@ clicking and scrolling work over it too."
                                (_ "💡")))))
     (dolist (prop '(keymap mouse-face help-echo flymake--diagnostic-type))
       (put-text-property 0 (length icon) prop (get-text-property 0 prop chunk) icon))
-    (concat icon " " chunk)))
+    (concat icon (propertize " " 'display '(space :width 0.3)) chunk)))
 
 (defun my-flymake--pillify (counters)
   "Return COUNTERS with each flymake count drawn as a colored pill.
