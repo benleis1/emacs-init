@@ -1285,6 +1285,20 @@ So opening a buffer doesn't block on starting Aspell."
 (with-eval-after-load 'markdown-mode
   (advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url))
 
+(defun my-markdown-preview-base-href (orig-fn &rest args)
+  "Call ORIG-FN with ARGS, adding a <base> tag for the visited file's directory.
+`markdown-preview' opens a temp copy of the HTML, so relative image paths
+would otherwise resolve against the temp directory."
+  (let ((markdown-xhtml-header-content
+         (if buffer-file-name
+             (format "%s<base href=\"%s\">" markdown-xhtml-header-content
+                     (url-encode-url (concat "file://" (file-name-directory buffer-file-name))))
+           markdown-xhtml-header-content)))
+    (apply orig-fn args)))
+
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-preview :around #'my-markdown-preview-base-href))
+
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
 
