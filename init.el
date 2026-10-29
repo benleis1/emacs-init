@@ -3708,8 +3708,10 @@ editable field."
 
 (my-profile-mark "menu config")
 ;;; Menu bar reorganization
+;; Deferred until elpaca has activated every queued package, so optional packages (consult,
+;; ghostel) are `fboundp' when `my-menu-config' checks for them.
 (require 'menu-config)
-(my-menu-config)
+(add-hook 'elpaca-after-init-hook #'my-menu-config)
 
 (my-profile-mark "Local.el loading")
 ;;; Local.el loading
