@@ -21,6 +21,29 @@
 ;; * Tools: removes Games, mail, news, web browsing, encryption, EDE and Semantic entries, replaces
 ;;   Grep and project search with consult-ripgrep, and adds a ghostel terminal entry.
 ;;
+;; # Screenshots
+;;
+;; <table>
+;; <tr>
+;; <td valign="top">
+;; <img src="../images/filemenu.png" width="100%" />
+;; </td>
+;; <td valign="top">
+;; <img src="../images/editmenu.png" width="100%" />
+;; </td>
+;; <td valign="top">
+;; <img src="../images/windowmenu.png" width="100%" />
+;; </td>
+;; <td valign="top">
+;; <img src="../images/toolmenu.png" width="100%" />
+;; </td>
+;; <td valign="top">
+;; <img src="../images/helpmenu.png" width="100%" />
+;; </td>
+;; </tr>
+;; </table>
+;;
+;; # Requirements
 ;; Requires Emacs 29.1 or later (`duplicate-dwim', `undelete-frame-mode', `project-list-buffers').
 ;; Developed and tested on Emacs 31; the stock menu keys it edits are checked by
 ;; menu-config-tests.el.
@@ -272,31 +295,35 @@ available, else the stock entry stays."
     (define-key global-map [menu-bar edit search project-search]
                 '(menu-item "Search in Files…" consult-ripgrep
                             :help "Search files in the project or current directory with ripgrep")))
-  (dolist (item
-           (list my-rectangle-menu
-                 my-registers-menu
-                 my-transpose-menu
-                 my-whitespace-menu
-                 my-lines-menu
-                 my-delete-menu
-                 "--"
-                 my-transform-text-menu
-                 [align-regexp align-regexp
-                               :label "Align Regexp…"
-                               :help "Align the region using a rule read from the minibuffer"
-                               :enable (use-region-p)
-                               :visible (not buffer-read-only)]
-                 [indent-region indent-region
-                                :label "Indent Region"
-                                :help "Indent each nonblank line in the region"
-                                :enable (use-region-p)
-                                :visible (not buffer-read-only)]
-                 [comment-dwim comment-dwim
-                               :label "Comment/Uncomment"
-                               :help "Comment or uncomment the region or the current line"
-                               :visible (not buffer-read-only)]
-                 "--"))
-    (easy-menu-add-item global-map '(menu-bar edit) item 'spell))
+  ;; Only NS builds have a Spell entry in the Edit menu; elsewhere anchor on the entry that follows it.
+  (let ((spell-anchor (if (assq 'spell (cdr (lookup-key global-map [menu-bar edit])))
+                          'spell
+                        'execute-extended-command)))
+    (dolist (item
+             (list my-rectangle-menu
+                   my-registers-menu
+                   my-transpose-menu
+                   my-whitespace-menu
+                   my-lines-menu
+                   my-delete-menu
+                   "--"
+                   my-transform-text-menu
+                   [align-regexp align-regexp
+                                 :label "Align Regexp…"
+                                 :help "Align the region using a rule read from the minibuffer"
+                                 :enable (use-region-p)
+                                 :visible (not buffer-read-only)]
+                   [indent-region indent-region
+                                  :label "Indent Region"
+                                  :help "Indent each nonblank line in the region"
+                                  :enable (use-region-p)
+                                  :visible (not buffer-read-only)]
+                   [comment-dwim comment-dwim
+                                 :label "Comment/Uncomment"
+                                 :help "Comment or uncomment the region or the current line"
+                                 :visible (not buffer-read-only)]
+                   "--"))
+      (easy-menu-add-item global-map '(menu-bar edit) item spell-anchor)))
   (define-key global-map [menu-bar edit fill]
               '(menu-item "Fill" fill-region
                           :enable (and mark-active (not buffer-read-only))

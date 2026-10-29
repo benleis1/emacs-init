@@ -9,7 +9,7 @@
 (require 'ert)
 
 (defconst menu-config-tests--stock-keys
-  '(((menu-bar file)
+  `(((menu-bar file)
      new-file insert-file recover-session Open\ Recent open-file project-open-file
      separator-window separator-tab separator-frame
      new-window-below new-window-on-right one-window
@@ -18,14 +18,15 @@
     ((menu-bar buffer)
      next-buffer previous-buffer)
     ((menu-bar edit)
-     mark-whole-buffer separator-search spell fill search)
+     mark-whole-buffer separator-search ,@(when (featurep 'ns) '(spell)) fill search
+     execute-extended-command)
     ((menu-bar tools)
      rgrep grep games separator-games gnus rmail compose-mail directory-search browse-web
      separator-net encryption-decryption separator-encryption-decryption ede semantic
      shell-commands project)
     ((menu-bar tools project)
      project-or-external-find-regexp project-find-regexp))
-  "Alist of (MENU-PATH . KEYS): stock entries menu-config.el removes, replaces or anchors on.")
+  "Alist of (MENU-PATH . KEYS): stock entries menu-config.el removes, replaces or anchors on.\nThe Edit menu has a `spell' entry on NS builds only.")
 
 (defconst menu-config-tests--stock-text-labels
   '("Center Line" "Center Region" "Center Paragraph" "Paragraph Indent" "Auto Fill")
