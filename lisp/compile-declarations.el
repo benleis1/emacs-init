@@ -120,6 +120,15 @@
 (declare-function ghostel "ghostel")
 (declare-function ghostel-buffer-name-by-title "ghostel")
 (defvar ghostel--buffer-identity)
+(declare-function ghostel-sync-theme "ghostel")
+
+;; terminal-colors
+(defvar terminal-colors--foreground)
+(defvar terminal-colors--background)
+(defvar terminal-colors--after-load-hook)
+(defvar terminal-colors--reset-hook)
+(defvar terminal-colors-modus-mode)
+(defvar terminal-colors-modus-mode-off-hook)
 
 ;; Built-in functions that older or newer Emacs versions don't define at compile time
 (declare-function font-face-attributes "font")
@@ -129,6 +138,7 @@
 
 ;; Other third-party packages
 (defvar imenu-list-mode-line-format)
+(defvar ilist-plus-mode-line-format)
 (declare-function mixed-pitch-mode "mixed-pitch")
 (defvar modus-operandi-tinted-palette-overrides)
 (defvar modus-vivendi-palette-overrides)
@@ -146,6 +156,9 @@
 (declare-function wikimode-project-tags "wikimode")
 (declare-function exco-org-show-day "excorporate-org")
 (declare-function ilist-plus--build-mode-line-format "ilist-plus")
+(declare-function ilist-plus-mode "ilist-plus")
+(declare-function ilist-plus-switch-sort "ilist-plus")
+(declare-function ilist-plus-current-sort "ilist-plus")
 (declare-function nerd-icons-mdicon "nerd-icons")
 (declare-function nerd-icons-octicon "nerd-icons")
 
@@ -155,7 +168,10 @@
 (declare-function my-modeline--keyboard-icon "modeline")
 (declare-function my-play-appt-sound "macos")
 (declare-function tab2-register-buffer-name-function "tab-config")
+(declare-function my-modeline-mouse-map "modeline")
 (defvar my-modeline-dedicated-window-map)
+(defvar my-modeline-dedicated-label-functions)
+(defvar my-modeline-format)
 (defvar my-default-fixed-pitch-font)
 
 ;; Variables owned by this file but defined or first set inside lazy forms
