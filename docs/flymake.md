@@ -143,11 +143,13 @@ invoked until after package load, a large group of fixups was eliminated.
 ```
 
 ### Loading all the packages
-The next issue was another group of fixups that seemed unnecessary. They were in `use-package` blocks and
-should have been OK. After investigating, it turned out that Elpaca was the root of the issue.
-First, when byte-compiling, Emacs doesn't actually process macros, so many of those blocks were just
-dropped. This, in fact, is noted frequently online. Byte-compiled files have to be very careful about
-wrapping macros, including `use-package`, inside `eval-and-compile` blocks.
+The next issue was another group of fixups that seemed unnecessary. They were in `use-package`
+blocks and should have been OK. After investigating, it turned out that Elpaca was the root of the
+issue. First, when byte-compiling, Emacs expands all macros immediately , so many of those blocks
+did not function as expected . This, in fact, is noted frequently online: see
+https://www.gnu.org/software/emacs/manual///html_node/elisp/Compiling-Macros.html. Byte-compiled
+files have to be very careful about wrapping macros, including `use-package`, inside
+`eval-and-compile` blocks.
 
 The second problem is that byte compilation runs without most of the default package manager settings
 set up, including the location of the build files that Elpaca generates. That means even when loaded,
@@ -204,12 +206,11 @@ require them when doing a byte-compile.
 ## Making byte compilation actually happen
 At this point I started testing by injecting errors and watching to see how quickly flymake
 caught them. Initially many never showed up which surprised me. It turns out that flymake will
-silently turn off most (but not all of the backend if code is not trusted). So while the missing
-docstring errors will get flagged, the undefined variables won't. Its critical to set the
-`trusted-content` variable for where ever your code is besides in .emacs.d directory. Also if like
+silently turn off most (but not all) of the backend if code is not trusted. So while the missing
+docstring errors will get flagged, the undefined variables won't. It's critical to set the
+`trusted-content` variable for wherever your code lives outside the `.emacs.d` directory. Also, if like
 me you symlink your configuration files into place, the resolved file sources are needed. So I set
-up the following script.
- 
+up the following snippet.
 
 ```
 ;; Trust everything in the lisp subdirectory.
@@ -224,9 +225,9 @@ up the following script.
 
 ```
 
-But later on i realized that i wanted a safety net when I worked in other directories. So i added
+But later on I realized that I wanted a safety net when I worked in other directories. So I added
 the following advice to make this work much the way theme loading does and prompt to add the
-directory onto the trusted-content list.t
+directory to the `trusted-content` list.
 
 ```
 (defvar-local my-trust-declined nil
@@ -251,17 +252,17 @@ directory onto the trusted-content list.t
 ```
 
 ## Conclusion
-After doing all these steps, Flymake results were  finally showing as clean and quickly reflected an expected
-error, as shown below, complete with the line number!  For the future, I've added a hook to turn it
-on automatically in elisp mode. 
+After doing all these steps, Flymake results were finally showing as clean and quickly reflected an expected
+error, as shown below, complete with the line number! For the future, I've added a hook to turn it
+on automatically in elisp mode.
 
 `(add-hook 'emacs-lisp-mode-hook #'flymake-mode)`
 
-  The modeline notifications will hopefully keep me honest and not letting warnings and errors creep back in.
+The mode line notifications will hopefully keep me honest and stop warnings and errors from creeping back in.
 
 ![](../images/flymake.png)
 
-# References
+## References
 
-[my compile declaration file](../lisp/compile-declarations.el)
-[fly-make general setup](https://github.com/benleis1/emacs-init/blob/3e586f4c05873d399abb027eca89660349ed0a0f/init.el#L2910)
+- [My compile declaration file](../lisp/compile-declarations.el)
+- [Flymake general setup](https://github.com/benleis1/emacs-init/blob/3e586f4c05873d399abb027eca89660349ed0a0f/init.el#L2910)
