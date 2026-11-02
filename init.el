@@ -738,6 +738,40 @@
 		(set-face-attribute 'my-modeline-position-face nil :background
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 
+;; terminal-colors (modus mode) only maps the 16 ANSI colors into the modus palette.  The terminal
+;; default foreground/background that ghostel draws with comes from `ghostel-default', so follow the
+;; active terminal-colors theme there and put the original face spec back on reset.
+(defvar my-ghostel-default-saved-spec nil
+  "This holds the original override spec of `ghostel-default'.")
+
+(defun my-ghostel-apply-terminal-colors ()
+  "Set `ghostel-default' to the terminal-colors default foreground and background."
+  (when (and (bound-and-true-p terminal-colors-modus-mode)
+             (facep 'ghostel-default) terminal-colors--foreground terminal-colors--background)
+    (unless my-ghostel-default-saved-spec
+      (setq my-ghostel-default-saved-spec (list (get 'ghostel-default 'face-override-spec))))
+    (face-spec-set 'ghostel-default
+                   `((t :foreground ,terminal-colors--foreground
+                        :background ,terminal-colors--background))
+                   'face-override-spec)
+    (ghostel-sync-theme)))
+
+(defun my-ghostel-reset-terminal-colors ()
+  "Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'."
+  (when my-ghostel-default-saved-spec
+    (face-spec-set 'ghostel-default (car my-ghostel-default-saved-spec) 'face-override-spec)
+    (setq my-ghostel-default-saved-spec nil)
+    (ghostel-sync-theme)))
+
+(with-eval-after-load 'terminal-colors
+  (add-hook 'terminal-colors--after-load-hook #'my-ghostel-apply-terminal-colors)
+  (add-hook 'terminal-colors--reset-hook #'my-ghostel-reset-terminal-colors)
+  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors))
+
+;; Terminals started after terminal-colors loaded still need the colors.
+(with-eval-after-load 'ghostel
+  (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
+
 ;; Make any locally-defined themes which live in the lisp subdirectory discoverable by
 ;; `load-theme'/`M-x customize-themes' without needing a package wrapper.
 (add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
@@ -2146,6 +2180,7 @@ the next prompt reports its title."
     (ghostel-buffer-name-by-title title)))
 
 (defvar ghostel--command-running)
+(defvar ghostel--managed-buffer-name)
 
 (defun my-ghostel-tab-name (name buffer)
   "Return the tab text for ghostel BUFFER named NAME.
@@ -2190,6 +2225,8 @@ See `my-ghostel-desktop-persistent-info' for the format."
     (with-current-buffer buffer
       ;; Take the saved name so the by-name view lookup after desktop-read hits.
       (rename-buffer buffer-name t)
+      ;; Otherwise ghostel sees a manual rename and stops renaming on title changes.
+      (setq ghostel--managed-buffer-name (buffer-name))
       (setq my-ghostel-user-title (plist-get misc :title)
             tab2-pinned-project (plist-get misc :project)
             ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
