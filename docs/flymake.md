@@ -167,9 +167,6 @@ byte-compile behavior was left untouched.
 ;; as function calls.  Only done while compiling: loading elpaca before init.el's bootstrap has
 ;; defined `elpaca-installer-version' triggers elpaca's "installer version does not match" warning.
 ;; This is a no-op when elpaca isn't on the `load-path'.
-;; elpaca.el has `(cl-declaim (optimize (safety 0)))', which sets `byte-compile-delete-errors' for
-;; the rest of the compile and silently drops bare top-level symbols (a stray `oops' goes
-;; unreported), so the loads below rebind it (and `byte-optimize') to undo that.
 (eval-when-compile
   (let ((byte-compile-delete-errors byte-compile-delete-errors)
         (byte-optimize byte-optimize))
@@ -227,6 +224,31 @@ up the following script.
 
 ```
 
+But later on i realized that i wanted a safety net when I worked in other directories. So i added
+the following advice to make this work much the way theme loading does and prompt to add the
+directory onto the trusted-content list.t
+
+```
+(defvar-local my-trust-declined nil
+  "Non-nil once the user declined to trust this buffer's directory.")
+
+(define-advice elisp-flymake-byte-compile (:around (fn &rest args) my-ask-trust)
+  "Offer to add the current directory to `trusted-content' before running FN."
+  (when (and (not (trusted-content-p))
+             (not my-trust-declined)
+             buffer-file-name
+             (not (eq trusted-content :all)))
+    (let ((dir (abbreviate-file-name
+                (file-name-as-directory
+                 (file-name-directory buffer-file-name)))))
+      (if (y-or-n-p (format "Trust %s for flymake/macro expansion? " dir))
+          (progn
+            (add-to-list 'trusted-content dir)
+            (when (y-or-n-p "Save permanently? ")
+              (customize-save-variable 'trusted-content trusted-content)))
+        (setq my-trust-declined t))))
+  (apply fn args))
+```
 
 ## Conclusion
 After doing all these steps, Flymake results were  finally showing as clean and quickly reflected an expected
