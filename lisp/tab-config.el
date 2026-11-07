@@ -50,7 +50,7 @@
 ;;; Mode exclusions
 
 ;; Set tab-line always on except for the exclude modes list
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode ))
+(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ilist-plus-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode ))
 
 ;; dape defines a handful of auxiliary major modes for its info/repl/memory
 ;; buffers (dape-repl-mode, dape-info-stack-mode, etc). Rather than hand
@@ -181,7 +181,9 @@ entries.")
   ;; Use the frame of the window being rendered, not the selected frame:
   ;; tab lines of unselected frames are redisplayed too.
   (let ((pos (frame-parameter (window-frame) 'tab-line-sel-view)))
-    (nth (or pos 0) tab2-views)))
+    ;; During desktop-read the frame is restored with its saved index before
+    ;; `tab2-views' is rebuilt, so the index can briefly be out of range.
+    (or (nth (or pos 0) tab2-views) (car tab2-views))))
 
 (defun tab2-default-view-p ()
   "Return if the current view is the default one."
