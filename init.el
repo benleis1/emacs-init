@@ -3145,6 +3145,28 @@ The left margin is only opened up when the buffer has at least one test."
                                              (nthcdr 3 cmd))))))))
       (apply fn args))))
 
+;; The byte-compile backend refuses to run in untrusted buffers (see `trusted-content'). Rather
+;; than just failing, offer to trust the file's directory the first time it's checked.
+(defvar-local my-trust-declined nil
+  "Non-nil once the user declined to trust this buffer's directory.")
+
+(define-advice elisp-flymake-byte-compile (:around (fn &rest args) my-ask-trust)
+  "Offer to add the current directory to `trusted-content' before running FN."
+  (when (and (not (trusted-content-p))
+             (not my-trust-declined)
+             buffer-file-name
+             (not (eq trusted-content :all)))
+    (let ((dir (abbreviate-file-name
+                (file-name-as-directory
+                 (file-name-directory buffer-file-name)))))
+      (if (y-or-n-p (format "Trust %s for flymake/macro expansion? " dir))
+          (progn
+            (add-to-list 'trusted-content dir)
+            (when (y-or-n-p "Save permanently? ")
+              (customize-save-variable 'trusted-content trusted-content)))
+        (setq my-trust-declined t))))
+  (apply fn args))
+
 ;; Dock the diagnostics list as a bottom "problems panel" instead of
 ;; letting it split whatever window happens to be current.
 (add-to-list 'display-buffer-alist
