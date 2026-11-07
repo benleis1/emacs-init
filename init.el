@@ -738,6 +738,9 @@
 		(set-face-attribute 'my-modeline-position-face nil :background
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 
+;; TEMPTEMP This is experimental and may be removed but it will not have any effect unless
+;; terminal-colors is loaded which I am only doing manually for now.
+
 ;; terminal-colors (modus mode) only maps the 16 ANSI colors into the modus palette.  The terminal
 ;; default foreground/background that ghostel draws with comes from `ghostel-default', so follow the
 ;; active terminal-colors theme there and put the original face spec back on reset.
@@ -766,10 +769,7 @@
 (with-eval-after-load 'terminal-colors
   (add-hook 'terminal-colors--after-load-hook #'my-ghostel-apply-terminal-colors)
   (add-hook 'terminal-colors--reset-hook #'my-ghostel-reset-terminal-colors)
-  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors))
-
-;; Terminals started after terminal-colors loaded still need the colors.
-(with-eval-after-load 'ghostel
+  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors)
   (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
 
 ;; Make any locally-defined themes which live in the lisp subdirectory discoverable by
