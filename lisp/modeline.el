@@ -224,15 +224,10 @@ This carries the same help text and keymap as the major mode name in
 (defface my-modeline-buffer-modified-face
   '((t :inherit (warning bold)))
   "Face for the modified-buffer icon in `my-modeline--buffer-state-icon'.
-Forked from doom-modeline's own `doom-modeline-buffer-modified'
-(effectively `(warning bold)', its `doom-modeline' base face being an
-empty placeholder), rather than depending on the doom-modeline package
-for it.")
+Based on warning bold.")
 
 (defun my-modeline--buffer-state-icon ()
-  "Small icon noting whether the buffer is read-only or modified. The
-  modified-buffer icon mirrors doom-modeline's own
-  `doom-modeline-update-buffer-file-state-icon' (`nf-md-content_save_edit')."
+  "Small icon noting whether the buffer is read-only or modified."
   (when my-modeline-icon
     (cond (buffer-read-only
            (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-lock" :face 'nerd-icons-red))
@@ -241,11 +236,13 @@ for it.")
                                    :face 'my-modeline-buffer-modified-face)))))
 
 ;;; Mode-line / header-line dual-prefix mouse bindings
+;; This was done to allow experimenting with putting the modeline on the header.
 
 (defun my-modeline-mouse-map (bindings)
-  "Return a keymap for BINDINGS, an alist of (MOUSE-EVENT . COMMAND), bound
-under both the `mode-line' and `header-line' event prefixes, so it works
-regardless of which one this modeline ends up displayed in."
+  "Return a keymap for BINDINGS.
+This is an alist of (MOUSE-EVENT . COMMAND), bound under both the
+`mode-line' and `header-line' event prefixes, so it works regardless of
+which one this modeline ends up displayed in."
   (let ((map (make-sparse-keymap)))
     (dolist (prefix '(mode-line header-line))
       (dolist (binding bindings)
@@ -253,8 +250,9 @@ regardless of which one this modeline ends up displayed in."
     map))
 
 (defun my-modeline--dualize-keymap (map)
-  "Return a copy of MAP with any `mode-line'/`header-line' prefixed submap
-  mirrored onto whichever of the two prefixes it's missing."
+  "Return a fixe copy of the key MAP.
+Mirrors the `mode-line'/`header-line' prefixed submap onto whichever of
+the two prefixes it's missing."
   (when (keymapp map)
     (let* ((new (copy-keymap map))
            (mode-sub (lookup-key map [mode-line]))
@@ -266,9 +264,7 @@ regardless of which one this modeline ends up displayed in."
       new)))
 
 (defun my-modeline--dualize-local-maps (string)
-  "Copy STRING with every `local-map' text property dualized via
-`my-modeline--dualize-keymap', so mouse bindings baked in by code that only
-thought about the mode-line (e.g. `vc-mode') still work in the header-line."
+  "Copy STRING with every `local-map' text property dualized."
   (let ((s (copy-sequence string))
         (pos 0)
         (len (length string)))
@@ -281,13 +277,13 @@ thought about the mode-line (e.g. `vc-mode') still work in the header-line."
     s))
 
 (defun my-modeline--render-dual (construct)
-  "Render CONSTRUCT, a `mode-line-format' construct, via `format-mode-line',
-  then dualize its mouse bindings (see `my-modeline--dualize-local-maps')."
+  "Render CONSTRUCT, a `mode-line-format' construct.
+Dualizes its mouse bindings (see `my-modeline--dualize-local-maps')."
   (my-modeline--dualize-local-maps (format-mode-line construct)))
 
 (defun my-modeline--first-property (string prop)
-  "The first non-nil value of text property PROP found anywhere in STRING,
-or nil if it has none. Useful for lifting a click binding off of a stock
+  "Find The first non-nil value of text property PROP anywhere in STRING.
+Returns nil if it has none. Useful for lifting a click binding off of a stock
 construct (e.g. `vc-mode') whose properties start a character or two in,
 rather than at position 0."
   (let ((pos (text-property-not-all 0 (length string) prop nil string)))
@@ -303,7 +299,7 @@ rather than at position 0."
 
 (defcustom my-modeline-dedicated-window-modes
   '((flymake-diagnostics-buffer-mode . t) (messages-buffer-mode . nil)
-    (emacs-lisp-compilation-mode . t) (help-mode . t) (occur-mode . t))
+    (emacs-lisp-compilation-mode . t) (help-mode . t) (occur-mode . t) (ilist-plus-major-mode . t))
   "Major modes whose buffers get a click-to-close mode-line/header-line.
 Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
 window is closed, nil just closes the window."
@@ -339,20 +335,20 @@ Kills its buffer too if the mode's entry in
 ;;; Segments
 
 (defun my-modeline--icon-badge ()
-  "Icon/state badge for the current buffer: the powerline-style file-type
-badge from `my-modeline--buffer-icon' plus a small modified/read-only
-indicator. Shared by the full mode-line's buffer-info segment and the
-dedicated-window reduced one."
+  "Icon/state badge for the current buffer.
+The powerline-style file-type badge from `my-modeline--buffer-icon' plus
+a small modified/read-only indicator. Shared by the full mode-line's
+buffer-info segment and the dedicated-window reduced one."
   (concat (my-modeline--buffer-icon) " " (my-modeline--buffer-state-icon) " "))
 
 (defun my-modeline--buffer-id ()
-  "Buffer name, styled like the stock `mode-line-buffer-identification'
-  default, but rebuilt fresh on every call so the help text is accurate"
+  "Buffer name, styled like the stock `mode-line-buffer-identification'.
+Rebuilt fresh on every call so the help text is accurate"
   (if (my-modeline--dedicated-window-p)
       (propertize "%12b"
                   'face 'mode-line-buffer-id
                   'help-echo "mouse-1: close the window"
-                  'mouse-face 'mode-line-highlight
+                  'mouse-face 'my-modeline-dedicated-highlight
                   'local-map my-modeline-dedicated-window-map)
     (propertize "%12b"
                 'face 'mode-line-buffer-id
@@ -367,10 +363,9 @@ dedicated-window reduced one."
                 'local-map mode-line-buffer-identification-keymap)))
 
 (defun my-modeline-segment-buffer-info ()
-  "Buffer icon/state badge, followed by the buffer name. No extra pad on
-the left -- the badge's own colored chip (see `my-modeline--buffer-icon')
-already starts with a 1-space inset, and an unstyled space in front of it
-would just show up as a mismatched sliver against the chip's background."
+  "Buffer icon/state badge, followed by the buffer name.
+No extra pad on the left since the badge's own colored chip (see
+`my-modeline--buffer-icon') already starts with a 1-space inset."
   (concat (my-modeline--icon-badge)
           (format-mode-line (my-modeline--buffer-id))))
 
@@ -396,7 +391,7 @@ escaped % signs to work with multiple levels of evaluation."
           (t (format "%d%%%%%%%%" (round (* 100.0 (/ (float (- start top))
                                                      (max 1 (- bot top))))))))))
 
-(defvar my-modeline-show-percent nil "Set to t to add the scroll percentage segment or nil to not")
+(defvar my-modeline-show-percent nil "Set to t to add the scroll percentage segment or nil to not.")
 
 (when (fboundp 'modus-themes-get-color-value)
   (defface my-modeline-position-face
@@ -415,9 +410,10 @@ Unlike `my-modeline-position-face', `:background' is left unspecified so
 the segment blends into the rest of the toned down modeline.")
 
 (defun my-modeline--position-face ()
-  "Face to use for `my-modeline-segment-position': `my-modeline-position-face'
-  when the window whose mode-line is being redisplayed is selected, or
-  `my-modeline-position-face-inactive' otherwise."
+  "Face to use for `my-modeline-segment-position'.
+`my-modeline-position-face' when the window whose mode-line is being
+  redisplayed is selected, or `my-modeline-position-face-inactive'
+  otherwise."
   (if (mode-line-window-selected-p)
       'my-modeline-position-face
     'my-modeline-position-face-inactive))
@@ -785,19 +781,56 @@ can look clipped even when it technically isn't.")
 ;; name. No file-type/read-only icon and no position/selection/VC/misc-info
 ;; clutter either; there's nothing else worth showing in a window this size.
 
+;; Hovering must not change the box: `my-modeline--sync-frame-box' pads the whole mode-line with
+;; one, so a hover face with `:box nil' (or the theme's own highlight box) changes the hovered
+;; run's padding and shifts the pin. Leave `:box' unspecified here so the line's box shows through;
+;; `my-modeline--sync-frame-box' copies the color attributes of `mode-line-highlight' in.
+(defface my-modeline-dedicated-highlight
+  '((t nil))
+  "Hover face for the dedicated-window mode-line.")
+
+;; `mode-line-emphasis' is italic in the modus themes, but a mode-line `mouse-face' replaces the
+;; glyph's own face on hover, so an italic pin would snap upright (and shift left) when hovered.
+(defface my-modeline-pin-face
+  '((t :inherit mode-line-emphasis :slant normal))
+  "Face for the pin icon in the dedicated-window mode-line.")
+
 (defun my-modeline--pin-icon ()
-  (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'mode-line-emphasis))
+  (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'my-modeline-pin-face))
+
+(defvar my-modeline-dedicated-label-functions nil
+  "Alist of (MODE . FUNCTION) overriding the buffer name in dedicated windows.
+FUNCTION is called in the buffer and returns the string to show in place of
+its name, or nil to fall back to the name.")
+
+(defun my-modeline--dedicated-label ()
+  "The label for the current dedicated buffer: its mode's override or its name."
+  (let ((entry (seq-find (lambda (e) (derived-mode-p (car e)))
+                         my-modeline-dedicated-label-functions)))
+    (or (and entry (funcall (cdr entry)))
+        (format-mode-line (my-modeline--buffer-id)))))
+
+(defun my-modeline--propertize-missing (string &rest props)
+  "Add PROPS to the parts of STRING that have no `local-map' of their own."
+  (let ((pos 0) (len (length string)))
+    (while (< pos len)
+      (let ((next (next-single-property-change pos 'local-map string len)))
+        (unless (get-text-property pos 'local-map string)
+          (add-text-properties pos next props string))
+        (setq pos next))))
+  string)
 
 (defun my-modeline--dedicated-render ()
-  "The pin icon and buffer name, both sharing the same click-to-close
+  "The pin icon and buffer label, sharing the same click-to-close
 binding and help text (see `my-modeline-dedicated-window-map') -- so
 mousing over or clicking either half of this reduced mode-line behaves
-the same standard way, rather than only the buffer name being clickable."
-  (propertize (concat (or (my-modeline--pin-icon) "") " "
-                      (format-mode-line (my-modeline--buffer-id)))
-              'help-echo "mouse-1: close the window"
-              'mouse-face 'mode-line-highlight
-              'local-map my-modeline-dedicated-window-map))
+the same standard way, rather than only the buffer name being clickable.
+Parts of the label that bring their own `local-map' keep it."
+  (my-modeline--propertize-missing
+   (concat (or (my-modeline--pin-icon) "") " " (my-modeline--dedicated-label))
+   'help-echo "mouse-1: close the window"
+   'mouse-face 'my-modeline-dedicated-highlight
+   'local-map my-modeline-dedicated-window-map))
 
 ;;; Assembly
 
@@ -863,7 +896,10 @@ file (see the file commentary), so a theme switch can't leave it stale."
                   '(mode-line mode-line-inactive)))
     (set-face-attribute face nil :box
                         (list :line-width my-modeline-box-line-width
-                              :color (face-attribute face :background nil t)))))
+                              :color (face-attribute face :background nil t))))
+  (dolist (attr '(:foreground :background :weight :underline :inverse-video))
+    (set-face-attribute 'my-modeline-dedicated-highlight nil attr
+                        (face-attribute 'mode-line-highlight attr nil t))))
 
 (defun my-modeline--render ()
   "The full mode-line, or, in a dedicated window (see
