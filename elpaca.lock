@@ -1,7 +1,7 @@
 ((apheleia :source "elpaca-menu-lock-file" :recipe
 	   (:package "apheleia" :fetcher github :repo "radian-software/apheleia" :files
-		     (:defaults ("scripts" "scripts/formatters")) :source "MELPA" :id apheleia :type
-		     git :protocol https :inherit t :depth treeless :ref
+		     (:defaults ("scripts" "scripts/formatters")) :source "elpaca-menu-lock-file"
+		     :id apheleia :type git :protocol https :inherit t :depth treeless :ref
 		     "4ba89aea2266c51400bee0489165ef334f81bac5"))
  (clutch :source "elpaca-menu-lock-file" :recipe
 	 (:package "clutch" :fetcher github :repo "LuciusChen/clutch" :files
@@ -127,17 +127,7 @@
  (ilist-plus :source "elpaca-menu-lock-file" :recipe
 	     (:source "elpaca-menu-lock-file" :package "ilist-plus" :id ilist-plus :host github
 		      :repo "benleis1/ilist-plus" :type git :protocol https :inherit t :depth
-		      treeless :ref "f1d850c49ccda9b931d0ee58a8ea096f57e2afd1"))
- (imenu-list :source "elpaca-menu-lock-file" :recipe
-	     (:package "imenu-list" :repo "bmag/imenu-list" :fetcher github :files
-		       ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo" "doc/dir" "doc/*.info"
-			"doc/*.texi" "doc/*.texinfo" "lisp/*.el" "docs/dir" "docs/*.info"
-			"docs/*.texi" "docs/*.texinfo"
-			(:exclude ".dir-locals.el" "test.el" "tests.el" "*-test.el" "*-tests.el"
-				  "LICENSE" "README*" "*-pkg.el"))
-		       :source "elpaca-menu-lock-file" :id imenu-list :host github :type git
-		       :protocol https :inherit t :depth treeless :ref
-		       "76f2335ee6f2f066d87fe4e4729219d70c9bc70d"))
+		      treeless :ref "7d7af0e9a82cdd3a55335c0d46e23d201beaadd7"))
  (llama :source "elpaca-menu-lock-file" :recipe
 	(:package "llama" :fetcher github :repo "tarsius/llama" :files ("llama.el" ".dir-locals.el")
 		  :source "elpaca-menu-lock-file" :id llama :type git :protocol https :inherit t

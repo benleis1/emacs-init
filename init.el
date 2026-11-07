@@ -1037,7 +1037,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
   (setq pulsar-highlight-face 'pulsar-magenta)
   ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
   ;; generic for the pulsar-pulse-functions list
-  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t)
+  (add-hook 'ilist-plus-after-jump-hook #'pulsar-pulse-line t)
   ;; Likewise, clicking a diagnostic runs `push-button', not a command pulsar watches.
   (advice-add 'flymake-goto-diagnostic :after (lambda (&rest _) (pulsar-pulse-line))))
 
@@ -1096,7 +1096,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-3") 'wikimode-toggle)
-(global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
+(global-set-key (kbd "C-\\") 'ilist-plus-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
 (global-set-key (kbd "s-]") 'tab2-next-view)
@@ -3218,37 +3218,32 @@ The only action we do is close on click."
                 sqlformat-args '("-s2" "-g")))
 
 
-(my-profile-mark "imenu-list")
-;;; imenu-list
+(my-profile-mark "ilist-plus")
+;;; ilist-plus
 ;; Note: C-\ is bound to smart toggle.
-(use-package imenu-list
-  :ensure t
-  :config
-  ;; Some built in default around resizing and window focus I prefer.
-  (setq imenu-list-focus-after-activation t
-        imenu-list-auto-resize nil
-	;; rescan buffers as they change
-	imenu-auto-rescan t))
+(my-ignore
+ (use-package imenu-list
+   :ensure t
+   :config
+   ;; rescan buffers as they change
+   (setq imenu-auto-rescan t)))
 
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
   ;; :load-path "~/dev/ilist-plus/"
   :ensure (:host github :repo "benleis1/ilist-plus")
-  :after imenu-list
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
   :config
   (ilist-plus-mode))
 
-;; Now that modeline.el (loaded above) has defined the richer dedicated-window
-;; keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-;; self-contained fallback.
-
+;; Render the *Ilist* mode-line with my-modeline; ilist-plus supplies the label.
 (with-eval-after-load 'ilist-plus
-  (setq imenu-list-mode-line-format
-	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
+  (setq ilist-plus-mode-line-format my-modeline-format)
+  (add-to-list 'my-modeline-dedicated-label-functions
+               '(ilist-plus-major-mode . ilist-plus-mode-line-label)))
 
 ;; Don't save/restore frame colors; otherwise a restored desktop pins the colors
 ;; from when it was saved and overrides the currently loaded theme. Applied on
