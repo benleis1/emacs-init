@@ -78,7 +78,7 @@
 ;; desktop into the system menus and also extensively modified tab-line to fit my work flow.
 ;; Longterm if the need arises I plan to either integrate in bookmark+ or activities to save related
 ;; sets of these files. For now I have customized tab-line with "views" to facilitate this. See
-;; tab-config.el for more details.
+;; tab-plus.el for more details.
 ;;
 ;; Style-wise, I prefer a fairly minimal design theme. I'm currently using the folio theme which is
 ;; based on the builtin modus-themes and have changed most faces to just use the same default
@@ -154,7 +154,7 @@
 ;; └── lisp/
 ;;     ├── macos.el
 ;;     ├── linux.el
-;;     ├── tab-config.el
+;;     ├── tab-plus.el
 ;;     ├── modeline.el
 ;;     ├── menu-config.el
 ;;     ├── dape-java.el
@@ -167,7 +167,7 @@
 ;; * `init.el` - this file.  Nearly all configuration, grouped into sections by functional area.
 ;; * `lisp/` - modules that grew large enough to leave init.el, plus the hand written themes.
 ;;   * `macos.el` / `linux.el` - OS specific settings, loaded by `system-type`.
-;;   * `tab-config.el` - the tab-line and "views" system (see [doc](./docs/tab-config.md)).
+;;   * `tab-plus.el` - the tab-line and "views" system (see [doc](./docs/tab-plus.md)).
 ;;   * `modeline.el` - the custom mode line (see [doc](./docs/modeline.md)).
 ;;   * `menu-config.el` - menu bar reorganization (Help, Edit and Text menus) adapted from anju.
 ;;   * `dape-java.el` - Java debugging and JUnit test support on top of dape and jdtls.
@@ -222,7 +222,7 @@
 
 ;; ## UX
 ;; * Buffers are shown in a heavily customized `tab-line` organized into "views": named sets of buffers,
-;; each with its own tab list.  For more detailed explanations of the tabbing system see: [doc](./docs/tab-config.md)
+;; each with its own tab list.  For more detailed explanations of the tabbing system see: [doc](./docs/tab-plus.md)
 ;; * For more detailed explanations of the modeline see: [doc](./docs/modeline.md)
 ;; * Key bindings:
 ;;   * `C-<tab>` / `C-S-<tab>` - next / previous tab
@@ -264,7 +264,7 @@
 (defmacro my-ignore (_form) "Ignore whatever follows." )
 
 ;; Set up basic paths for the lisp subdirectory and themes before any are required. For now,
-;; install.sh symlinks themes and custom modules like tab-config all in the same lisp subdirectory.
+;; install.sh symlinks themes and custom modules like tab-plus all in the same lisp subdirectory.
 ;; This directory must be manually compiled once.
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory)))
@@ -1094,7 +1094,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
 (my-modeline-mode 1)
 
 ;; Load all of my custom tab-line config.
-(load "tab-config")
+(load "tab-plus")
 
 (my-profile-mark "Global key bindings")
 ;;; Global key bindings
@@ -1108,8 +1108,8 @@ Customize the thresholds via `my-max-auto-revert-size'."
 (global-set-key (kbd "C-\\") 'ilist-plus-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
-(global-set-key (kbd "s-]") 'tab2-next-view)
-(global-set-key (kbd "s-[") 'tab2-prev-view)
+(global-set-key (kbd "s-]") 'tab-plus-next-view)
+(global-set-key (kbd "s-[") 'tab-plus-prev-view)
 (global-set-key (kbd "C-c t") 'ghostel)
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
@@ -2045,8 +2045,8 @@ the terminal."
            (buf (apply fn args)))
       (when (and project (buffer-live-p buf))
         (with-current-buffer buf
-          (unless tab2-pinned-project
-            (setq tab2-pinned-project (project-root project)))))
+          (unless tab-plus-pinned-project
+            (setq tab-plus-pinned-project (project-root project)))))
       buf))
 
   ;; Mirror readline cuts into the Emacs kill ring, then let the shell do the cut.
@@ -2170,7 +2170,7 @@ Either way the file path or URI is also added to the kill ring."
 Owned by Emacs so it can be saved in the desktop; it overrides the
 terminal-reported title in the buffer name.")
 
-(defvar-local tab2-pinned-project nil
+(defvar-local tab-plus-pinned-project nil
   "Root of the project the terminal was created for, or nil.
 Unlike `default-directory' this does not follow `cd'.")
 
@@ -2209,7 +2209,7 @@ terminal icon plus input-needed / command-running status."
             (concat "⏳ " name))
            (t name))))
 
-(tab2-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
+(tab-plus-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
 (with-eval-after-load 'ghostel
   (add-to-list 'ghostel-eval-cmds '("set-tab-title" my-ghostel-set-title))
@@ -2218,7 +2218,7 @@ terminal icon plus input-needed / command-running status."
 (defun my-ghostel-desktop-persistent-info (_dirname)
   "Create a list for serialization of ghostel buffers to the desktop file."
   (list :directory default-directory :identity ghostel--buffer-identity
-        :title my-ghostel-user-title :project tab2-pinned-project))
+        :title my-ghostel-user-title :project tab-plus-pinned-project))
 
 (add-hook 'ghostel-mode-hook
           (lambda () (setq-local desktop-save-buffer #'my-ghostel-desktop-persistent-info)))
@@ -2237,7 +2237,7 @@ See `my-ghostel-desktop-persistent-info' for the format."
       ;; Otherwise ghostel sees a manual rename and stops renaming on title changes.
       (setq ghostel--managed-buffer-name (buffer-name))
       (setq my-ghostel-user-title (plist-get misc :title)
-            tab2-pinned-project (plist-get misc :project)
+            tab-plus-pinned-project (plist-get misc :project)
             ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
     buffer))
 

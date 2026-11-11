@@ -172,7 +172,7 @@
 (declare-function my-modeline--icon-safe "modeline")
 (declare-function my-modeline--keyboard-icon "modeline")
 (declare-function my-play-appt-sound "macos")
-(declare-function tab2-register-buffer-name-function "tab-config")
+(declare-function tab-plus-register-buffer-name-function "tab-plus")
 (declare-function my-modeline-mouse-map "modeline")
 (defvar my-modeline-dedicated-window-map)
 (defvar my-modeline-dedicated-label-functions)

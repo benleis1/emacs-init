@@ -120,7 +120,7 @@ through color or additional glyphs when it's working in the background.
   - [my-modeline--eval-segments](#my-modeline--eval-segments)
   - [my-modeline--sync-frame-box](#my-modeline--sync-frame-box)
   - [my-modeline--render](#my-modeline--render)
-  - [tab2-view-segment](#tab2-view-segment)
+  - [tab-plus-view-segment](#tab-plus-view-segment)
   - [my-flymake-toggle-buffer-diagnostics](#my-flymake-toggle-buffer-diagnostics)
   - [my-flymake--refresh-pill-faces](#my-flymake--refresh-pill-faces)
   - [my-flymake--pill-svg-source](#my-flymake--pill-svg-source)
@@ -154,11 +154,11 @@ through color or additional glyphs when it's working in the background.
 (require 'xml)
 ```
 
-Modeline loads before tab-config but needs to reference a few functions.
+Modeline loads before tab-plus but needs to reference a few functions.
 ```
-(declare-function tab2-view-name "tab-config")
-(declare-function tab2-get-current-view "tab-config")
-(declare-function tab2-num-views "tab-config")
+(declare-function tab-plus-view-name "tab-plus")
+(declare-function tab-plus-get-current-view "tab-plus")
+(declare-function tab-plus-num-views "tab-plus")
 ```
 
 eglot's own menu keymaps, reused as-is for the rocket-icon segment's
@@ -1244,11 +1244,11 @@ counter never ends up glued directly to the VCS branch name. See
 hug the window's right edge.")
 
 (defvar my-modeline-anchored-right-segments
-  '(tab2-view-segment my-modeline-segment-zoom)
+  '(tab-plus-view-segment my-modeline-segment-zoom)
   "Segment functions right-justified flush against the window's right
 edge -- separated from `my-modeline-right-segments' by however much space
 remains, and from each other by a couple of spaces, rather than run
-together with everything else. E.g. the current tab2 view, or the
+together with everything else. E.g. the current tab-plus view, or the
 rightmost zoom in/out icon.")
 ```
 
@@ -1267,7 +1267,7 @@ SEPARATOR (default: none)."
   "Fixed spacing kept between `my-modeline-right-segments' and
 `my-modeline-anchored-right-segments' in `my-modeline--render', on top of
 whatever space `my-modeline--right-align' leaves -- so e.g. the major
-mode name and the tab2 view never end up touching just because the rest
+mode name and the tab-plus view never end up touching just because the rest
 of the line happened to fill the window exactly.")
 
 (defcustom my-modeline-box-line-width 4
@@ -1312,7 +1312,7 @@ The right side has two zones: `my-modeline-right-segments' is positioned
 before `my-modeline-anchored-right-segments' begins, and that second zone
 gets its own, independent `my-modeline--right-align' call measuring only
 itself, so it always lands flush against the window edge regardless of
-how wide the first zone renders -- the git branch and tab2 view, say,
+how wide the first zone renders -- the git branch and tab-plus view, say,
 don't just run together with everything else, or with the rest of the line.
 `my-modeline-right-margin' keeps the very last character from rendering
 flush against the true edge.
@@ -1328,7 +1328,7 @@ The right side has two zones: `my-modeline-right-segments' is positioned
 before `my-modeline-anchored-right-segments' begins, and that second zone
 gets its own, independent `my-modeline--right-align' call measuring only
 itself, so it always lands flush against the window edge regardless of
-how wide the first zone renders -- the git branch and tab2 view, say,
+how wide the first zone renders -- the git branch and tab-plus view, say,
 don't just run together with everything else, or with the rest of the line.
 `my-modeline-right-margin' keeps the very last character from rendering
 flush against the true edge."
@@ -1365,26 +1365,26 @@ work the same way.")
 ```
 
 
-The tab2 view segment. See tab-config.el
+The tab-plus view segment. See tab-plus.el
 ```
-(defvar tab2-mode-line-view-map
-  (my-modeline-mouse-map '((mouse-1 . tab2-next-view)
-                           (mouse-3 . tab2-prev-view))))
+(defvar tab-plus-mode-line-view-map
+  (my-modeline-mouse-map '((mouse-1 . tab-plus-next-view)
+                           (mouse-3 . tab-plus-prev-view))))
 ```
 
-## tab2-view-segment
->Show the current tab2 view, marked with a desktop icon.
+## tab-plus-view-segment
+>Show the current tab-plus view, marked with a desktop icon.
 
 ```
-(defun tab2-view-segment ()
-  "Show the current tab2 view, marked with a desktop icon."
-  (when (> (tab2-num-views) 1)
+(defun tab-plus-view-segment ()
+  "Show the current tab-plus view, marked with a desktop icon."
+  (when (> (tab-plus-num-views) 1)
     (let ((icon (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
 					:face 'mode-line-emphasis)))
-      (propertize (concat (or icon "") " " (tab2-view-name (tab2-get-current-view)))
+      (propertize (concat (or icon "") " " (tab-plus-view-name (tab-plus-get-current-view)))
                   'help-echo "Current tab view - click to switch to the next one"
                   'mouse-face 'mode-line-highlight
-                  'local-map tab2-mode-line-view-map))))
+                  'local-map tab-plus-mode-line-view-map))))
 ```
 
 ## my-flymake-toggle-buffer-diagnostics

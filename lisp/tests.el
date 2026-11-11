@@ -910,7 +910,7 @@ also holds machine-local files (local.el and the like) that aren't ours."
 ;; hands to hooks/advice/keymaps/`use-package' and check any in this config's
 ;; own namespaces are defined somewhere in it (or at least `fboundp').
 
-(defconst my/own-symbol-regexp "\\`\\(?:my[-/]\\|tab2-\\|dape-java-\\)"
+(defconst my/own-symbol-regexp "\\`\\(?:my[-/]\\|tab-plus-\\|dape-java-\\)"
   "Function names that belong to this config rather than a package.")
 
 (defconst my/function-ref-arg-positions
