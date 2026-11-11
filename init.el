@@ -3207,6 +3207,152 @@ The only action we do is close on click."
 ;; Save space by not showing zero warn/error counter in the mode line
 (setq flymake-suppress-zero-counters t)
 
+;; Flymake equivalent of flycheck's `flycheck-verify-setup'.
+(define-derived-mode my-flymake-diagnostics-mode help-mode "Flymake verification"
+  "Major mode to display `my-flymake-diagnostics' results."
+  (setq buffer-read-only nil))
+
+(define-button-type 'my-flymake-button
+  'follow-link t
+  'face 'link
+  'action (lambda (button)
+            (apply (button-get button 'my-action) (button-get button 'my-data))
+            (revert-buffer)))
+
+(defun my-flymake--backends ()
+  "Return the backends `flymake-diagnostic-functions' uses in this buffer.
+A `t' entry stands for the global value."
+  (let (backends)
+    (dolist (b flymake-diagnostic-functions)
+      (if (eq b t)
+          (dolist (g (default-value 'flymake-diagnostic-functions))
+            (push g backends))
+        (push b backends)))
+    (nreverse (delete-dups backends))))
+
+(defun my-flymake--backend-report (backend)
+  "Return a list of (LABEL MESSAGE FACE) describing BACKEND in this buffer."
+  (let* ((state (and flymake--state (gethash backend flymake--state)))
+         (diags (and state (flymake--state-diags state)))
+         (results
+          (list (list "function"
+                      (if (fboundp backend) "defined" "not defined")
+                      (if (fboundp backend) 'success 'error)))))
+    (push
+     (cond
+      ((not state)
+       (list "state"
+             (if flymake-mode "not started yet" "not started (Flymake Mode is off)")
+             'warning))
+      ((flymake--state-disabled state)
+       (list "state" (format "disabled: %s" (flymake--state-disabled state))
+             '(bold error)))
+      ((flymake--state-running state) (list "state" "running" 'success))
+      ((flymake--state-reported-p state) (list "state" "idle, has reported" 'success))
+      (t (list "state" "idle, has not reported" 'warning)))
+     results)
+    (when (and state (flymake--state-reported-p state)
+               (not (flymake--state-disabled state)))
+      (let ((counts (list (cons :error 0) (cons :warning 0) (cons :note 0))))
+        (dolist (d diags)
+          (let* ((sev (flymake--severity (flymake-diagnostic-type d)))
+                 (key (cond ((>= sev (warning-numeric-level :error)) :error)
+                            ((>= sev (warning-numeric-level :warning)) :warning)
+                            (t :note))))
+            (cl-incf (alist-get key counts))))
+        (push (list "diagnostics"
+                    (format "%d (%d errors, %d warnings, %d notes)" (length diags)
+                            (alist-get :error counts) (alist-get :warning counts)
+                            (alist-get :note counts))
+                    nil)
+              results)))
+    (nreverse results)))
+
+(defun my-flymake--princ-backend (backend buffer)
+  "Print the status of BACKEND for BUFFER at point in the current buffer."
+  (princ "  ")
+  (insert-button (symbol-name backend)
+                 'type 'help-function 'help-args (list backend))
+  (let ((disabled (with-current-buffer buffer
+                    (and flymake--state
+                         (when-let* ((s (gethash backend flymake--state)))
+                           (flymake--state-disabled s))))))
+    (when disabled
+      (insert (propertize " (disabled) " 'face '(bold error)))
+      (insert-text-button "re-enable" 'type 'my-flymake-button
+                          'my-action
+                          (lambda (buf be)
+                            (with-current-buffer buf
+                              (remhash be flymake--state)
+                              (when flymake-mode (flymake-start))))
+                          'my-data (list buffer backend))))
+  (princ "\n")
+  (let* ((results (with-current-buffer buffer (my-flymake--backend-report backend)))
+         (column (+ 8 (seq-max (mapcar (lambda (r) (length (car r))) results)))))
+    (dolist (r results)
+      (princ "    - ")
+      (princ (car r))
+      (princ ": ")
+      (princ (make-string (max 0 (- column (current-column))) ?\s))
+      (insert (if (nth 2 r) (propertize (nth 1 r) 'face (nth 2 r)) (nth 1 r)))
+      (princ "\n")))
+  (princ "\n"))
+
+(defun my-flymake-diagnostics ()
+  "Show the status of Flymake's backends in this buffer.
+List the backends in `flymake-diagnostic-functions', whether each is defined,
+running, disabled (and why) or has reported, plus global backends this buffer
+does not use."
+  (interactive)
+  (let* ((buffer (current-buffer))
+         (backends (my-flymake--backends))
+         (unused (seq-difference (default-value 'flymake-diagnostic-functions)
+                                 (cons t backends)))
+         (orphans (and flymake--state
+                       (seq-difference
+                        (let (ks) (maphash (lambda (k _) (push k ks)) flymake--state) ks)
+                        backends))))
+    (with-help-window "*Flymake backends*"
+      (with-current-buffer standard-output
+        (my-flymake-diagnostics-mode)
+        (princ "Flymake backends for buffer ")
+        (insert (propertize (buffer-name buffer) 'face 'bold))
+        (princ " in ")
+        (let ((mode (buffer-local-value 'major-mode buffer)))
+          (insert-button (symbol-name mode) 'type 'help-function 'help-args (list mode)))
+        (princ ":\n\n")
+        (if backends
+            (progn
+              (princ "Backends that will run in this buffer:\n\n")
+              (dolist (b backends) (my-flymake--princ-backend b buffer)))
+          (insert (propertize "No Flymake backends in this buffer.\n\n"
+                              'face '(bold error))))
+        (when unused
+          (princ "Global backends not used here (the buffer-local value of \
+`flymake-diagnostic-functions' lacks `t'):\n\n")
+          (dolist (b unused) (my-flymake--princ-backend b buffer)))
+        (when orphans
+          (princ "Backends with leftover state that are no longer registered:\n\n")
+          (dolist (b orphans) (my-flymake--princ-backend b buffer)))
+        (princ "Flymake Mode is ")
+        (let ((on (buffer-local-value 'flymake-mode buffer)))
+          (insert (propertize (if on "enabled" "disabled")
+                              'face (if on 'success '(warning bold)))))
+        (princ ".  See the ")
+        (insert-text-button "log" 'type 'my-flymake-button
+                            'my-action #'flymake-switch-to-log-buffer 'my-data nil)
+        (princ " for backend messages, or use C-u M-x flymake-start in the \
+buffer to run disabled backends.\n")
+        (princ "\n--------------------\n\n")
+        (princ (format "Emacs version:    %s\n" emacs-version))
+        (princ (format "System:           %s\n" system-configuration))
+        (princ (format "Window system:    %S\n" window-system))
+        (setq-local revert-buffer-function
+                    (lambda (_ignore-auto _noconfirm)
+                      (unless (buffer-live-p buffer)
+                        (user-error "The verified buffer is gone"))
+                      (with-current-buffer buffer (my-flymake-diagnostics))))))))
+
 ;; Configure lightbulbs with corresponding diagnostic colors/faces'
 ;; And place them in the margin rather than the fringe. Pin the margin
 ;; to a fixed width of 2 (rather than `flymake-autoresize-margins'
