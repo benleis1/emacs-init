@@ -926,6 +926,14 @@ ROOT must already be normalized with `tab2--normalize-root'."
               (setq tab2-project-membership-cache (cons path (cons root member))))
             member))))))
 
+(defun tab2-repin-buffer (root)
+  "Repin a buffer to a specific project.
+ROOT should be a project root."
+  (interactive
+   (list
+    (read-directory-name "Project Path: ")))
+  (setq-local tab2-pinned-project root))
+
 ;; Filter the list of buffers based on the selected group
 ;; if Files then return all of the file based buffers.
 ;; if Project then return all buffers in the curent project.
@@ -937,7 +945,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 
         ((equal curgroup "Project")
          (let ((root (when-let* ((pr (project-current nil)))
-                       (tab2--normalize-root (project-root pr)))))
+		       (tab2--normalize-root (project-root pr)))))
            (seq-filter (lambda (b) (tab2-buffer-in-project-p b root)) buffers)))
 
         ((equal curgroup "Modified")
@@ -945,7 +953,7 @@ ROOT must already be normalized with `tab2--normalize-root'."
 
         (t (seq-filter (lambda (b)
                          (equal (tab-line-tabs-buffer-group-name b) curgroup))
-                       buffers))))
+		       buffers))))
 
 (defun find-first (filter list)
   "Find the first match from FILTER on the LIST."
@@ -975,8 +983,8 @@ group to an icon and adds on all files"
     (let* ((buffers (funcall tab-line-tabs-buffer-list-function))
 	   (groups (delq nil (mapcar #'car (seq-group-by
 					    (lambda (buffer)
-                                              (tab-line-tabs-buffer-group-name
-                                               buffer))
+					      (tab-line-tabs-buffer-group-name
+					       buffer))
                                             buffers))))
 	   (selected-group (window-parameter nil 'tab-line-group))
 	   (tabs (mapcar (apply-partially 'tab2-make-group-tab selected-group) groups)))
@@ -1100,7 +1108,7 @@ group to an icon and adds on all files"
   (tab2-save-view-state)
   (set-frame-parameter nil 'tab2-views (tab2-serialize-views))
   (set-frame-parameter nil 'tab2-sel-view-name
-                       (let ((name (tab2-view-name (tab2-get-current-view))))
+		       (let ((name (tab2-view-name (tab2-get-current-view))))
                          (unless (member name (tab2--tear-off-view-names)) name))))
 
 (defun tab2-rebuild-buffer-list-from-frame-params ()
@@ -1130,8 +1138,8 @@ views) are then left out of the desktop file."
              (not (tab2-buffer-filter buffer))
              (seq-some (lambda (v)
                          (and (not (member (tab2-view-name v) skip))
-                              (memq buffer (tab2-view-buffers v))))
-                       tab2-views)))))
+			      (memq buffer (tab2-view-buffers v))))
+		       tab2-views)))))
 
 ;; hook the rebuild function to run after read desktop
 (add-hook 'desktop-after-read-hook 'tab2-rebuild-buffer-list-from-frame-params)
@@ -1273,7 +1281,7 @@ views) are then left out of the desktop file."
 
             ;; Clear previous buffer content
             (let ((inhibit-read-only t))
-              (erase-buffer))
+	      (erase-buffer))
 
             ;; Insert prompt
             (insert (concat (propertize prompt 'intangible t
@@ -1286,14 +1294,14 @@ views) are then left out of the desktop file."
 
             ;; Main loop where we read key sequences until RET or ESC is pressed
             (while t
-              (let* ((message "")
+	      (let* ((message "")
                      (key (key-description (read-key-sequence message))))
 
                 ;; Command enter
                 (when (string= key "RET")
                   (setq command (buffer-substring (+ (length prompt) 1) (point-max)))
                   (if (> (length command) 0)
-                      (throw 'break command)
+		      (throw 'break command)
                     (throw 'break nil)))
 
                 ;; Command abort
@@ -1337,7 +1345,7 @@ A terminal's pinned `tab2-pinned-project' wins over its directory."
   "Return the list of tab group names BUFFER is assigned to.
 ROOT is the project root used for the virtual \"Project\" group."
   (seq-filter (lambda (g) (and g (not (equal g ""))))
-              (list (when (buffer-file-name buffer) "Files")
+	      (list (when (buffer-file-name buffer) "Files")
                     (when (and root (tab2-buffer-in-project-p buffer root)) "Project")
                     (when (tab2-buffer-modified-file-p buffer) "Modified")
                     (tab-line-tabs-buffer-group-name buffer))))
@@ -1373,7 +1381,7 @@ assigned to and its project root."
                             (if-let* ((tear (frame-parameter f 'tab2-tear-off-view)))
                                 (format " [tear-off %S]" tear) "")))
             (dolist (w (window-list f 'no-minibuf))
-              (let* ((wbuf (window-buffer w))
+	      (let* ((wbuf (window-buffer w))
                      (group (window-parameter w 'tab-line-group))
                      (root (tab2--buffer-project-root wbuf)))
                 (insert (format "    %s%s  buffer=%s  mode=%s  group=%s  project=%s\n"
@@ -1385,8 +1393,8 @@ assigned to and its project root."
                   (insert (format "      shown tabs: %s\n"
                                   (mapconcat #'buffer-name
                                              (tab2-filter-buffers-by-group
-                                              (seq-filter #'buffer-live-p (tab2-view-buffers view))
-                                              group)
+					      (seq-filter #'buffer-live-p (tab2-view-buffers view))
+					      group)
                                              ", "))))))))
         (insert (format "\n== Views (%d) ==\n" (length views)))
         (dolist (view views)
@@ -1395,7 +1403,7 @@ assigned to and its project root."
                             (tab2-view-name view) (length bufs)
                             (if (tab2-view-wstate view) "  (window state saved)" "")))
             (dolist (b bufs)
-              (if (not (buffer-live-p b))
+	      (if (not (buffer-live-p b))
                   (insert "  <dead buffer>\n")
                 (let ((root (tab2--buffer-project-root b)))
                   (insert (format "  %-32s groups=%s  tracked=%s\n"

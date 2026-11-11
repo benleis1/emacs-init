@@ -925,6 +925,15 @@
 (setopt auto-revert-check-vc-info t)
 (global-auto-revert-mode 1)
 
+;; Ignore attribute-only file notifications.  With `auto-revert-check-vc-info',
+;; each one runs `vc-refresh-state' -> git, and git reading a modified file
+;; changes its atime, which fires another kqueue attrib event: a ~25/s loop of
+;; synchronous git calls that starves the UI.  Real edits arrive as `changed'.
+(define-advice auto-revert-notify-handler (:around (orig event) my-ignore-attrib)
+  "Drop `attribute-changed' EVENTs to break the git/atime feedback loop."
+  (unless (eq (nth 1 event) 'attribute-changed)
+    (funcall orig event)))
+
 ;; Define a size threshold currently 50 megabytes in bytes) for autorevert
 ;; larger files will be managed manually. These are typically logs which may
 ;; be live and constantly reloading them is disruptive.

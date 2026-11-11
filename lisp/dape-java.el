@@ -136,7 +136,7 @@ plugin and the needed functions."
 		 (uri (eglot-path-to-uri (buffer-file-name)))
 		 (test-file-p (eglot-execute-command server "java.project.isTestFile" (vector uri)))
 		 (result (eglot-execute-command server "java.project.getClasspaths"
-						 (vector uri (json-serialize '(:scope "test")))))
+						(vector uri (json-serialize '(:scope "test")))))
 		 (jdk-settings (eglot-execute-command
 				server "java.project.getSettings"
 				(vector uri (vector "org.eclipse.jdt.ls.core.vm.location"
@@ -174,10 +174,10 @@ plugin and the needed functions."
 	;; Message for any jsonrpc issues that occur along the way.
 	(jsonrpc-error
 	 (message "dape-java-diagnostics: jdtls request failed -- %s"
-		   (or (alist-get 'jsonrpc-error-message (cddr err)) (cadr err)))))
+		  (or (alist-get 'jsonrpc-error-message (cddr err)) (cadr err)))))
 
-	;; else
-	(message "eglot is not running in this buffer"))
+    ;; else
+    (message "eglot is not running in this buffer"))
   )
 
 
@@ -209,7 +209,7 @@ MODULE-DIR is a Gradle module or nil if not"
       nil)))
 
 (defvar dape-java--junit-gradle-classpath-cache (make-hash-table :test #'equal)
-    "Cache of MODULE-DIR -> (BUILD-GRADLE-MTIME . CLASSPATH-VECTOR).
+  "Cache of MODULE-DIR -> (BUILD-GRADLE-MTIME . CLASSPATH-VECTOR).
 See `dape-java--junit-gradle-classpath-cached'.")
 
 ;; The contents of the temporary gradle file to compute the classpath.
@@ -252,8 +252,8 @@ to 2gig by default"
   "Path of the file the `myDapeClasspath' task writes MODULE-DIR's
 classpath to. See `dape-java--junit-gradle-compile-command'."
   (expand-file-name (format "dape-junit-classpath-%s.txt"
-                             (secure-hash 'sha1 (expand-file-name module-dir)))
-                     temporary-file-directory))
+                            (secure-hash 'sha1 (expand-file-name module-dir)))
+                    temporary-file-directory))
 
 (defun dape-java--junit-gradle-classpath-cached (module-dir)
   "Return MODULE-DIR's Gradle classpath if it's already been resolved,
@@ -276,10 +276,10 @@ Cached per MODULE-DIR, keyed on its build file  mtime -- clear
       (let ((out-file (dape-java--junit-gradle-classpath-file module-dir)))
         (when (file-exists-p out-file)
           (let ((classpath (vconcat (split-string
-                                      (with-temp-buffer
-                                        (insert-file-contents out-file)
-                                        (buffer-string))
-                                      path-separator t))))
+                                     (with-temp-buffer
+                                       (insert-file-contents out-file)
+                                       (buffer-string))
+                                     path-separator t))))
             ;; Consumed -- a stale leftover must never be mistaken for a
             ;; fresh result by a later cold-cache check.
             (delete-file out-file)
@@ -304,10 +304,10 @@ sibling modules pulled in via composite builds, which jdtls's own
 classpath resolution doesn't reliably surface for this project."
   (let* ((module-dir (expand-file-name module-dir))
          (gradlew-dir (or (locate-dominating-file module-dir "gradlew")
-                           (user-error "No `gradlew' found above %s" module-dir)))
+                          (user-error "No `gradlew' found above %s" module-dir)))
          (gradlew (expand-file-name "gradlew" gradlew-dir))
          (init-file (make-temp-file "dape-junit-classpath-" nil ".gradle"
-                                     dape-java--gradle-file-contents))
+                                    dape-java--gradle-file-contents))
          (out-file (dape-java--junit-gradle-classpath-file module-dir)))
     (format "rm -f %s; cd %s && %s --console=plain --init-script %s -PdapeClasspathOut=%s%s myDapeClasspath; ec=$?; rm -f %s; exit $ec"
             (shell-quote-argument out-file)
@@ -513,9 +513,9 @@ wire protocol's fully-qualified test name)."
         (dolist (m (nreverse (cdr c)))
           (insert "  ")
           (insert (propertize (if (memq (cdr m) '(fail error)) "✘" "✔")
-                               'face (if (memq (cdr m) '(fail error))
-                                         'dape-java-junit-fail-face
-                                       'dape-java-junit-pass-face)))
+                              'face (if (memq (cdr m) '(fail error))
+                                        'dape-java-junit-fail-face
+                                      'dape-java-junit-pass-face)))
           (insert " " (car m) "\n")))
       (goto-char (point-min)))))
 
@@ -524,9 +524,9 @@ wire protocol's fully-qualified test name)."
 `dape-java--junit-report-test' -- to :junit-results, and redraw the
 JUnit results window."
   (process-put proc :junit-results
-                (cons (cons (process-get proc :junit-cur)
-                            (process-get proc :junit-status))
-                      (process-get proc :junit-results)))
+               (cons (cons (process-get proc :junit-cur)
+                           (process-get proc :junit-status))
+                     (process-get proc :junit-results)))
   (dape-java--junit-results-redraw proc))
 
 (defun dape-java--junit-report-test (proc)
@@ -693,9 +693,9 @@ launch classpath."
           (plist-put config 'compile (dape-java--junit-gradle-compile-command root))
         (let* ((junit-port (and dape-java-junit-listener-callback (dape-java--junit-start-listener)))
                (program-args (if junit-port
-                                  (dape-java--junit-rewrite-port
-                                   (plist-get launch :programArguments) junit-port)
-                                (plist-get launch :programArguments)))
+                                 (dape-java--junit-rewrite-port
+                                  (plist-get launch :programArguments) junit-port)
+                               (plist-get launch :programArguments)))
                (debug-port (eglot-execute-command server "vscode.java.startDebugSession" nil)))
           (thread-first config
                         (plist-put 'port debug-port)
@@ -845,7 +845,7 @@ rather than trying to guess when the project is done importing."
 
 (defcustom dape-java-ms-debug-plugin
   (expand-file-name
-  "~/.m2/repository/com/microsoft/java/com.microsoft.java.debug.plugin/0.53.2/com.microsoft.java.debug.plugin-0.53.2.jar")
+   "~/.m2/repository/com/microsoft/java/com.microsoft.java.debug.plugin/0.53.1/com.microsoft.java.debug.plugin-0.53.1.jar")
   "The path to the microsoft java debug plugin jar"
   :group 'dape-java
   :type 'string
@@ -902,7 +902,7 @@ Requires `unzip' on PATH."
                         (expand-file-name "extension/server" extract-dir)
                         t "\\.jar\\'"))
             (copy-file jar (expand-file-name (file-name-nondirectory jar)
-                                              dape-java-test-bundles-dir)
+                                             dape-java-test-bundles-dir)
                        t))
           (message "dape-java-fetch-test-bundle: installed to %s" dape-java-test-bundles-dir))
       (delete-file vsix-file)

@@ -135,6 +135,10 @@
 (declare-function pixel-scroll-interpolate-down "pixel-scroll")
 (declare-function pixel-scroll-interpolate-up "pixel-scroll")
 (declare-function mouse-shift-adjust-mode "mouse")
+(declare-function flymake--severity "flymake")
+(declare-function flymake-start "flymake")
+(declare-function flymake-switch-to-log-buffer "flymake")
+(declare-function warning-numeric-level "warnings")
 
 ;; Other third-party packages
 (defvar imenu-list-mode-line-format)
