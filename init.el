@@ -1095,6 +1095,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
 
 ;; Load all of my custom tab-line config.
 (load "tab-plus")
+(tab-plus-mode 1)
 
 (my-profile-mark "Global key bindings")
 ;;; Global key bindings

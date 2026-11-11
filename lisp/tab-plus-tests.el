@@ -301,7 +301,37 @@ afterwards."
    (should (equal (tab-plus-list-views) '("default" "work")))))
 
 (ert-deftest tab-plus-test/close-tear-off-view-is-a-delete-frame-hook ()
-  (should (memq 'tab-plus--close-tear-off-view delete-frame-functions)))
+  (unwind-protect
+      (progn
+        (tab-plus-mode 1)
+        (should (memq 'tab-plus--close-tear-off-view delete-frame-functions)))
+    (tab-plus-mode -1)))
+
+(ert-deftest tab-plus-test/mode-installs-and-restores-settings ()
+  (let ((old-tabs-fn tab-line-tabs-function)
+        (old-skip switch-to-prev-buffer-skip)
+        (old-exclude tab-line-exclude-modes)
+        (old-global global-tab-line-mode)
+        (old-drag (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t)))
+    (unwind-protect
+        (progn
+          (tab-plus-mode 1)
+          (should (eq tab-line-tabs-function #'tab-plus--get-tabs))
+          (should (eq switch-to-prev-buffer-skip #'tab-plus--skip-foreign-buffer))
+          (should (equal tab-line-exclude-modes tab-plus-exclude-modes))
+          (should global-tab-line-mode)
+          (should (advice-member-p #'tab-plus--close-tab-advice 'tab-line-close-tab))
+          (should (eq (keymap-lookup tab-line-tab-map tab-plus--drag-key)
+                      #'tab-plus-mouse-move-tab))
+          (tab-plus-mode -1)
+          (should (eq tab-line-tabs-function old-tabs-fn))
+          (should (eq switch-to-prev-buffer-skip old-skip))
+          (should (equal tab-line-exclude-modes old-exclude))
+          (should (eq global-tab-line-mode old-global))
+          (should-not (advice-member-p #'tab-plus--close-tab-advice 'tab-line-close-tab))
+          (should-not (memq 'tab-plus--close-tear-off-view delete-frame-functions))
+          (should (eq (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t) old-drag)))
+      (tab-plus-mode -1))))
 
 ;; `tab-plus--git-state' runs from every tab-line render, so an error out of
 ;; `vc-git-state' (e.g. git's process spawn signalling because the
