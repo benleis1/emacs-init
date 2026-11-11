@@ -2476,25 +2476,20 @@ LSP guarantees a task's token is stable across its begin/report/end
 notifications, so membership here is tracked from begin to end.")
 
 (with-eval-after-load 'eglot
-  (advice-add 'eglot-handle-notification :around
-              (lambda (orig server method &rest args)
-                (if (not (eq method '$/progress))
-                    (apply orig server method args)
-                  (let* ((token (plist-get args :token))
-                         (value (plist-get args :value))
-                         (kind (plist-get value :kind))
-                         (title (plist-get value :title)))
-                    ;; `title' is only ever present on `begin' -- `report'/
-                    ;; `end' carry nil, so whether a token is suppressed
-                    ;; has to be decided now and remembered.
-                    (when (and (equal kind "begin")
-                               (member title eglot-suppressed-progress-titles))
-                      (puthash token t eglot--suppressed-progress-tokens))
-                    (let ((fully-suppressed (gethash token eglot--suppressed-progress-tokens)))
-                      (when (equal kind "end")
-                        (remhash token eglot--suppressed-progress-tokens))
-                      (unless fully-suppressed
-                        (apply orig server method args))))))))
+  (cl-defmethod eglot-handle-notification
+    :around (_server (_method (eql $/progress)) &key token value &allow-other-keys)
+    (let ((kind (plist-get value :kind))
+          (title (plist-get value :title)))
+      ;; `title' is only ever present on `begin' -- `report'/`end' carry nil,
+      ;; so whether a token is suppressed has to be decided now and remembered.
+      (when (and (equal kind "begin")
+                 (member title eglot-suppressed-progress-titles))
+        (puthash token t eglot--suppressed-progress-tokens))
+      (let ((fully-suppressed (gethash token eglot--suppressed-progress-tokens)))
+        (when (equal kind "end")
+          (remhash token eglot--suppressed-progress-tokens))
+        (unless fully-suppressed
+          (cl-call-next-method))))))
 
 ;; Simplify eglot's progress reporter to not throttle. Its more useful to see them all.
 (with-eval-after-load 'eglot
@@ -2513,17 +2508,15 @@ notifications, so membership here is tracked from begin to end.")
 
 ;; Report back warnings of interest after eglot loads
 (with-eval-after-load 'eglot
-  (advice-add 'eglot-handle-notification :before
-              (lambda (_server method &rest params)
-                (when (eq method 'window/logMessage)
-                  (let ((message (plist-get params :message)))
-                    (when (and (eql (plist-get params :type) 1)
-                               (not (seq-some (lambda (s) (string-search s message))
-                                              my-jdtls-suppressed-error-messages)))
-                      (display-warning
-                       'jdtls
-                       (format "jdtls error: %s" (car (split-string message "\n")))
-                       :warning)))))))
+  (cl-defmethod eglot-handle-notification
+    :before (_server (_method (eql window/logMessage)) &key type message &allow-other-keys)
+    (when (and (eql type 1)
+               (not (seq-some (lambda (s) (string-search s message))
+                              my-jdtls-suppressed-error-messages)))
+      (display-warning
+       'jdtls
+       (format "jdtls error: %s" (car (split-string message "\n")))
+       :warning))))
 
 ;; Context menu additions for eglot/dape
 (defun my-eglot-dape-context-menu (menu _click)
@@ -2641,15 +2634,18 @@ anything as useful as the `report' messages in between."
                           :kind)
                '("begin" "end"))))
 
+(defun my-jsonrpc-log-event (connection origin &rest plist)
+  "`jsonrpc-event-hook' replacement for `jsonrpc--log-event'.
+Drops uninteresting messages and adds a one-line :log-text summary."
+  (let ((message (plist-get plist :message)))
+    (unless (my-jsonrpc-skip-message-p message)
+      (when (and message (not (plist-get plist :log-text)))
+        (setq plist (plist-put plist :log-text (my-jsonrpc-log-text message))))
+      (apply #'jsonrpc--log-event connection origin plist))))
+
 (with-eval-after-load 'jsonrpc
-  (advice-add 'jsonrpc--log-event :around
-              (lambda (orig connection origin &rest plist)
-                (let ((message (plist-get plist :message)))
-                  (unless (my-jsonrpc-skip-message-p message)
-                    (when (and message (not (plist-get plist :log-text)))
-                      (setq plist (plist-put plist :log-text
-                                             (my-jsonrpc-log-text message))))
-                    (apply orig connection origin plist))))))
+  (remove-hook 'jsonrpc-event-hook #'jsonrpc--log-event)
+  (add-hook 'jsonrpc-event-hook #'my-jsonrpc-log-event))
 
 (defvar my-jdt-uri-cache-dir
   (locate-user-emacs-file "jdtls-decompiled")
@@ -3221,7 +3217,7 @@ The only action we do is close on click."
 
 (defun my-flymake--backends ()
   "Return the backends `flymake-diagnostic-functions' uses in this buffer.
-A `t' entry stands for the global value."
+A t entry stands for the global value."
   (let (backends)
     (dolist (b flymake-diagnostic-functions)
       (if (eq b t)
@@ -3408,11 +3404,12 @@ buffer to run disabled backends.\n")
 ;; Load all of my custom imenu extensions.
 (use-package ilist-plus
   ;; For local test/dev when turned on.
-  ;; :load-path "~/dev/ilist-plus/"
-  :ensure (:host github :repo "benleis1/ilist-plus")
+  :load-path "~/dev/ilist-plus/"
+  ;; :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
+  (setq ilist-plus-focus-after-activation nil)
   :config
   (ilist-plus-mode))
 
@@ -3914,6 +3911,9 @@ editable field."
 ;;; Config diagnostics
 ;; These are separate from here to make them easier to call independently.
 (require 'config-diagnostics)
+
+;; Temporary: logs frame/git events to ~/.emacs.d/hang-trace.log to track down a multi-frame hang.
+(require 'hang-trace)
 
 (my-profile-mark "menu config")
 ;;; Menu bar reorganization

@@ -27,17 +27,17 @@
 (eval-when-compile
   (let ((byte-compile-delete-errors byte-compile-delete-errors)
         (byte-optimize byte-optimize))
-   (when (bound-and-true-p byte-compile-current-file)
-    (add-to-list 'load-path (expand-file-name "elpaca/builds/elpaca" user-emacs-directory))
-    (require 'elpaca nil t)
-    ;; A bare `emacs -Q' compile (flymake) has no elpaca-use-package, so elpaca-style :ensure specs
-    ;; fail to parse and package.el refreshes the archives over the network.  Already active when
-    ;; compiling from the running session.
-    (when (and (featurep 'elpaca) (not (bound-and-true-p elpaca-use-package-mode)))
-      (require 'use-package)
-      (when (require 'elpaca-use-package nil t)
-        (elpaca-use-package-mode)
-        (with-no-warnings (setq use-package-always-ensure t)))))))
+    (when (bound-and-true-p byte-compile-current-file)
+      (add-to-list 'load-path (expand-file-name "elpaca/builds/elpaca" user-emacs-directory))
+      (require 'elpaca nil t)
+      ;; A bare `emacs -Q' compile (flymake) has no elpaca-use-package, so elpaca-style :ensure specs
+      ;; fail to parse and package.el refreshes the archives over the network.  Already active when
+      ;; compiling from the running session.
+      (when (and (featurep 'elpaca) (not (bound-and-true-p elpaca-use-package-mode)))
+	(require 'use-package)
+	(when (require 'elpaca-use-package nil t)
+          (elpaca-use-package-mode)
+          (with-no-warnings (setq use-package-always-ensure t)))))))
 (eval-when-compile (require 'frameset))
 ;; Load the packages init.el configures lazily, at compile time only, so the compiler sees their
 ;; variables and functions without a declaration here.  Costs nothing at startup.  Load order
@@ -45,12 +45,12 @@
 (eval-when-compile
   (let ((byte-compile-delete-errors byte-compile-delete-errors)
         (byte-optimize byte-optimize))
-   (dolist (feature '(tab-line ispell flyspell eglot jsonrpc flymake ediff ediff-util ediff-wind org org-agenda
-                     org-clock org-element dape dape-java treesit treesit-fold pulsar diff-hl
-                     markdown-mode imenu desktop dired diary-lib cl-lib zone
-                     pixel-scroll profiler modus-themes excorporate wikimode ghostel ghostel-links
-                     consult vertico marginalia yasnippet gcmh nerd-icons))
-    (condition-case nil (require feature nil t) (error nil)))))
+    (dolist (feature '(tab-line ispell flyspell eglot jsonrpc flymake ediff ediff-util ediff-wind org org-agenda
+				org-clock org-element dape dape-java treesit treesit-fold pulsar diff-hl
+				markdown-mode imenu desktop dired diary-lib cl-lib zone
+				pixel-scroll profiler modus-themes excorporate wikimode ghostel ghostel-links
+				consult vertico marginalia yasnippet gcmh nerd-icons))
+      (condition-case nil (require feature nil t) (error nil)))))
 
 ;; elpaca
 (declare-function elpaca--expand-declaration "elpaca")
@@ -100,6 +100,7 @@
 (declare-function eglot-path-to-uri "eglot")
 (declare-function eglot-shutdown "eglot")
 (declare-function jsonrpc-request "jsonrpc")
+(declare-function jsonrpc--log-event "jsonrpc")
 (declare-function treesit-fold--cons-add "treesit-fold")
 (declare-function treesit-fold--foldable-node-at-pos "treesit-fold")
 (declare-function treesit-fold-close "treesit-fold")
