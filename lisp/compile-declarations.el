@@ -153,6 +153,8 @@
 (declare-function modus-themes-get-color-value "modus-themes")
 (declare-function global-diff-hl-mode "diff-hl")
 (declare-function diff-hl-flydiff-mode "diff-hl-flydiff")
+(declare-function diff-hl-hunk-overlay-at "diff-hl")
+(declare-function dape-mouse-breakpoint-log "dape")
 (declare-function markdown--browse-url "markdown-mode")
 (declare-function markdown-imenu-create-nested-index "markdown-mode")
 (declare-function markdown-link-at-pos "markdown-mode")

@@ -827,6 +827,184 @@ Messages are collected into the variable `messages'."
   (should (fboundp 'jsonrpc--log-event))
   (should (advice--p (symbol-function 'jsonrpc--log-event))))
 
+;;; diff-hl context menus (init.el)
+;; diff-hl stays deferred in tests, so its hunk lookup is stubbed.
+
+(defmacro my/tests--with-hunk-at-line (hunk-p &rest body)
+  "Run BODY with `diff-hl-hunk-overlay-at' reporting a hunk iff HUNK-P."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function 'diff-hl-hunk-overlay-at)
+              (lambda (_pos) ,hunk-p)))
+     ,@body))
+
+(defun my/tests--menu-items (menu)
+  "Return the (menu-item LABEL COMMAND . PROPS) bindings of MENU in display order."
+  (let (items)
+    (map-keymap (lambda (_key binding) (push binding items)) menu)
+    (nreverse items)))
+
+(defun my/tests--menu-enabled (item)
+  "Whether menu ITEM is enabled."
+  (plist-get (nthcdr 3 item) :enable))
+
+(defun my/tests--gutter-click (pos x)
+  "A fake right-click at buffer POS, X pixels from the left of the text area."
+  (list 'down-mouse-3 (list (selected-window) pos (cons x 0) 0)))
+
+(ert-deftest my/test-diff-hl-menu-lists-actions-in-display-order ()
+  (my/tests--with-hunk-at-line t
+    (let ((items (my/tests--menu-items
+                  (my-diff-hl-add-menu-actions (make-sparse-keymap) 1))))
+      (should (equal '("Revert change" "Show old state" "Git blame")
+                     (mapcar #'cadr items))))))
+
+(ert-deftest my/test-diff-hl-menu-enables-everything-in-a-hunk ()
+  (my/tests--with-hunk-at-line t
+    (let ((items (my/tests--menu-items
+                  (my-diff-hl-add-menu-actions (make-sparse-keymap) 1))))
+      (should (cl-every #'my/tests--menu-enabled items)))))
+
+(ert-deftest my/test-diff-hl-menu-greys-out-hunk-actions-outside-a-hunk ()
+  (my/tests--with-hunk-at-line nil
+    (let ((items (my/tests--menu-items
+                  (my-diff-hl-add-menu-actions (make-sparse-keymap) 1))))
+      (should-not (my/tests--menu-enabled (nth 0 items)))
+      (should-not (my/tests--menu-enabled (nth 1 items)))
+      (should (my/tests--menu-enabled (nth 2 items))))))
+
+(ert-deftest my/test-diff-hl-menu-action-runs-at-the-clicked-line ()
+  (my/tests--with-hunk-at-line t
+    (with-temp-buffer
+      (insert "one\ntwo\nthree\n")
+      (goto-char (point-min))
+      (let* (seen
+             (menu (my-diff-hl-add-menu-actions (make-sparse-keymap) 5))
+             (show-old (nth 1 (my/tests--menu-items menu))))
+        (cl-letf (((symbol-function 'diff-hl-show-hunk)
+                   (lambda () (interactive) (setq seen (point)))))
+          (funcall (nth 2 show-old)))
+        (should (= 5 seen))))))
+
+(ert-deftest my/test-diff-hl-menu-keeps-existing-entries ()
+  (my/tests--with-hunk-at-line t
+    (let ((menu (make-sparse-keymap)))
+      (define-key menu [other] '(menu-item "Other" ignore))
+      (my-diff-hl-add-menu-actions menu 1)
+      (should (equal '("Revert change" "Show old state" "Git blame" "Other")
+                     (mapcar #'cadr (my/tests--menu-items menu)))))))
+
+(ert-deftest my/test-diff-hl-gutter-menu-adds-actions-on-a-line-number-click ()
+  (my/tests--with-hunk-at-line t
+    (with-temp-buffer
+      (insert "one\ntwo\n")
+      (setq-local diff-hl-mode t)
+      (display-line-numbers-mode 1)
+      (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+        (let ((menu (my-diff-hl-gutter-context-menu
+                     (make-sparse-keymap) (my/tests--gutter-click 6 2))))
+          (should (= 3 (length (my/tests--menu-items menu)))))))))
+
+(ert-deftest my/test-diff-hl-gutter-menu-ignores-clicks-in-the-text ()
+  (my/tests--with-hunk-at-line t
+    (with-temp-buffer
+      (insert "one\ntwo\n")
+      (setq-local diff-hl-mode t)
+      (display-line-numbers-mode 1)
+      (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+        (let ((menu (my-diff-hl-gutter-context-menu
+                     (make-sparse-keymap) (my/tests--gutter-click 6 40))))
+          (should-not (my/tests--menu-items menu)))))))
+
+(ert-deftest my/test-diff-hl-gutter-menu-needs-diff-hl-and-line-numbers ()
+  (my/tests--with-hunk-at-line t
+    (with-temp-buffer
+      (insert "one\ntwo\n")
+      (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+        (let ((click (my/tests--gutter-click 6 2)))
+          (setq-local diff-hl-mode nil)
+          (display-line-numbers-mode 1)
+          (should-not (my/tests--menu-items
+                       (my-diff-hl-gutter-context-menu (make-sparse-keymap) click)))
+          (setq-local diff-hl-mode t)
+          (display-line-numbers-mode -1)
+          (should-not (my/tests--menu-items
+                       (my-diff-hl-gutter-context-menu (make-sparse-keymap) click))))))))
+
+(ert-deftest my/test-diff-hl-gutter-menu-targets-the-start-of-the-clicked-line ()
+  (my/tests--with-hunk-at-line t
+    (with-temp-buffer
+      (insert "one\ntwo\n")
+      (let (seen)
+        (setq-local diff-hl-mode t)
+        (display-line-numbers-mode 1)
+        (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4))
+                  ((symbol-function 'diff-hl-show-hunk)
+                   (lambda () (interactive) (setq seen (point)))))
+          (let ((menu (my-diff-hl-gutter-context-menu
+                       (make-sparse-keymap) (my/tests--gutter-click 7 2))))
+            (funcall (nth 2 (nth 1 (my/tests--menu-items menu))))))
+        (should (= 5 seen))))))
+
+(ert-deftest my/test-diff-hl-fringe-menu-pops-up-the-actions-for-the-clicked-line ()
+  (my/tests--with-hunk-at-line nil
+    (with-temp-buffer
+      (insert "one\ntwo\n")
+      (let (popped)
+        (cl-letf (((symbol-function 'posn-set-point) (lambda (_) (goto-char 5)))
+                  ((symbol-function 'popup-menu) (lambda (menu &rest _) (setq popped menu))))
+          (my-diff-hl-fringe-menu (list 'mouse-3 (list nil 5 '(0 . 0) 0))))
+        (let ((items (my/tests--menu-items popped)))
+          (should (equal '("Revert change" "Show old state" "Git blame")
+                         (mapcar #'cadr items)))
+          (should (my/tests--menu-enabled (nth 2 items))))))))
+
+(ert-deftest my/test-line-number-click-pos-returns-the-start-of-the-clicked-line ()
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n")
+    (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+      (should (= 5 (my-line-number-click-pos (my/tests--gutter-click 7 2))))
+      (should (= 1 (my-line-number-click-pos (my/tests--gutter-click 1 0)))))))
+
+(ert-deftest my/test-line-number-click-pos-is-nil-past-the-gutter ()
+  (with-temp-buffer
+    (insert "one\ntwo\n")
+    (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+      (should-not (my-line-number-click-pos (my/tests--gutter-click 6 4)))
+      (should-not (my-line-number-click-pos (my/tests--gutter-click 6 40))))))
+
+(ert-deftest my/test-line-number-click-pos-is-nil-without-a-buffer-position ()
+  (cl-letf (((symbol-function 'line-number-display-width) (lambda (&rest _) 4)))
+    (should-not (my-line-number-click-pos
+                 (list 'down-mouse-3 (list (selected-window) nil '(2 . 0) 0))))))
+
+(ert-deftest my/test-diff-hl-blame-line-annotates-from-the-current-line ()
+  (let (args)
+    (cl-letf (((symbol-function 'vc-annotate) (lambda (&rest a) (setq args a)))
+              ((symbol-function 'vc-working-revision) (lambda (_file) "abc123"))
+              ((symbol-function 'vc-backend) (lambda (_file) 'Git)))
+      (with-temp-buffer
+        (setq buffer-file-name "/repo/file.el")
+        (my-diff-hl-blame-line)
+        (set-buffer-modified-p nil)))
+    ;; A nil MOVE-POINT-TO makes `vc-annotate' use the current line.
+    (should (equal '("/repo/file.el" "abc123" nil nil nil Git) args))))
+
+(ert-deftest my/test-diff-hl-blame-line-does-not-need-a-hunk ()
+  (my/tests--with-hunk-at-line nil
+    (let (called)
+      (cl-letf (((symbol-function 'vc-annotate) (lambda (&rest _) (setq called t)))
+                ((symbol-function 'vc-working-revision) (lambda (_file) "abc123"))
+                ((symbol-function 'vc-backend) (lambda (_file) 'Git)))
+        (with-temp-buffer
+          (setq buffer-file-name "/repo/file.el")
+          (my-diff-hl-blame-line)
+          (set-buffer-modified-p nil)))
+      (should called))))
+
+(ert-deftest my/test-diff-hl-blame-line-requires-a-file-buffer ()
+  (with-temp-buffer
+    (should-error (my-diff-hl-blame-line) :type 'user-error)))
+
 ;;; Config-wide checks: byte-compilation and references
 
 (defconst my/repo-root

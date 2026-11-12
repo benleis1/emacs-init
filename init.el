@@ -772,10 +772,6 @@
   (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors)
   (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
 
-;; Make any locally-defined themes which live in the lisp subdirectory discoverable by
-;; `load-theme'/`M-x customize-themes' without needing a package wrapper.
-(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
-
 ;; Currently folio is my main theme.
 (use-package folio-theme
   :ensure (:host github :repo "kn66/folio-theme.el")
@@ -1240,8 +1236,68 @@ So opening a buffer doesn't block on starting Aspell."
 (use-package diff-hl
   :ensure t
   :defer t
+  :bind (:map diff-hl-mode-map
+              ("<left-fringe> <mouse-3>" . my-diff-hl-fringe-menu)
+              ("<right-fringe> <mouse-3>" . my-diff-hl-fringe-menu))
   :config
-  (my-diff-hl-update-faces))
+  (my-diff-hl-update-faces)
+  (add-hook 'context-menu-functions #'my-diff-hl-gutter-context-menu))
+
+;; Clicks on the line-number gutter are reported as ordinary text-area clicks
+;; whose X pixel offset is measured from the left edge of the text area (which
+;; includes the line-number glyphs), so a click is in the gutter when its X is
+;; less than the line-number display's pixel width.
+(defun my-line-number-click-pos (click)
+  "Return the start of the line whose number CLICK landed on, or nil."
+  (let* ((posn (event-end click))
+         (x (car (posn-x-y posn))))
+    (when (and x (posn-point posn)
+               (< x (line-number-display-width t)))
+      (save-excursion
+        (goto-char (posn-point posn))
+        (line-beginning-position)))))
+
+(defun my-diff-hl-blame-line ()
+  "Annotate the current file with `vc-annotate', starting at the current line."
+  (interactive)
+  (let ((file (or buffer-file-name (user-error "Buffer is not visiting a file"))))
+    (vc-annotate file (vc-working-revision file) nil nil nil (vc-backend file))))
+
+(defconst my-diff-hl-menu-actions
+  '(("Revert change" diff-hl-revert-hunk t)
+    ("Show old state" diff-hl-show-hunk t)
+    ("Git blame" my-diff-hl-blame-line nil))
+  "Context menu actions as (LABEL COMMAND HUNK-ONLY), in display order.
+HUNK-ONLY actions are greyed out unless the line is part of a diff-hl hunk.")
+
+(defun my-diff-hl-add-menu-actions (menu pos)
+  "Add the `my-diff-hl-menu-actions' for the line at POS to keymap MENU."
+  (let ((in-hunk (and (diff-hl-hunk-overlay-at pos) t)))
+    ;; `define-key' prepends, so add in reverse to keep the display order.
+    (dolist (action (reverse my-diff-hl-menu-actions))
+      (pcase-let ((`(,label ,command ,hunk-only) action))
+        (define-key menu (vector command)
+                    `(menu-item ,label
+                                ,(lambda ()
+                                   (interactive)
+                                   (goto-char pos)
+                                   (call-interactively command))
+                                :enable ,(or in-hunk (not hunk-only)))))))
+  menu)
+
+(defun my-diff-hl-fringe-menu (event)
+  "Pop up a context menu for the line clicked in the fringe at EVENT."
+  (interactive "e")
+  (posn-set-point (event-start event))
+  (popup-menu (my-diff-hl-add-menu-actions (make-sparse-keymap "Hunk") (point))))
+
+(defun my-diff-hl-gutter-context-menu (menu click)
+  "Add the diff-hl actions to MENU when CLICK is on a line number."
+  (when (and (bound-and-true-p diff-hl-mode)
+             (bound-and-true-p display-line-numbers-mode))
+    (when-let* ((pos (my-line-number-click-pos click)))
+      (my-diff-hl-add-menu-actions menu pos)))
+  menu)
 
 (my-profile-mark "markdown mode")
 ;;; markdown mode
@@ -2340,25 +2396,15 @@ See `my-ghostel-desktop-persistent-info' for the format."
       (or type (treesit-fold-summary-javadoc doc-str)))))
 
 ;; Add a "Fold Line" entry to the right-click context menu when the click
-;; lands on the line-number gutter. Clicks there are reported as ordinary
-;; text-area clicks whose X pixel offset is measured from the left edge of
-;; the text area (which includes the line-number glyphs), so a click is in
-;; the gutter when its X is less than the line-number display's pixel width.
+;; lands on the line-number gutter (see `my-line-number-click-pos').
 (defun context-menu-fold-line (menu click)
   "Add a fold-line entry to MENU when CLICK lands on the line-number gutter."
   (when (and (bound-and-true-p display-line-numbers-mode)
              (treesit-available-p)
              (treesit-parser-list)
              (treesit-fold-usable-mode-p))
-    (let* ((posn (event-end click))
-           (x (car (posn-x-y posn)))
-           (pos (and (posn-point posn)
-                     (save-excursion
-                       (goto-char (posn-point posn))
-                       (line-beginning-position)))))
-      (when (and x pos
-                 (< x (line-number-display-width t))
-                 (treesit-fold--foldable-node-at-pos pos))
+    (let ((pos (my-line-number-click-pos click)))
+      (when (and pos (treesit-fold--foldable-node-at-pos pos))
         (define-key menu [treesit-fold-line]
 		    `(menu-item "Fold Line"
 				,(lambda ()
@@ -2773,17 +2819,37 @@ cached `-data' workspace, and reconnects."
 
 ;;;; DAPE debugging
 
+;; `dape-breakpoint-mode-map' outranks `diff-hl-mode-map' for fringe clicks, so
+;; without this a right-click in a Java buffer's fringe prompts for a log
+;; breakpoint instead of showing the hunk menu.
+(defun my-fringe-context-menu (event)
+  "Show the diff-hl menu for a fringe click at EVENT.
+If there is no diff hl marker add a dape log breakpoint."
+  (interactive "e")
+  (if (bound-and-true-p diff-hl-mode)
+      (my-diff-hl-fringe-menu event)
+    (dape-mouse-breakpoint-log event)))
+
 ;; Use dape after eglot is loaded
 (use-package dape
   :ensure t
   :after eglot
   :config
 
+  (define-key dape-breakpoint-mode-map [left-fringe mouse-3] #'my-fringe-context-menu)
+
   (set-face-attribute 'dape-breakpoint-face nil
                       :foreground (modus-themes-get-color-value 'red-syntax t)
 		      :weight 'bold)
-  ;; turn on support for adding breakpoints via clicking on the fringe
-  (dape-breakpoint-global-mode))
+  ;; Turn on support for adding breakpoints via clicking on the fringe, but only
+  ;; for Java buffers: `dape-breakpoint-global-mode' enables it in every
+  ;; `prog-mode' buffer and its click bindings then shadow other fringe menus
+  ;; such as diff-hl's.  Enabling a globalized mode also covers buffers that
+  ;; are already open, which matters since dape loads after the first Java buffer.
+  (define-globalized-minor-mode my-dape-java-breakpoint-mode dape-breakpoint-mode
+    dape-breakpoint-mode
+    :predicate '(java-mode java-ts-mode))
+  (my-dape-java-breakpoint-mode 1))
 
 ;; Visual debug toolbar (continue/step/restart/quit buttons) for dape.  Rendered
 ;;  as a header-line in the `*dape-repl*' buffer rather than via
@@ -2894,8 +2960,8 @@ cached `-data' workspace, and reconnects."
 
   (defun my-dape--gutter-ensure-margin ()
     "Widen the left margin (never shrink it) to fit the gutter arrows.
-Leaves room for flymake's own indicator (a fixed width of 2, set
-above) plus ours."
+  Leaves room for flymake's own indicator (a fixed width of 2, set
+					     above) plus ours."
     (setq left-margin-width (max (or left-margin-width 0) 2))
     (dolist (win (get-buffer-window-list nil nil t))
       (set-window-margins win left-margin-width (cdr (window-margins win)))))
@@ -2917,7 +2983,7 @@ above) plus ours."
 
   (defun my-junit-test-gutter-refresh ()
     "Mark every jdtls-discovered JUnit test method with a clickable
-green arrow in the left margin."
+  green arrow in the left margin."
     (interactive)
     (my-junit-test-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -2937,14 +3003,14 @@ green arrow in the left margin."
 
   (defun my-class-run-gutter-refresh ()
     "Mark the buffer's JUnit test class declaration with a clickable
-green arrow in the left margin that runs every test in the file, if
-jdtls-discovered any runnable test method in it.
+  green arrow in the left margin that runs every test in the file, if
+  jdtls-discovered any runnable test method in it.
 
-Deliberately not gated on jdtls's own \"is this class runnable\"
-determination (`vscode.java.resolveMainClass') -- that's known to
-get it wrong. The presence of a JUnit test method is already
-report via the same codelens query used for the method-level
-arrows is a more reliable signal."
+  Deliberately not gated on jdtls's own \"is this class runnable\"
+  determination (`vscode.java.resolveMainClass') -- that's known to
+  get it wrong. The presence of a JUnit test method is already
+  report via the same codelens query used for the method-level
+  arrows is a more reliable signal."
     (interactive)
     (my-class-run-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -2965,8 +3031,8 @@ arrows is a more reliable signal."
 
   (defun my-dape--junit-gutter-refresh-when-ready (buf &optional delay)
     "Refresh both JUnit gutters in BUF once jdtls is actually capable,
-retrying with the same gradually increasing, never-ending backoff as
-`dape-java-junit-fetch-items-async' if it isn't yet."
+  retrying with the same gradually increasing, never-ending backoff as
+  `dape-java-junit-fetch-items-async' if it isn't yet."
     (when (buffer-live-p buf)
       (with-current-buffer buf
         (if (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -2981,8 +3047,8 @@ retrying with the same gradually increasing, never-ending backoff as
   (with-no-warnings
     (define-minor-mode my-dape-run-gutter-mode
       "Show clickable green arrows in the left margin next to every
-jdtls-discovered runnable JUnit test method, and at the test class's
-declaration if any such methods were found."
+  jdtls-discovered runnable JUnit test method, and at the test class's
+  declaration if any such methods were found."
       :lighter nil
       :keymap (let ((m (make-sparse-keymap)))
                 (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
@@ -3327,7 +3393,7 @@ does not use."
                               'face '(bold error))))
         (when unused
           (princ "Global backends not used here (the buffer-local value of \
-`flymake-diagnostic-functions' lacks `t'):\n\n")
+						     `flymake-diagnostic-functions' lacks `t'):\n\n")
           (dolist (b unused) (my-flymake--princ-backend b buffer)))
         (when orphans
           (princ "Backends with leftover state that are no longer registered:\n\n")
@@ -3340,7 +3406,7 @@ does not use."
         (insert-text-button "log" 'type 'my-flymake-button
                             'my-action #'flymake-switch-to-log-buffer 'my-data nil)
         (princ " for backend messages, or use C-u M-x flymake-start in the \
-buffer to run disabled backends.\n")
+  buffer to run disabled backends.\n")
         (princ "\n--------------------\n\n")
         (princ (format "Emacs version:    %s\n" emacs-version))
         (princ (format "System:           %s\n" system-configuration))
@@ -3564,7 +3630,7 @@ buffer to run disabled backends.\n")
   ;; Capture window state and turn off my-modeline
   (defun my-ediff-bsh ()
     "Function to be called before any buffers or window setup for
-    ediff."
+  ediff."
     (setq my-ediff-buffers '())
     (setq my-ediff-bwin-config (current-window-configuration))
     ;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
@@ -3765,7 +3831,7 @@ buffer to run disabled backends.\n")
 (defun my-select-font ()
   "Read a font from the user without changing any frame's font.
 Uses the native font dialog via `x-select-font' when available,
-falling back to `mouse-select-font'."
+  falling back to `mouse-select-font'."
   (if (fboundp 'x-select-font)
       (x-select-font)
     (mouse-select-font)))
