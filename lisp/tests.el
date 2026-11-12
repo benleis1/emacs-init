@@ -958,6 +958,23 @@ Messages are collected into the variable `messages'."
                          (mapcar #'cadr items)))
           (should (my/tests--menu-enabled (nth 2 items))))))))
 
+(ert-deftest my/test-fringe-context-menu-prefers-diff-hl ()
+  (let (called)
+    (cl-letf (((symbol-function 'my-diff-hl-fringe-menu) (lambda (_e) (push 'diff-hl called)))
+              ((symbol-function 'dape-mouse-breakpoint-log) (lambda (_e) (push 'dape called))))
+      (with-temp-buffer
+        (setq-local diff-hl-mode t)
+        (my-fringe-context-menu 'event)))
+    (should (equal '(diff-hl) called))))
+
+(ert-deftest my/test-fringe-context-menu-falls-back-to-a-dape-log-breakpoint ()
+  (let (called)
+    (cl-letf (((symbol-function 'my-diff-hl-fringe-menu) (lambda (_e) (push 'diff-hl called)))
+              ((symbol-function 'dape-mouse-breakpoint-log) (lambda (_e) (push 'dape called))))
+      (with-temp-buffer
+        (my-fringe-context-menu 'event)))
+    (should (equal '(dape) called))))
+
 (ert-deftest my/test-line-number-click-pos-returns-the-start-of-the-clicked-line ()
   (with-temp-buffer
     (insert "one\ntwo\nthree\n")
