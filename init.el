@@ -1094,7 +1094,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
 (my-modeline-mode 1)
 
 ;; Load all of my custom tab-line config.
-(load "tab-plus")
+(require 'tab-plus)
 (tab-plus-mode 1)
 
 (my-profile-mark "Global key bindings")
@@ -2637,7 +2637,8 @@ anything as useful as the `report' messages in between."
 
 (defun my-jsonrpc-log-event (connection origin &rest plist)
   "`jsonrpc-event-hook' replacement for `jsonrpc--log-event'.
-Drops uninteresting messages and adds a one-line :log-text summary."
+Drops uninteresting messages and adds a one-line log-text summary.
+CONNECTION, ORIGIN are pushed through. PLIST contains the message payload."
   (let ((message (plist-get plist :message)))
     (unless (my-jsonrpc-skip-message-p message)
       (when (and message (not (plist-get plist :log-text)))
