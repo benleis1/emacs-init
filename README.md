@@ -288,6 +288,8 @@ Variables worth knowing about:
 - [Modus theme configuration.](#modus-theme-configuration)
   - [my-theme-margin-color](#my-theme-margin-color)
   - [my-reload-fonts](#my-reload-fonts)
+  - [my-ghostel-apply-terminal-colors](#my-ghostel-apply-terminal-colors)
+  - [my-ghostel-reset-terminal-colors](#my-ghostel-reset-terminal-colors)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [my-pixel-scroll-setup](#my-pixel-scroll-setup)
   - [my-before-save-hook](#my-before-save-hook)
@@ -304,11 +306,17 @@ Variables worth knowing about:
 - [diff-hl](#diff-hl)
   - [my-diff-hl-enable-if-vc](#my-diff-hl-enable-if-vc)
   - [my-diff-hl-update-faces](#my-diff-hl-update-faces)
+  - [my-line-number-click-pos](#my-line-number-click-pos)
+  - [my-diff-hl-blame-line](#my-diff-hl-blame-line)
+  - [my-diff-hl-add-menu-actions](#my-diff-hl-add-menu-actions)
+  - [my-diff-hl-fringe-menu](#my-diff-hl-fringe-menu)
+  - [my-diff-hl-gutter-context-menu](#my-diff-hl-gutter-context-menu)
 - [markdown mode](#markdown-mode)
   - [my-markdown-translate-filename-add-md-extension](#my-markdown-translate-filename-add-md-extension)
   - [insert-date](#insert-date)
   - [my-markdown-liquid-post-url-at-point](#my-markdown-liquid-post-url-at-point)
   - [my-markdown-follow-liquid-post-url](#my-markdown-follow-liquid-post-url)
+  - [my-markdown-preview-base-href](#my-markdown-preview-base-href)
   - [my-markdown-imenu-dot-glyph](#my-markdown-imenu-dot-glyph)
   - [my-markdown-imenu-create-nested-index](#my-markdown-imenu-create-nested-index)
   - [my-markdown-frontmatter-bounds](#my-markdown-frontmatter-bounds)
@@ -354,11 +362,13 @@ Variables worth knowing about:
     - [my-jsonrpc-elide-token](#my-jsonrpc-elide-token)
     - [my-jsonrpc-log-text](#my-jsonrpc-log-text)
     - [my-jsonrpc-skip-message-p](#my-jsonrpc-skip-message-p)
+    - [my-jsonrpc-log-event](#my-jsonrpc-log-event)
     - [my-jdt-uri-handler](#my-jdt-uri-handler)
     - [my-jdtls-cache-dir](#my-jdtls-cache-dir)
     - [my-jdtls-clean-workspace](#my-jdtls-clean-workspace)
   - [eglot for Python](#eglot-for-python)
   - [DAPE debugging](#dape-debugging)
+    - [my-fringe-context-menu](#my-fringe-context-menu)
     - [my-ert-gutter--set-margin](#my-ert-gutter--set-margin)
     - [my-ert-gutter-clear](#my-ert-gutter-clear)
     - [my-ert-gutter--find-tests](#my-ert-gutter--find-tests)
@@ -367,9 +377,13 @@ Variables worth knowing about:
     - [my-get-test-annotations](#my-get-test-annotations)
   - [flymake](#flymake)
     - [flymake-buffer-quit](#flymake-buffer-quit)
+    - [my-flymake--backends](#my-flymake--backends)
+    - [my-flymake--backend-report](#my-flymake--backend-report)
+    - [my-flymake--princ-backend](#my-flymake--princ-backend)
+    - [my-flymake-diagnostics](#my-flymake-diagnostics)
   - [elisp](#elisp)
 - [SQL](#sql)
-- [imenu-list](#imenu-list)
+- [ilist-plus](#ilist-plus)
   - [my-desktop-mark-secondary-frame](#my-desktop-mark-secondary-frame)
   - [my-desktop-autosave](#my-desktop-autosave)
   - [my-desktop-start-autosave](#my-desktop-start-autosave)
@@ -964,10 +978,50 @@ Add the font changes onto the enable theme hook
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 ```
 
-Make any locally-defined themes which live in the lisp subdirectory discoverable by
-`load-theme'/`M-x customize-themes' without needing a package wrapper.
+TEMPTEMP This is experimental and may be removed but it will not have any effect unless
+terminal-colors is loaded which I am only doing manually for now.
+
+terminal-colors (modus mode) only maps the 16 ANSI colors into the modus palette.  The terminal
+default foreground/background that ghostel draws with comes from `ghostel-default', so follow the
+active terminal-colors theme there and put the original face spec back on reset.
 ```
-(add-to-list 'custom-theme-load-path (expand-file-name "lisp" user-emacs-directory))
+(defvar my-ghostel-default-saved-spec nil
+  "This holds the original override spec of `ghostel-default'.")
+```
+
+## my-ghostel-apply-terminal-colors
+>Set `ghostel-default' to the terminal-colors default foreground and background.
+
+```
+(defun my-ghostel-apply-terminal-colors ()
+  "Set `ghostel-default' to the terminal-colors default foreground and background."
+  (when (and (bound-and-true-p terminal-colors-modus-mode)
+             (facep 'ghostel-default) terminal-colors--foreground terminal-colors--background)
+    (unless my-ghostel-default-saved-spec
+      (setq my-ghostel-default-saved-spec (list (get 'ghostel-default 'face-override-spec))))
+    (face-spec-set 'ghostel-default
+                   `((t :foreground ,terminal-colors--foreground
+                        :background ,terminal-colors--background))
+                   'face-override-spec)
+    (ghostel-sync-theme)))
+```
+
+## my-ghostel-reset-terminal-colors
+>Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'.
+
+```
+(defun my-ghostel-reset-terminal-colors ()
+  "Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'."
+  (when my-ghostel-default-saved-spec
+    (face-spec-set 'ghostel-default (car my-ghostel-default-saved-spec) 'face-override-spec)
+    (setq my-ghostel-default-saved-spec nil)
+    (ghostel-sync-theme)))
+
+(with-eval-after-load 'terminal-colors
+  (add-hook 'terminal-colors--after-load-hook #'my-ghostel-apply-terminal-colors)
+  (add-hook 'terminal-colors--reset-hook #'my-ghostel-reset-terminal-colors)
+  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors)
+  (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
 ```
 
 Currently folio is my main theme.
@@ -1163,6 +1217,17 @@ Revert most buffers when the underlying file has changed
 (global-auto-revert-mode 1)
 ```
 
+Ignore attribute-only file notifications.  With `auto-revert-check-vc-info',
+each one runs `vc-refresh-state' -> git, and git reading a modified file
+changes its atime, which fires another kqueue attrib event: a ~25/s loop of
+synchronous git calls that starves the UI.  Real edits arrive as `changed'.
+```
+(define-advice auto-revert-notify-handler (:around (orig event) my-ignore-attrib)
+  "Drop `attribute-changed' EVENTs to break the git/atime feedback loop."
+  (unless (eq (nth 1 event) 'attribute-changed)
+    (funcall orig event)))
+```
+
 Define a size threshold currently 50 megabytes in bytes) for autorevert
 larger files will be managed manually. These are typically logs which may
 be live and constantly reloading them is disruptive.
@@ -1304,7 +1369,7 @@ Brief pulse/highlight for various motions
   (setq pulsar-highlight-face 'pulsar-magenta)
   ;; explicit pulse needed because clicking on an entry in ilist is just a push-button and that's too
   ;; generic for the pulsar-pulse-functions list
-  (add-hook 'imenu-list-after-jump-hook #'pulsar-pulse-line t)
+  (add-hook 'ilist-plus-after-jump-hook #'pulsar-pulse-line t)
   ;; Likewise, clicking a diagnostic runs `push-button', not a command pulsar watches.
   (advice-add 'flymake-goto-diagnostic :after (lambda (&rest _) (pulsar-pulse-line))))
 
@@ -1366,7 +1431,8 @@ fully activated first.
 
 Load all of my custom tab-line config.
 ```
-(load "tab-plus")
+(require 'tab-plus)
+(tab-plus-mode 1)
 
 (my-profile-mark "Global key bindings")
 ```
@@ -1379,7 +1445,7 @@ Control + a number key which are closer than the function keys and not in use.
 (global-set-key (kbd "C-1") 'treemacs)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-3") 'wikimode-toggle)
-(global-set-key (kbd "C-\\") 'imenu-list-smart-toggle)
+(global-set-key (kbd "C-\\") 'ilist-plus-toggle)
 (global-set-key (kbd "C-<tab>") 'tab-line-switch-to-next-tab)
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
 (global-set-key (kbd "s-]") 'tab-plus-next-view)
@@ -1569,8 +1635,93 @@ the current theme and the hook keeps it current across theme switches.
 (use-package diff-hl
   :ensure t
   :defer t
+  :bind (:map diff-hl-mode-map
+              ("<left-fringe> <mouse-3>" . my-diff-hl-fringe-menu)
+              ("<right-fringe> <mouse-3>" . my-diff-hl-fringe-menu))
   :config
-  (my-diff-hl-update-faces))
+  (my-diff-hl-update-faces)
+  (add-hook 'context-menu-functions #'my-diff-hl-gutter-context-menu))
+```
+
+## my-line-number-click-pos
+>Return the start of the line whose number CLICK landed on, or nil.
+
+Clicks on the line-number gutter are reported as ordinary text-area clicks
+whose X pixel offset is measured from the left edge of the text area (which
+includes the line-number glyphs), so a click is in the gutter when its X is
+less than the line-number display's pixel width.
+```
+(defun my-line-number-click-pos (click)
+  "Return the start of the line whose number CLICK landed on, or nil."
+  (let* ((posn (event-end click))
+         (x (car (posn-x-y posn))))
+    (when (and x (posn-point posn)
+               (< x (line-number-display-width t)))
+      (save-excursion
+        (goto-char (posn-point posn))
+        (line-beginning-position)))))
+```
+
+## my-diff-hl-blame-line
+>Annotate the current file with `vc-annotate', starting at the current line.
+
+```
+(defun my-diff-hl-blame-line ()
+  "Annotate the current file with `vc-annotate', starting at the current line."
+  (interactive)
+  (let ((file (or buffer-file-name (user-error "Buffer is not visiting a file"))))
+    (vc-annotate file (vc-working-revision file) nil nil nil (vc-backend file))))
+
+(defconst my-diff-hl-menu-actions
+  '(("Revert change" diff-hl-revert-hunk t)
+    ("Show old state" diff-hl-show-hunk t)
+    ("Git blame" my-diff-hl-blame-line nil))
+  "Context menu actions as (LABEL COMMAND HUNK-ONLY), in display order.
+HUNK-ONLY actions are greyed out unless the line is part of a diff-hl hunk.")
+```
+
+## my-diff-hl-add-menu-actions
+>Add the `my-diff-hl-menu-actions' for the line at POS to keymap MENU.
+
+```
+(defun my-diff-hl-add-menu-actions (menu pos)
+  "Add the `my-diff-hl-menu-actions' for the line at POS to keymap MENU."
+  (let ((in-hunk (and (diff-hl-hunk-overlay-at pos) t)))
+    ;; `define-key' prepends, so add in reverse to keep the display order.
+    (dolist (action (reverse my-diff-hl-menu-actions))
+      (pcase-let ((`(,label ,command ,hunk-only) action))
+        (define-key menu (vector command)
+                    `(menu-item ,label
+                                ,(lambda ()
+                                   (interactive)
+                                   (goto-char pos)
+                                   (call-interactively command))
+                                :enable ,(or in-hunk (not hunk-only)))))))
+  menu)
+```
+
+## my-diff-hl-fringe-menu
+>Pop up a context menu for the line clicked in the fringe at EVENT.
+
+```
+(defun my-diff-hl-fringe-menu (event)
+  "Pop up a context menu for the line clicked in the fringe at EVENT."
+  (interactive "e")
+  (posn-set-point (event-start event))
+  (popup-menu (my-diff-hl-add-menu-actions (make-sparse-keymap "Hunk") (point))))
+```
+
+## my-diff-hl-gutter-context-menu
+>Add the diff-hl actions to MENU when CLICK is on a line number.
+
+```
+(defun my-diff-hl-gutter-context-menu (menu click)
+  "Add the diff-hl actions to MENU when CLICK is on a line number."
+  (when (and (bound-and-true-p diff-hl-mode)
+             (bound-and-true-p display-line-numbers-mode))
+    (when-let* ((pos (my-line-number-click-pos click)))
+      (my-diff-hl-add-menu-actions menu pos)))
+  menu)
 
 (my-profile-mark "markdown mode")
 ```
@@ -1683,6 +1834,27 @@ so this can't run until markdown-follow-link-at-point actually exists.
 ```
 (with-eval-after-load 'markdown-mode
   (advice-add 'markdown-follow-link-at-point :around #'my-markdown-follow-liquid-post-url))
+```
+
+## my-markdown-preview-base-href
+>Call ORIG-FN with ARGS, adding a <base> tag for the visited file's directory.
+`markdown-preview' opens a temp copy of the HTML, so relative image paths
+would otherwise resolve against the temp directory.
+
+```
+(defun my-markdown-preview-base-href (orig-fn &rest args)
+  "Call ORIG-FN with ARGS, adding a <base> tag for the visited file's directory.
+`markdown-preview' opens a temp copy of the HTML, so relative image paths
+would otherwise resolve against the temp directory."
+  (let ((markdown-xhtml-header-content
+         (if buffer-file-name
+             (format "%s<base href=\"%s\">" markdown-xhtml-header-content
+                     (url-encode-url (concat "file://" (file-name-directory buffer-file-name))))
+           markdown-xhtml-header-content)))
+    (apply orig-fn args)))
+
+(with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-preview :around #'my-markdown-preview-base-href))
 
 (add-hook 'markdown-mode-hook 'markdown-toggle-inline-images)
 (add-hook 'markdown-mode-hook 'stripe-table-mode)
@@ -2720,6 +2892,7 @@ the next prompt reports its title."
     (ghostel-buffer-name-by-title title)))
 
 (defvar ghostel--command-running)
+(defvar ghostel--managed-buffer-name)
 ```
 
 ## my-ghostel-tab-name
@@ -2782,6 +2955,8 @@ See `my-ghostel-desktop-persistent-info' for the format."
     (with-current-buffer buffer
       ;; Take the saved name so the by-name view lookup after desktop-read hits.
       (rename-buffer buffer-name t)
+      ;; Otherwise ghostel sees a manual rename and stops renaming on title changes.
+      (setq ghostel--managed-buffer-name (buffer-name))
       (setq my-ghostel-user-title (plist-get misc :title)
             tab-plus-pinned-project (plist-get misc :project)
             ghostel--buffer-identity (or (plist-get misc :identity) (buffer-name))))
@@ -2919,10 +3094,7 @@ from `setup-common-java' below.
 >Add a fold-line entry to MENU when CLICK lands on the line-number gutter.
 
 Add a "Fold Line" entry to the right-click context menu when the click
-lands on the line-number gutter. Clicks there are reported as ordinary
-text-area clicks whose X pixel offset is measured from the left edge of
-the text area (which includes the line-number glyphs), so a click is in
-the gutter when its X is less than the line-number display's pixel width.
+lands on the line-number gutter (see `my-line-number-click-pos').
 ```
 (defun context-menu-fold-line (menu click)
   "Add a fold-line entry to MENU when CLICK lands on the line-number gutter."
@@ -2930,15 +3102,8 @@ the gutter when its X is less than the line-number display's pixel width.
              (treesit-available-p)
              (treesit-parser-list)
              (treesit-fold-usable-mode-p))
-    (let* ((posn (event-end click))
-           (x (car (posn-x-y posn)))
-           (pos (and (posn-point posn)
-                     (save-excursion
-                       (goto-char (posn-point posn))
-                       (line-beginning-position)))))
-      (when (and x pos
-                 (< x (line-number-display-width t))
-                 (treesit-fold--foldable-node-at-pos pos))
+    (let ((pos (my-line-number-click-pos click)))
+      (when (and pos (treesit-fold--foldable-node-at-pos pos))
         (define-key menu [treesit-fold-line]
 		    `(menu-item "Fold Line"
 				,(lambda ()
@@ -3086,25 +3251,20 @@ LSP guarantees a task's token is stable across its begin/report/end
 notifications, so membership here is tracked from begin to end.")
 
 (with-eval-after-load 'eglot
-  (advice-add 'eglot-handle-notification :around
-              (lambda (orig server method &rest args)
-                (if (not (eq method '$/progress))
-                    (apply orig server method args)
-                  (let* ((token (plist-get args :token))
-                         (value (plist-get args :value))
-                         (kind (plist-get value :kind))
-                         (title (plist-get value :title)))
-                    ;; `title' is only ever present on `begin' -- `report'/
-                    ;; `end' carry nil, so whether a token is suppressed
-                    ;; has to be decided now and remembered.
-                    (when (and (equal kind "begin")
-                               (member title eglot-suppressed-progress-titles))
-                      (puthash token t eglot--suppressed-progress-tokens))
-                    (let ((fully-suppressed (gethash token eglot--suppressed-progress-tokens)))
-                      (when (equal kind "end")
-                        (remhash token eglot--suppressed-progress-tokens))
-                      (unless fully-suppressed
-                        (apply orig server method args))))))))
+  (cl-defmethod eglot-handle-notification
+    :around (_server (_method (eql $/progress)) &key token value &allow-other-keys)
+    (let ((kind (plist-get value :kind))
+          (title (plist-get value :title)))
+      ;; `title' is only ever present on `begin' -- `report'/`end' carry nil,
+      ;; so whether a token is suppressed has to be decided now and remembered.
+      (when (and (equal kind "begin")
+                 (member title eglot-suppressed-progress-titles))
+        (puthash token t eglot--suppressed-progress-tokens))
+      (let ((fully-suppressed (gethash token eglot--suppressed-progress-tokens)))
+        (when (equal kind "end")
+          (remhash token eglot--suppressed-progress-tokens))
+        (unless fully-suppressed
+          (cl-call-next-method))))))
 ```
 
 Simplify eglot's progress reporter to not throttle. Its more useful to see them all.
@@ -3129,17 +3289,15 @@ warning buffer.
 Report back warnings of interest after eglot loads
 ```
 (with-eval-after-load 'eglot
-  (advice-add 'eglot-handle-notification :before
-              (lambda (_server method &rest params)
-                (when (eq method 'window/logMessage)
-                  (let ((message (plist-get params :message)))
-                    (when (and (eql (plist-get params :type) 1)
-                               (not (seq-some (lambda (s) (string-search s message))
-                                              my-jdtls-suppressed-error-messages)))
-                      (display-warning
-                       'jdtls
-                       (format "jdtls error: %s" (car (split-string message "\n")))
-                       :warning)))))))
+  (cl-defmethod eglot-handle-notification
+    :before (_server (_method (eql window/logMessage)) &key type message &allow-other-keys)
+    (when (and (eql type 1)
+               (not (seq-some (lambda (s) (string-search s message))
+                              my-jdtls-suppressed-error-messages)))
+      (display-warning
+       'jdtls
+       (format "jdtls error: %s" (car (split-string message "\n")))
+       :warning))))
 ```
 
 ### my-eglot-dape-context-menu
@@ -3302,16 +3460,27 @@ anything as useful as the `report' messages in between."
        (member (plist-get (plist-get (plist-get message :params) :value)
                           :kind)
                '("begin" "end"))))
+```
+
+### my-jsonrpc-log-event
+>`jsonrpc-event-hook' replacement for `jsonrpc--log-event'.
+Drops uninteresting messages and adds a one-line log-text summary.
+CONNECTION, ORIGIN are pushed through. PLIST contains the message payload.
+
+```
+(defun my-jsonrpc-log-event (connection origin &rest plist)
+  "`jsonrpc-event-hook' replacement for `jsonrpc--log-event'.
+Drops uninteresting messages and adds a one-line log-text summary.
+CONNECTION, ORIGIN are pushed through. PLIST contains the message payload."
+  (let ((message (plist-get plist :message)))
+    (unless (my-jsonrpc-skip-message-p message)
+      (when (and message (not (plist-get plist :log-text)))
+        (setq plist (plist-put plist :log-text (my-jsonrpc-log-text message))))
+      (apply #'jsonrpc--log-event connection origin plist))))
 
 (with-eval-after-load 'jsonrpc
-  (advice-add 'jsonrpc--log-event :around
-              (lambda (orig connection origin &rest plist)
-                (let ((message (plist-get plist :message)))
-                  (unless (my-jsonrpc-skip-message-p message)
-                    (when (and message (not (plist-get plist :log-text)))
-                      (setq plist (plist-put plist :log-text
-                                             (my-jsonrpc-log-text message))))
-                    (apply orig connection origin plist))))))
+  (remove-hook 'jsonrpc-event-hook #'jsonrpc--log-event)
+  (add-hook 'jsonrpc-event-hook #'my-jsonrpc-log-event))
 
 (defvar my-jdt-uri-cache-dir
   (locate-user-emacs-file "jdtls-decompiled")
@@ -3466,6 +3635,23 @@ start eglot automatically for python buffers.
 
 ## DAPE debugging
 
+### my-fringe-context-menu
+>Show the diff-hl menu for a fringe click at EVENT.
+If there is no diff hl marker add a dape log breakpoint.
+
+`dape-breakpoint-mode-map' outranks `diff-hl-mode-map' for fringe clicks, so
+without this a right-click in a Java buffer's fringe prompts for a log
+breakpoint instead of showing the hunk menu.
+```
+(defun my-fringe-context-menu (event)
+  "Show the diff-hl menu for a fringe click at EVENT.
+If there is no diff hl marker add a dape log breakpoint."
+  (interactive "e")
+  (if (bound-and-true-p diff-hl-mode)
+      (my-diff-hl-fringe-menu event)
+    (dape-mouse-breakpoint-log event)))
+```
+
 Use dape after eglot is loaded
 ```
 (use-package dape
@@ -3473,11 +3659,20 @@ Use dape after eglot is loaded
   :after eglot
   :config
 
+  (define-key dape-breakpoint-mode-map [left-fringe mouse-3] #'my-fringe-context-menu)
+
   (set-face-attribute 'dape-breakpoint-face nil
                       :foreground (modus-themes-get-color-value 'red-syntax t)
 		      :weight 'bold)
-  ;; turn on support for adding breakpoints via clicking on the fringe
-  (dape-breakpoint-global-mode))
+  ;; Turn on support for adding breakpoints via clicking on the fringe, but only
+  ;; for Java buffers: `dape-breakpoint-global-mode' enables it in every
+  ;; `prog-mode' buffer and its click bindings then shadow other fringe menus
+  ;; such as diff-hl's.  Enabling a globalized mode also covers buffers that
+  ;; are already open, which matters since dape loads after the first Java buffer.
+  (define-globalized-minor-mode my-dape-java-breakpoint-mode dape-breakpoint-mode
+    dape-breakpoint-mode
+    :predicate '(java-mode java-ts-mode))
+  (my-dape-java-breakpoint-mode 1))
 ```
 
 Visual debug toolbar (continue/step/restart/quit buttons) for dape.  Rendered
@@ -3592,8 +3787,8 @@ dape config to run, so the one binding can dispatch either arrow.
 
   (defun my-dape--gutter-ensure-margin ()
     "Widen the left margin (never shrink it) to fit the gutter arrows.
-Leaves room for flymake's own indicator (a fixed width of 2, set
-above) plus ours."
+  Leaves room for flymake's own indicator (a fixed width of 2, set
+					     above) plus ours."
     (setq left-margin-width (max (or left-margin-width 0) 2))
     (dolist (win (get-buffer-window-list nil nil t))
       (set-window-margins win left-margin-width (cdr (window-margins win)))))
@@ -3615,7 +3810,7 @@ above) plus ours."
 
   (defun my-junit-test-gutter-refresh ()
     "Mark every jdtls-discovered JUnit test method with a clickable
-green arrow in the left margin."
+  green arrow in the left margin."
     (interactive)
     (my-junit-test-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -3635,14 +3830,14 @@ green arrow in the left margin."
 
   (defun my-class-run-gutter-refresh ()
     "Mark the buffer's JUnit test class declaration with a clickable
-green arrow in the left margin that runs every test in the file, if
-jdtls-discovered any runnable test method in it.
+  green arrow in the left margin that runs every test in the file, if
+  jdtls-discovered any runnable test method in it.
 
-Deliberately not gated on jdtls's own \"is this class runnable\"
-determination (`vscode.java.resolveMainClass') -- that's known to
-get it wrong. The presence of a JUnit test method is already
-report via the same codelens query used for the method-level
-arrows is a more reliable signal."
+  Deliberately not gated on jdtls's own \"is this class runnable\"
+  determination (`vscode.java.resolveMainClass') -- that's known to
+  get it wrong. The presence of a JUnit test method is already
+  report via the same codelens query used for the method-level
+  arrows is a more reliable signal."
     (interactive)
     (my-class-run-gutter-clear)
     (when (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -3663,8 +3858,8 @@ arrows is a more reliable signal."
 
   (defun my-dape--junit-gutter-refresh-when-ready (buf &optional delay)
     "Refresh both JUnit gutters in BUF once jdtls is actually capable,
-retrying with the same gradually increasing, never-ending backoff as
-`dape-java-junit-fetch-items-async' if it isn't yet."
+  retrying with the same gradually increasing, never-ending backoff as
+  `dape-java-junit-fetch-items-async' if it isn't yet."
     (when (buffer-live-p buf)
       (with-current-buffer buf
         (if (and (featurep 'eglot) (eglot-current-server) (dape-java-jdtls-support-p))
@@ -3679,8 +3874,8 @@ retrying with the same gradually increasing, never-ending backoff as
   (with-no-warnings
     (define-minor-mode my-dape-run-gutter-mode
       "Show clickable green arrows in the left margin next to every
-jdtls-discovered runnable JUnit test method, and at the test class's
-declaration if any such methods were found."
+  jdtls-discovered runnable JUnit test method, and at the test class's
+  declaration if any such methods were found."
       :lighter nil
       :keymap (let ((m (make-sparse-keymap)))
                 (define-key m [left-margin mouse-1] #'my-dape-gutter-run-clicked)
@@ -3890,6 +4085,30 @@ diagnostics. Turn the ensure step into a no-op in that process only.
       (apply fn args))))
 ```
 
+The byte-compile backend refuses to run in untrusted buffers (see `trusted-content'). Rather
+than just failing, offer to trust the file's directory the first time it's checked.
+```
+(defvar-local my-trust-declined nil
+  "Non-nil once the user declined to trust this buffer's directory.")
+
+(define-advice elisp-flymake-byte-compile (:around (fn &rest args) my-ask-trust)
+  "Offer to add the current directory to `trusted-content' before running FN."
+  (when (and (not (trusted-content-p))
+             (not my-trust-declined)
+             buffer-file-name
+             (not (eq trusted-content :all)))
+    (let ((dir (abbreviate-file-name
+                (file-name-as-directory
+                 (file-name-directory buffer-file-name)))))
+      (if (y-or-n-p (format "Trust %s for flymake/macro expansion? " dir))
+          (progn
+            (add-to-list 'trusted-content dir)
+            (when (y-or-n-p "Save permanently? ")
+              (customize-save-variable 'trusted-content trusted-content)))
+        (setq my-trust-declined t))))
+  (apply fn args))
+```
+
 Dock the diagnostics list as a bottom "problems panel" instead of
 letting it split whatever window happens to be current.
 ```
@@ -3929,6 +4148,178 @@ The only action we do is close on click."
 Save space by not showing zero warn/error counter in the mode line
 ```
 (setq flymake-suppress-zero-counters t)
+```
+
+Flymake equivalent of flycheck's `flycheck-verify-setup'.
+```
+(define-derived-mode my-flymake-diagnostics-mode help-mode "Flymake verification"
+  "Major mode to display `my-flymake-diagnostics' results."
+  (setq buffer-read-only nil))
+
+(define-button-type 'my-flymake-button
+  'follow-link t
+  'face 'link
+  'action (lambda (button)
+            (apply (button-get button 'my-action) (button-get button 'my-data))
+            (revert-buffer)))
+```
+
+### my-flymake--backends
+>Return the backends `flymake-diagnostic-functions' uses in this buffer.
+A t entry stands for the global value.
+
+```
+(defun my-flymake--backends ()
+  "Return the backends `flymake-diagnostic-functions' uses in this buffer.
+A t entry stands for the global value."
+  (let (backends)
+    (dolist (b flymake-diagnostic-functions)
+      (if (eq b t)
+          (dolist (g (default-value 'flymake-diagnostic-functions))
+            (push g backends))
+        (push b backends)))
+    (nreverse (delete-dups backends))))
+```
+
+### my-flymake--backend-report
+>Return a list of (LABEL MESSAGE FACE) describing BACKEND in this buffer.
+
+```
+(defun my-flymake--backend-report (backend)
+  "Return a list of (LABEL MESSAGE FACE) describing BACKEND in this buffer."
+  (let* ((state (and flymake--state (gethash backend flymake--state)))
+         (diags (and state (flymake--state-diags state)))
+         (results
+          (list (list "function"
+                      (if (fboundp backend) "defined" "not defined")
+                      (if (fboundp backend) 'success 'error)))))
+    (push
+     (cond
+      ((not state)
+       (list "state"
+             (if flymake-mode "not started yet" "not started (Flymake Mode is off)")
+             'warning))
+      ((flymake--state-disabled state)
+       (list "state" (format "disabled: %s" (flymake--state-disabled state))
+             '(bold error)))
+      ((flymake--state-running state) (list "state" "running" 'success))
+      ((flymake--state-reported-p state) (list "state" "idle, has reported" 'success))
+      (t (list "state" "idle, has not reported" 'warning)))
+     results)
+    (when (and state (flymake--state-reported-p state)
+               (not (flymake--state-disabled state)))
+      (let ((counts (list (cons :error 0) (cons :warning 0) (cons :note 0))))
+        (dolist (d diags)
+          (let* ((sev (flymake--severity (flymake-diagnostic-type d)))
+                 (key (cond ((>= sev (warning-numeric-level :error)) :error)
+                            ((>= sev (warning-numeric-level :warning)) :warning)
+                            (t :note))))
+            (cl-incf (alist-get key counts))))
+        (push (list "diagnostics"
+                    (format "%d (%d errors, %d warnings, %d notes)" (length diags)
+                            (alist-get :error counts) (alist-get :warning counts)
+                            (alist-get :note counts))
+                    nil)
+              results)))
+    (nreverse results)))
+```
+
+### my-flymake--princ-backend
+>Print the status of BACKEND for BUFFER at point in the current buffer.
+
+```
+(defun my-flymake--princ-backend (backend buffer)
+  "Print the status of BACKEND for BUFFER at point in the current buffer."
+  (princ "  ")
+  (insert-button (symbol-name backend)
+                 'type 'help-function 'help-args (list backend))
+  (let ((disabled (with-current-buffer buffer
+                    (and flymake--state
+                         (when-let* ((s (gethash backend flymake--state)))
+                           (flymake--state-disabled s))))))
+    (when disabled
+      (insert (propertize " (disabled) " 'face '(bold error)))
+      (insert-text-button "re-enable" 'type 'my-flymake-button
+                          'my-action
+                          (lambda (buf be)
+                            (with-current-buffer buf
+                              (remhash be flymake--state)
+                              (when flymake-mode (flymake-start))))
+                          'my-data (list buffer backend))))
+  (princ "\n")
+  (let* ((results (with-current-buffer buffer (my-flymake--backend-report backend)))
+         (column (+ 8 (seq-max (mapcar (lambda (r) (length (car r))) results)))))
+    (dolist (r results)
+      (princ "    - ")
+      (princ (car r))
+      (princ ": ")
+      (princ (make-string (max 0 (- column (current-column))) ?\s))
+      (insert (if (nth 2 r) (propertize (nth 1 r) 'face (nth 2 r)) (nth 1 r)))
+      (princ "\n")))
+  (princ "\n"))
+```
+
+### my-flymake-diagnostics
+>Show the status of Flymake's backends in this buffer.
+List the backends in `flymake-diagnostic-functions', whether each is defined,
+running, disabled (and why) or has reported, plus global backends this buffer
+does not use.
+
+```
+(defun my-flymake-diagnostics ()
+  "Show the status of Flymake's backends in this buffer.
+List the backends in `flymake-diagnostic-functions', whether each is defined,
+running, disabled (and why) or has reported, plus global backends this buffer
+does not use."
+  (interactive)
+  (let* ((buffer (current-buffer))
+         (backends (my-flymake--backends))
+         (unused (seq-difference (default-value 'flymake-diagnostic-functions)
+                                 (cons t backends)))
+         (orphans (and flymake--state
+                       (seq-difference
+                        (let (ks) (maphash (lambda (k _) (push k ks)) flymake--state) ks)
+                        backends))))
+    (with-help-window "*Flymake backends*"
+      (with-current-buffer standard-output
+        (my-flymake-diagnostics-mode)
+        (princ "Flymake backends for buffer ")
+        (insert (propertize (buffer-name buffer) 'face 'bold))
+        (princ " in ")
+        (let ((mode (buffer-local-value 'major-mode buffer)))
+          (insert-button (symbol-name mode) 'type 'help-function 'help-args (list mode)))
+        (princ ":\n\n")
+        (if backends
+            (progn
+              (princ "Backends that will run in this buffer:\n\n")
+              (dolist (b backends) (my-flymake--princ-backend b buffer)))
+          (insert (propertize "No Flymake backends in this buffer.\n\n"
+                              'face '(bold error))))
+        (when unused
+          (princ "Global backends not used here (the buffer-local value of \
+						     `flymake-diagnostic-functions' lacks `t'):\n\n")
+          (dolist (b unused) (my-flymake--princ-backend b buffer)))
+        (when orphans
+          (princ "Backends with leftover state that are no longer registered:\n\n")
+          (dolist (b orphans) (my-flymake--princ-backend b buffer)))
+        (princ "Flymake Mode is ")
+        (let ((on (buffer-local-value 'flymake-mode buffer)))
+          (insert (propertize (if on "enabled" "disabled")
+                              'face (if on 'success '(warning bold)))))
+        (princ ".  See the ")
+        (insert-text-button "log" 'type 'my-flymake-button
+                            'my-action #'flymake-switch-to-log-buffer 'my-data nil)
+        (princ " for backend messages, or use C-u M-x flymake-start in the \
+  buffer to run disabled backends.\n")
+        (princ "\n--------------------\n\n")
+        (princ (format "Emacs version:    %s\n" emacs-version))
+        (princ (format "System:           %s\n" system-configuration))
+        (princ (format "Window system:    %S\n" window-system))
+        (setq-local revert-buffer-function
+                    (lambda (_ignore-auto _noconfirm)
+                      (unless (buffer-live-p buffer)
+                        (user-error "The verified buffer is gone"))
+                      (with-current-buffer buffer (my-flymake-diagnostics))))))))
 ```
 
 Configure lightbulbs with corresponding diagnostic colors/faces'
@@ -3980,43 +4371,39 @@ sql formatting setup for sqlformat-* functions.
                 sqlformat-args '("-s2" "-g")))
 
 
-(my-profile-mark "imenu-list")
+(my-profile-mark "ilist-plus")
 ```
-# imenu-list
+# ilist-plus
 Note: C-\ is bound to smart toggle.
 ```
-(use-package imenu-list
-  :ensure t
-  :config
-  ;; Some built in default around resizing and window focus I prefer.
-  (setq imenu-list-focus-after-activation t
-        imenu-list-auto-resize nil
-	;; rescan buffers as they change
-	imenu-auto-rescan t))
+(my-ignore
+ (use-package imenu-list
+   :ensure t
+   :config
+   ;; rescan buffers as they change
+   (setq imenu-auto-rescan t)))
 ```
 
 Load all of my custom imenu extensions.
 ```
 (use-package ilist-plus
   ;; For local test/dev when turned on.
-  ;; :load-path "~/dev/ilist-plus/"
-  :ensure (:host github :repo "benleis1/ilist-plus")
-  :after imenu-list
+  :load-path "~/dev/ilist-plus/"
+  ;; :ensure (:host github :repo "benleis1/ilist-plus")
   :init
   ;; Bind the fixed pitch icon font for the imenu modeline
   (setq ilist-plus-fixed-font my-default-fixed-pitch-font)
+  (setq ilist-plus-focus-after-activation nil)
   :config
   (ilist-plus-mode))
 ```
 
-Now that modeline.el (loaded above) has defined the richer dedicated-window
-keymap, rebuild the *Ilist* mode-line to use it instead of imenu.el's
-self-contained fallback.
-
+Render the *Ilist* mode-line with my-modeline; ilist-plus supplies the label.
 ```
 (with-eval-after-load 'ilist-plus
-  (setq imenu-list-mode-line-format
-	(ilist-plus--build-mode-line-format my-modeline-dedicated-window-map)))
+  (setq ilist-plus-mode-line-format my-modeline-format)
+  (add-to-list 'my-modeline-dedicated-label-functions
+               '(ilist-plus-major-mode . ilist-plus-mode-line-label)))
 ```
 
 Don't save/restore frame colors; otherwise a restored desktop pins the colors
@@ -4205,7 +4592,7 @@ a bash macro for emacsclient -c -n --eval "(ediff \"$file1\" \"$file2\")"
   ;; Capture window state and turn off my-modeline
   (defun my-ediff-bsh ()
     "Function to be called before any buffers or window setup for
-    ediff."
+  ediff."
     (setq my-ediff-buffers '())
     (setq my-ediff-bwin-config (current-window-configuration))
     ;;  (setq my-ediff-linenum-state (bound-and-true-p display-line-number-mode))
@@ -4414,7 +4801,7 @@ Turned off while I try out the built in completion framework in emacs 31
 ## my-select-font
 >Read a font from the user without changing any frame's font.
 Uses the native font dialog via `x-select-font' when available,
-falling back to `mouse-select-font'.
+ falling back to `mouse-select-font'.
 
 Inline "Set Font..." button next to the Font Family field in
 customize-face buffers, on the same line like the Value Menu buttons
@@ -4425,7 +4812,7 @@ hood)
 (defun my-select-font ()
   "Read a font from the user without changing any frame's font.
 Uses the native font dialog via `x-select-font' when available,
-falling back to `mouse-select-font'."
+  falling back to `mouse-select-font'."
   (if (fboundp 'x-select-font)
       (x-select-font)
     (mouse-select-font)))
@@ -4606,13 +4993,20 @@ No key binding for now.
 These are separate from here to make them easier to call independently.
 ```
 (require 'config-diagnostics)
+```
+
+Temporary: logs frame/git events to ~/.emacs.d/hang-trace.log to track down a multi-frame hang.
+```
+(require 'hang-trace)
 
 (my-profile-mark "menu config")
 ```
 # Menu bar reorganization
+Deferred until elpaca has activated every queued package, so optional packages (consult,
+ghostel) are `fboundp' when `my-menu-config' checks for them.
 ```
 (require 'menu-config)
-(my-menu-config)
+(add-hook 'elpaca-after-init-hook #'my-menu-config)
 
 (my-profile-mark "Local.el loading")
 ```
