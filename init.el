@@ -3980,9 +3980,6 @@ editable field."
 ;; These are separate from here to make them easier to call independently.
 (require 'config-diagnostics)
 
-;; Temporary: logs frame/git events to ~/.emacs.d/hang-trace.log to track down a multi-frame hang.
-(require 'hang-trace)
-
 (my-profile-mark "menu config")
 ;;; Menu bar reorganization
 ;; Deferred until elpaca has activated every queued package, so optional packages (consult,
