@@ -321,7 +321,8 @@ afterwards."
           (tab-plus-mode 1)
           (should (eq tab-line-tabs-function #'tab-plus--get-tabs))
           (should (eq switch-to-prev-buffer-skip #'tab-plus--skip-foreign-buffer))
-          (should (equal tab-line-exclude-modes tab-plus-exclude-modes))
+          ;; dape modes are appended on top of the configured list.
+          (should (cl-subsetp tab-plus-exclude-modes tab-line-exclude-modes))
           (should global-tab-line-mode)
           (should (advice-member-p #'tab-plus--close-tab-advice 'tab-line-close-tab))
           (should (eq (keymap-lookup tab-line-tab-map tab-plus--drag-key)
