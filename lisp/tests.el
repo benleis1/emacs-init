@@ -821,11 +821,12 @@ Messages are collected into the variable `messages'."
   (should-not (my-jsonrpc-skip-message-p '(:id 1 :result nil)))
   (should-not (my-jsonrpc-skip-message-p nil)))
 
-(ert-deftest my/test-jsonrpc-log-event-advice-is-installed ()
-  "The advice targets a private jsonrpc function; fail loudly if it goes away."
+(ert-deftest my/test-jsonrpc-log-event-hook-is-installed ()
+  "The hook swap relies on a private jsonrpc function; fail loudly if it goes away."
   (require 'jsonrpc)
   (should (fboundp 'jsonrpc--log-event))
-  (should (advice--p (symbol-function 'jsonrpc--log-event))))
+  (should (memq #'my-jsonrpc-log-event jsonrpc-event-hook))
+  (should-not (memq #'jsonrpc--log-event jsonrpc-event-hook)))
 
 ;;; diff-hl context menus (init.el)
 ;; diff-hl stays deferred in tests, so its hunk lookup is stubbed.

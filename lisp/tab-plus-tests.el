@@ -308,11 +308,14 @@ afterwards."
     (tab-plus-mode -1)))
 
 (ert-deftest tab-plus-test/mode-installs-and-restores-settings ()
-  (let ((old-tabs-fn tab-line-tabs-function)
-        (old-skip switch-to-prev-buffer-skip)
-        (old-exclude tab-line-exclude-modes)
-        (old-global global-tab-line-mode)
-        (old-drag (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t)))
+  (let* ((was-on tab-plus-mode)
+         ;; init.el turns the mode on; capture the stock settings, not ours.
+         (_ (when was-on (tab-plus-mode -1)))
+         (old-tabs-fn tab-line-tabs-function)
+         (old-skip switch-to-prev-buffer-skip)
+         (old-exclude tab-line-exclude-modes)
+         (old-global global-tab-line-mode)
+         (old-drag (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t)))
     (unwind-protect
         (progn
           (tab-plus-mode 1)
@@ -331,7 +334,7 @@ afterwards."
           (should-not (advice-member-p #'tab-plus--close-tab-advice 'tab-line-close-tab))
           (should-not (memq 'tab-plus--close-tear-off-view delete-frame-functions))
           (should (eq (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t) old-drag)))
-      (tab-plus-mode -1))))
+      (tab-plus-mode (if was-on 1 -1)))))
 
 ;; `tab-plus--git-state' runs from every tab-line render, so an error out of
 ;; `vc-git-state' (e.g. git's process spawn signalling because the
