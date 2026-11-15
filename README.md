@@ -278,10 +278,6 @@ Variables worth knowing about:
 - [Code:](#code)
 - [Byte-compile warning fixups](#byte-compile-warning-fixups)
 - [Profiling](#profiling)
-  - [my-toggle-profiler](#my-toggle-profiler)
-  - [my-profile-mark](#my-profile-mark)
-  - [my-profile-report-phases](#my-profile-report-phases)
-  - [my-profile-init-finish](#my-profile-init-finish)
 - [Package setup](#package-setup)
 - [Customizations](#customizations)
 - [Font setup](#font-setup)
@@ -459,101 +455,17 @@ They have to be spliced into this file (a `require' would not carry bare `defvar
 ```
 
 # Profiling
-Everything for profiling startup lives here, ahead of the rest of the file, because the
-`my-profile-mark' calls before each later section need these definitions.
-
-`my-toggle-profiler' (adapted from Doom Emacs): the first call starts sampling CPU and memory,
-the second shows the report and stops.
-
-`emacs --profile-init' makes early-init.el do the first call, set `my-profile-init-p' and run
-`my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
-this file and the use-package report.
+The profiling machinery (`my-toggle-profiler', `my-profile-mark', `emacs --profile-init' support)
+lives in early-init.el. This no-op fallback only matters when init.el is loaded without
+early-init.el, e.g. `emacs -Q --batch -l init.el' for tests, where the `my-profile-mark' calls
+below would otherwise hit a void function.
 
 ```
-(defvar my-profile-init-p nil
-  "Non-nil when Emacs was started with --profile-init.")
-(defvar my-profiler-running nil
-  "Non-nil while the profiler started by `my-toggle-profiler' is sampling.")
-(defvar my-profile-marks nil
-  "Reverse list of (NAME TIME PACKAGE-COUNT) recorded by `my-profile-mark'.")
-```
-
-Per package timing. This has to be on before use-package is loaded and any declaration is read.
-```
-(when my-profile-init-p (setq use-package-compute-statistics t))
-```
-
-## my-toggle-profiler
->Toggle the Emacs profiler.  Run it again to see the profiling report.
-
-```
-(defun my-toggle-profiler ()
-  "Toggle the Emacs profiler.  Run it again to see the profiling report."
-  (interactive)
-  (if my-profiler-running
-      (progn (profiler-report) (profiler-stop))
-    (profiler-start 'cpu+mem))
-  (setq my-profiler-running (not my-profiler-running)))
-```
-
-## my-profile-mark
->Record that the init section NAME starts now, if --profile-init was given.
-
-```
-(defun my-profile-mark (name)
-  "Record that the init section NAME starts now, if --profile-init was given."
-  (when my-profile-init-p
-    (push (list name (float-time)
-                (if (boundp 'use-package-statistics) (hash-table-count use-package-statistics) 0))
-          my-profile-marks)))
+(declare-function my-profile-mark "early-init")
+(unless (fboundp 'my-profile-mark)
+  (defun my-profile-mark (_name)))
 
 (eval-when-compile (require 'cl-lib))
-```
-
-## my-profile-report-phases
->Show per-section init timing recorded by `my-profile-mark' in *init-phases*.
-
-The wall column is the time between consecutive marks, so a section containing an `elpaca-wait'
-absorbs the processing of every use-package queued before it. The use-package column sums the
-time use-package measured for the packages declared in the section. Its :use-package-secs
-already includes the nested :init and :config times.
-```
-(defun my-profile-report-phases ()
-  "Show per-section init timing recorded by `my-profile-mark' in *init-phases*."
-  (let ((marks (cons (list "startup before init.el" (float-time before-init-time) 0)
-                     (reverse my-profile-marks)))
-        (pkg-secs nil)
-        (buf (get-buffer-create "*init-phases*")))
-    (when (boundp 'use-package-statistics)
-      (maphash (lambda (_name stats)
-                 (push (float-time (gethash :use-package-secs stats '(0 0 0 0))) pkg-secs))
-               use-package-statistics)
-      (setq pkg-secs (nreverse pkg-secs)))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (format "%-42s %10s %17s\n" "Section" "wall (ms)" "use-package (ms)"))
-        (cl-loop for (mark next) on marks while next
-                 do (insert (format "%-42s %10.0f %17.0f\n" (nth 0 mark)
-                                    (* 1000 (- (nth 1 next) (nth 1 mark)))
-                                    (* 1000 (apply #'+ (seq-subseq pkg-secs (nth 2 mark)
-                                                                   (nth 2 next)))))))
-        (insert (format "\nTotal wall: %.0f ms\n"
-                        (* 1000 (- (nth 1 (car my-profile-marks)) (nth 1 (car marks))))))
-        (special-mode)))
-    (pop-to-buffer buf)))
-```
-
-## my-profile-init-finish
->Show the init section timings, `use-package' report and profiler report.
-
-```
-(defun my-profile-init-finish ()
-  "Show the init section timings, `use-package' report and profiler report."
-  (my-profile-mark "init done")
-  (my-profile-report-phases)
-  (use-package-report)
-  (my-toggle-profiler))
 
 (my-profile-mark "Package setup")
 ```
@@ -1461,6 +1373,11 @@ I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
 pinching on a trackpad also causes chaos for me so disable.
 ```
 (global-set-key (kbd "<pinch>") 'ignore)
+```
+
+Use shift left and shift right for moving between windows.
+```
+(windmove-default-keybindings 'shift)
 ```
 
 Don't lose a paste from outside emacs because you killed a line
@@ -4993,11 +4910,6 @@ No key binding for now.
 These are separate from here to make them easier to call independently.
 ```
 (require 'config-diagnostics)
-```
-
-Temporary: logs frame/git events to ~/.emacs.d/hang-trace.log to track down a multi-frame hang.
-```
-(require 'hang-trace)
 
 (my-profile-mark "menu config")
 ```

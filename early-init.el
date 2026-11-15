@@ -25,16 +25,91 @@
           (lambda ()
             (setq file-name-handler-alist my--file-name-handler-alist-backup)))
 
+;;; Startup profiling
 ;; `emacs --profile-init' profiles startup with the built-in profiler and shows the reports once
 ;; elpaca has finished init. It starts here to capture as much of startup as possible. The no-op
-;; switch handler keeps emacs from complaining about an unknown option. The variables set here are
-;; defined, and `my-profile-init-finish' lives, in the Profiling section of init.el.
+;; switch handler keeps emacs from complaining about an unknown option.
+;;
+;; `my-toggle-profiler' (adapted from Doom Emacs): the first call starts sampling CPU and memory,
+;; the second shows the report and stops.
+;;
+;; With `--profile-init' this file does the first call, sets `my-profile-init-p' and runs
+;; `my-profile-init-finish' once elpaca has finished init. That also shows the time per section of
+;; init.el (recorded by the `my-profile-mark' calls there) and the use-package report.
+
+(defvar my-profile-init-p nil
+  "Non-nil when Emacs was started with --profile-init.")
+(defvar my-profiler-running nil
+  "Non-nil while the profiler started by `my-toggle-profiler' is sampling.")
+(defvar my-profile-marks nil
+  "Reverse list of (NAME TIME PACKAGE-COUNT) recorded by `my-profile-mark'.")
+
+(defvar use-package-compute-statistics)
+(defvar use-package-statistics)
+(declare-function use-package-report "use-package-core")
+(declare-function profiler-report "profiler")
+(declare-function profiler-stop "profiler")
+(eval-when-compile (require 'cl-lib))
+
+(defun my-toggle-profiler ()
+  "Toggle the Emacs profiler.  Run it again to see the profiling report."
+  (interactive)
+  (if my-profiler-running
+      (progn (profiler-report) (profiler-stop))
+    (profiler-start 'cpu+mem))
+  (setq my-profiler-running (not my-profiler-running)))
+
+(defun my-profile-mark (name)
+  "Record that the init section NAME starts now, if --profile-init was given."
+  (when my-profile-init-p
+    (push (list name (float-time)
+                (if (boundp 'use-package-statistics) (hash-table-count use-package-statistics) 0))
+          my-profile-marks)))
+
+;; The wall column is the time between consecutive marks, so a section containing an `elpaca-wait'
+;; absorbs the processing of every use-package queued before it. The use-package column sums the
+;; time use-package measured for the packages declared in the section. Its :use-package-secs
+;; already includes the nested :init and :config times.
+(defun my-profile-report-phases ()
+  "Show per-section init timing recorded by `my-profile-mark' in *init-phases*."
+  (let ((marks (cons (list "startup before init.el" (float-time before-init-time) 0)
+                     (reverse my-profile-marks)))
+        (pkg-secs nil)
+        (buf (get-buffer-create "*init-phases*")))
+    (when (boundp 'use-package-statistics)
+      (maphash (lambda (_name stats)
+                 (push (float-time (gethash :use-package-secs stats '(0 0 0 0))) pkg-secs))
+               use-package-statistics)
+      (setq pkg-secs (nreverse pkg-secs)))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "%-42s %10s %17s\n" "Section" "wall (ms)" "use-package (ms)"))
+        (cl-loop for (mark next) on marks while next
+                 do (insert (format "%-42s %10.0f %17.0f\n" (nth 0 mark)
+                                    (* 1000 (- (nth 1 next) (nth 1 mark)))
+                                    (* 1000 (apply #'+ (seq-subseq pkg-secs (nth 2 mark)
+                                                                   (nth 2 next)))))))
+        (insert (format "\nTotal wall: %.0f ms\n"
+                        (* 1000 (- (nth 1 (car my-profile-marks)) (nth 1 (car marks))))))
+        (special-mode)))
+    (pop-to-buffer buf)))
+
+(defun my-profile-init-finish ()
+  "Show the init section timings, `use-package' report and profiler report."
+  (my-profile-mark "init done")
+  (my-profile-report-phases)
+  (use-package-report)
+  (my-toggle-profiler))
+
 (when (member "--profile-init" command-line-args)
   (add-to-list 'command-switch-alist '("--profile-init" . ignore))
   (require 'profiler)
   (profiler-start 'cpu+mem)
   (setq my-profiler-running t
-        my-profile-init-p t)
+        my-profile-init-p t
+        ;; Per package timing. This has to be on before use-package is loaded.
+        use-package-compute-statistics t)
   (add-hook 'elpaca-after-init-hook #'my-profile-init-finish))
 
 ;; Packages are managed by elpaca (see init.el) now, not package.el. Emacs

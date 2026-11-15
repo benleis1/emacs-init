@@ -117,7 +117,8 @@
   (declare (indent 4))
   `(let ((flymake-mode ,mode)
          (flymake-mode-line-counters ,counters))
-     (cl-letf (((symbol-function 'format-mode-line) #'identity) ; returns "" in batch
+     ;; Compiled callers pad a primitive's optional args, so accept and ignore them.
+     (cl-letf (((symbol-function 'format-mode-line) (lambda (spec &rest _) spec)) ; "" in batch
                ((symbol-function 'flymake-running-backends) (lambda () ,running))
                ((symbol-function 'flymake-reporting-backends) (lambda () ,reporting)))
        ,@body)))
