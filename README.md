@@ -1375,9 +1375,10 @@ pinching on a trackpad also causes chaos for me so disable.
 (global-set-key (kbd "<pinch>") 'ignore)
 ```
 
-Use shift left and shift right for moving between windows.
+Use control-shift and the arrow keys for moving between windows. Plain control-arrow is
+taken by macOS and shift-arrow by shift-select.
 ```
-(windmove-default-keybindings 'shift)
+(windmove-default-keybindings '(control shift))
 ```
 
 Don't lose a paste from outside emacs because you killed a line

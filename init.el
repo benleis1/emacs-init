@@ -1053,8 +1053,9 @@ Customize the thresholds via `my-max-auto-revert-size'."
 ;; pinching on a trackpad also causes chaos for me so disable.
 (global-set-key (kbd "<pinch>") 'ignore)
 
-;; Use shift left and shift right for moving between windows.
-(windmove-default-keybindings 'shift)
+;; Use control-shift and the arrow keys for moving between windows. Plain control-arrow is
+;; taken by macOS and shift-arrow by shift-select.
+(windmove-default-keybindings '(control shift))
 
 ;; Don't lose a paste from outside emacs because you killed a line
 ;; in preparation before pasting.
