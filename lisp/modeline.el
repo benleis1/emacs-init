@@ -755,6 +755,99 @@ it's still reachable by hovering while collapsed."
                   'help-echo help
                   'local-map map))))
 
+;;; System CPU usage
+
+(defcustom my-modeline-cpu-interval 2
+  "Seconds between samples for `my-modeline-segment-cpu'."
+  :type 'number
+  :group 'my-modeline)
+
+(defvar my-modeline--cpu-percent nil
+  "Whole-system CPU use over the last sample interval, in percent.")
+
+(defvar my-modeline--cpu-process nil
+  "Streaming `iostat' process feeding `my-modeline--cpu-percent' (macOS).")
+
+(defvar my-modeline--cpu-timer nil
+  "Timer sampling /proc/stat for `my-modeline--cpu-percent' (non-macOS).")
+
+(defvar my-modeline--cpu-last-stat nil
+  "Cons of (BUSY . TOTAL) jiffies from the previous /proc/stat sample.")
+
+(defun my-modeline--cpu-set (percent)
+  (unless (eql percent my-modeline--cpu-percent)
+    (setq my-modeline--cpu-percent percent)
+    (force-mode-line-update t)))
+
+(defun my-modeline--cpu-iostat-filter (proc output)
+  "Parse `iostat -n 0 -w N' lines, \"us sy id 1m 5m 15m\", from PROC.
+The first data line is the average since boot, so it is skipped."
+  (let ((buf (concat (process-get proc 'partial) output)))
+    (while (string-match "\n" buf)
+      (let ((line (substring buf 0 (match-beginning 0))))
+        (setq buf (substring buf (match-end 0)))
+        (when (string-match "\\`\\s-*\\([0-9]+\\)\\s-+\\([0-9]+\\)\\s-+\\([0-9]+\\)\\s-" line)
+          (if (process-get proc 'seen-first)
+              (my-modeline--cpu-set (- 100 (string-to-number (match-string 3 line))))
+            (process-put proc 'seen-first t)))))
+    (process-put proc 'partial buf)))
+
+(defun my-modeline--cpu-proc-stat-sample ()
+  "Update `my-modeline--cpu-percent' from the aggregate line of /proc/stat."
+  (with-temp-buffer
+    (insert-file-contents "/proc/stat" nil 0 512)
+    (when (looking-at "cpu\\s-+\\(.*\\)")
+      (let* ((f (mapcar #'string-to-number (split-string (match-string 1))))
+             (total (apply #'+ (seq-take f 8)))
+             (busy (- total (nth 3 f) (or (nth 4 f) 0)))
+             (prev my-modeline--cpu-last-stat))
+        (setq my-modeline--cpu-last-stat (cons busy total))
+        (when (and prev (> total (cdr prev)))
+          (my-modeline--cpu-set
+           (round (* 100.0 (/ (float (- busy (car prev)))
+                              (- total (cdr prev)))))))))))
+
+(defun my-modeline--cpu-ensure-sampler ()
+  (cond
+   ((eq system-type 'darwin)
+    (unless (process-live-p my-modeline--cpu-process)
+      (setq my-modeline--cpu-process
+            (make-process :name "modeline-cpu"
+                          :command (list "iostat" "-n" "0" "-w"
+                                         (number-to-string (max 1 (round my-modeline-cpu-interval))))
+                          :buffer nil
+                          :noquery t
+                          :connection-type 'pipe
+                          :filter #'my-modeline--cpu-iostat-filter))))
+   ((file-readable-p "/proc/stat")
+    (unless (timerp my-modeline--cpu-timer)
+      (setq my-modeline--cpu-timer
+            (run-with-timer 0 my-modeline-cpu-interval #'my-modeline--cpu-proc-stat-sample))))))
+
+(defun my-modeline--cpu-color (percent)
+  "Mode-line foreground blended toward red as PERCENT approaches 100."
+  (let* ((base (or (color-name-to-rgb
+                    (face-foreground 'mode-line-emphasis nil 'default))
+                   '(0.0 0.0 0.0)))
+         (red '(1.0 0.0 0.0))
+         (f (/ (min 100 (max 0 percent)) 100.0)))
+    (apply #'color-rgb-to-hex
+           (append (cl-mapcar (lambda (b r) (+ b (* f (- r b)))) base red) '(2)))))
+
+(defun my-modeline-segment-cpu ()
+  "Whole-system CPU use in percent, sampled every
+`my-modeline-cpu-interval' seconds."
+  (my-modeline--cpu-ensure-sampler)
+  (when my-modeline--cpu-percent
+    (let* ((blocks "▁▂▃▄▅▆▇█")
+           (idx (min (1- (length blocks))
+                     (max 0 (/ (* my-modeline--cpu-percent (length blocks)) 100)))))
+      (propertize (string (aref blocks idx))
+                  'face (list 'mode-line-emphasis
+                              (list :foreground (my-modeline--cpu-color my-modeline--cpu-percent)))
+                  'help-echo (format "System CPU use (user + system): %d%%"
+                                     my-modeline--cpu-percent)))))
+
 ;;; Right alignment
 ;;
 ;; Stock Emacs 30 already has `mode-line-format-right-align' for exactly
