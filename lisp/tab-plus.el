@@ -383,7 +383,8 @@ entries.")
 ;; another view, and `tab-plus--get-filtered-buffer-list' would then adopt it into this one.
 ;; Likewise, prefer buffers in WINDOW's selected tab group so closing a tab stays in that group.
 (defun tab-plus--skip-foreign-buffer (window buffer _bury-or-kill)
-  "Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view and group."
+  "Handle switching away from a  WINDOW and BUFFER.
+Prefer a buffer in the same view and group."
   (with-selected-window window
     (let ((group (window-parameter window 'tab-line-group)))
       (if (tab-plus--buffer-filter buffer)
@@ -945,8 +946,7 @@ ROOT should be a project root."
          (seq-filter (lambda (b) (buffer-file-name b)) buffers))
 
         ((equal curgroup "Project")
-         (let ((root (when-let* ((pr (project-current nil)))
-		       (tab-plus--normalize-root (project-root pr)))))
+         (let ((root (tab-plus--buffer-project-root (current-buffer))))
            (seq-filter (lambda (b) (tab-plus--buffer-in-project-p b root)) buffers)))
 
         ((equal curgroup "Modified")
@@ -992,7 +992,7 @@ group to an icon and adds on all files"
 
       ;;insert a Files and Project group
       (append
-       (when (project-current nil)
+       (when (tab-plus--buffer-project-root (current-buffer))
 	 (list (tab-plus--make-group-tab selected-group "Project")))
        (list (tab-plus--make-group-tab selected-group "Files"))
        (list (tab-plus--make-group-tab selected-group "All"))
