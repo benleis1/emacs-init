@@ -381,11 +381,16 @@ entries.")
 ;; Window history (prev/next buffers, also restored from a saved window state) is shared by
 ;; every view, so killing/burying/cycling away from a buffer could land on one that belongs to
 ;; another view, and `tab-plus--get-filtered-buffer-list' would then adopt it into this one.
+;; Likewise, prefer buffers in WINDOW's selected tab group so closing a tab stays in that group.
 (defun tab-plus--skip-foreign-buffer (window buffer _bury-or-kill)
-  "Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view."
-  (and (tab-plus--buffer-filter buffer)
-       (with-selected-window window
-         (not (memq buffer (tab-plus--get-buffer-list))))))
+  "Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view and group."
+  (with-selected-window window
+    (let ((group (window-parameter window 'tab-line-group)))
+      (if (tab-plus--buffer-filter buffer)
+          (or (not (memq buffer (tab-plus--get-buffer-list)))
+              (not (tab-plus--filter-buffers-by-group (list buffer) group)))
+        ;; Untracked buffers have no tab, so they never belong to a selected group.
+        (and group (not (equal group "All")))))))
 
 ;; tabs may just be a buffer or an alist depending on the mode.
 (defun tab-plus--get-buffer-from-tab (tab)
@@ -596,7 +601,7 @@ shows it, and delete WINDOW if that was its only tab."
                   (ignore-errors (delete-window window))))
 	    (progn
               (and (kill-buffer buffer)
-		   (unless (cdr tab-list)
+                   (unless (cdr tab-list)
                      (ignore-errors (delete-window window))))))))
       )))
 
