@@ -21,8 +21,8 @@
 ;; ## Quick Start
 ;;
 ;; ```
-;; git clone <repo> ~/dev/emacs-init
-;; cd ~/dev/emacs-init
+;; git clone https://github.com/benleis1/emacs-init.git ~/emacs-init
+;; cd ~/emacs-init
 ;; ./install.sh              # or: ./install.sh -d /path/to/emacs.d
 ;; ```
 ;;
@@ -30,6 +30,8 @@
 ;; and point Emacs at it (Emacs 29+):
 ;;
 ;; ```
+;; git clone https://github.com/benleis1/emacs-init.git ~/emacs-init
+;; cd ~/emacs-init
 ;; ./install.sh -d ~/emacs-try
 ;; emacs --init-directory ~/emacs-try
 ;; ```
@@ -689,40 +691,6 @@
 		(set-face-attribute 'my-modeline-position-face nil :background
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 
-;; TEMPTEMP This is experimental and may be removed but it will not have any effect unless
-;; terminal-colors is loaded which I am only doing manually for now.
-
-;; terminal-colors (modus mode) only maps the 16 ANSI colors into the modus palette.  The terminal
-;; default foreground/background that ghostel draws with comes from `ghostel-default', so follow the
-;; active terminal-colors theme there and put the original face spec back on reset.
-(defvar my-ghostel-default-saved-spec nil
-  "This holds the original override spec of `ghostel-default'.")
-
-(defun my-ghostel-apply-terminal-colors ()
-  "Set `ghostel-default' to the terminal-colors default foreground and background."
-  (when (and (bound-and-true-p terminal-colors-modus-mode)
-             (facep 'ghostel-default) terminal-colors--foreground terminal-colors--background)
-    (unless my-ghostel-default-saved-spec
-      (setq my-ghostel-default-saved-spec (list (get 'ghostel-default 'face-override-spec))))
-    (face-spec-set 'ghostel-default
-                   `((t :foreground ,terminal-colors--foreground
-                        :background ,terminal-colors--background))
-                   'face-override-spec)
-    (ghostel-sync-theme)))
-
-(defun my-ghostel-reset-terminal-colors ()
-  "Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'."
-  (when my-ghostel-default-saved-spec
-    (face-spec-set 'ghostel-default (car my-ghostel-default-saved-spec) 'face-override-spec)
-    (setq my-ghostel-default-saved-spec nil)
-    (ghostel-sync-theme)))
-
-(with-eval-after-load 'terminal-colors
-  (add-hook 'terminal-colors--after-load-hook #'my-ghostel-apply-terminal-colors)
-  (add-hook 'terminal-colors--reset-hook #'my-ghostel-reset-terminal-colors)
-  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors)
-  (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
-
 ;; Currently folio is my main theme.
 (use-package folio-theme
   :ensure (:host github :repo "kn66/folio-theme.el")
@@ -969,12 +937,12 @@ Customize the thresholds via `my-max-auto-revert-size'."
 
 
 ;; Zone / screensaver is whimsical but its built-in and lightweight,
-(when (display-graphic-p)
-  (use-package zone
-    :ensure nil ; Built-in package
-    :config
-    ;; 1 hour
-    (zone-when-idle 3600)))
+(my-ignore (when (display-graphic-p)
+	     (use-package zone
+	       :ensure nil ; Built-in package
+	       :config
+	       ;; 1 hour
+	       (zone-when-idle 3600))))
 
 ;; Brief pulse/highlight for various motions
 (use-package pulsar
