@@ -155,6 +155,21 @@ as nerd-icons' `:face' argument: nerd-icons puts it straight into an
 `:inherit' slot, which only accepts a face symbol -- hence syncing real
 named faces instead of computing an ad hoc one per call.)")
 
+(defun my-modeline--alpha-match (color)
+  "COLOR as it appears when drawn as a background under `alpha-background'.
+Glyph foregrounds are always opaque on the NS port while face backgrounds
+are blended, so a glyph meant to blend into a background chip of COLOR is
+pre-blended with the default background to match."
+  (let* ((a (frame-parameter nil 'alpha-background))
+         (a (cond ((not (numberp a)) 1.0) ((> a 1) (/ a 100.0)) (t a)))
+         (bg (face-background 'default nil t))
+         (c (color-name-to-rgb color))
+         (d (and (stringp bg) (color-name-to-rgb bg))))
+    (if (and c d (< a 1.0))
+        (apply #'color-rgb-to-hex
+               (append (seq-mapn (lambda (x y) (+ (* a x) (* (- 1 a) y))) c d) '(2)))
+      color)))
+
 (defun my-modeline--sync-file-icon-face ()
   "Refresh `my-modeline-file-icon-face' and `my-modeline-file-icon-divider-face'.
 Use the active modus theme's `cursor' palette color, when `modus-themes'
@@ -167,7 +182,8 @@ it can't go stale."
 	  (fg (modus-themes-get-color-value 'bg-main)))
       (when (stringp bg)
         (set-face-attribute 'my-modeline-file-icon-face nil :background bg :foreground fg)
-        (set-face-attribute 'my-modeline-file-icon-divider-face nil :foreground bg)))))
+        (set-face-attribute 'my-modeline-file-icon-divider-face nil
+                            :foreground (my-modeline--alpha-match bg))))))
 
 (defvar my-modeline-wellknown-buffers '((lisp-interaction-mode . "ELISP"))
   "A map for translating well known buffers to a special name.")
