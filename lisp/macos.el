@@ -1,6 +1,11 @@
-;; -*- lexical-binding: t; -*-
-;; macOS-specific configuration, loaded only when `system-type' is `darwin'.
-;; See init.el for the load point and rationale on ordering.
+;;; macos.el --- mac specific config   -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; macOS-specific configuration, loaded only when `system-type' is `darwin'. See init.el for the
+;; load point and rationale on ordering.
+
+;;; Code:
 
 (eval-when-compile (require 'use-package))
 
@@ -13,6 +18,7 @@
   (add-to-list 'exec-path "/opt/homebrew/bin"))
 
 ;; Deal with dark/light mode macos ui elements like the scrollbar
+(declare-function ns-auto-titlebar-mode "ns-auto-titlebar")
 (use-package ns-auto-titlebar
   :ensure t
   :config
@@ -21,12 +27,13 @@
 ;; Copy to clipboard functions for terminal mode
 ;; copy the current region directly
 (defun pbcopy-region ()
+  "Invoke pbcopy."
   (interactive)
   (call-process-region (point) (mark) "pbcopy")
   (setq deactivate-mark t))
 
-;; copy the latest kill ring
 (defun pbcopy-kill-ring (&optional _xpush)
+  "Copy the latest kill run entry."
   (interactive)
   (let ((process-connection-type nil)
 	(text (current-kill 0)))
@@ -37,6 +44,7 @@
 ;; Final version hook into interprogram-cut-function instead
 ;; for terminal mode cut to system clipboard
 (defun paste-for-osx (text &optional _push)
+  "Hook to make pasting of TEXT work."
   (let ((process-connection-type nil))
     (let ((proc (start-process "pbcopy" "*Messages*" "pbcopy")))
       (process-send-string proc text)
@@ -47,12 +55,23 @@
 
 ;; Appointment alert sound; the advice that uses it lives in init.el.
 (defun play-mac-sound (sound-name)
-  "Play a macOS system sound asynchronously."
+  "Play a macOS system SOUND-NAME asynchronously."
   (let ((sound-path (format "/System/Library/Sounds/%s.aiff" sound-name)))
     (if (file-exists-p sound-path)
         (start-process "mac-sound" nil "afplay" sound-path)
       (message "Sound file not found: %s" sound-path))))
 
-;; Appointment alert sound, called by `my-appt-glass-bell' in init.el.
 (defun my-play-appt-sound ()
+  "Appointment alert sound, called by `my-appt-glass-bell' in init.el."
   (play-mac-sound "Glass"))
+
+;; Frame transparency + blur. Needs the emacs-plus `frame-transparency'
+;; community patch (see ~/.config/emacs-plus/build.yml); on an unpatched build
+;; these parameters are simply ignored. Via `default-frame-alist' so
+;; emacsclient frames get it too, and so blur is set at frame creation.
+(add-to-list 'default-frame-alist '(alpha-background . 0.85))
+(add-to-list 'default-frame-alist '(ns-background-blur . 20))
+(add-to-list 'default-frame-alist '(ns-alpha-elements ns-alpha-all))
+
+(provide 'macos)
+;;; macos.el ends here
