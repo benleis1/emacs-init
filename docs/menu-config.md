@@ -386,6 +386,11 @@ available, else the stock entry stays."
                                  :visible (not buffer-read-only)]
                    "--"))
       (easy-menu-add-item global-map '(menu-bar edit) item spell-anchor)))
+  (easy-menu-add-item global-map '(menu-bar edit)
+                      [count-words count-words
+                                   :label "Word Count"
+                                   :help "Count the words in the region, or in the buffer if no region is active"]
+                      'execute-extended-command)
   (define-key global-map [menu-bar edit fill]
               '(menu-item "Fill" fill-region
                           :enable (and mark-active (not buffer-read-only))
