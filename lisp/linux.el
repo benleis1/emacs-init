@@ -29,3 +29,7 @@
           ((not (file-exists-p sound-path))
            (message "Sound file not found: %s" sound-path))
           (t (start-process "appt-sound" nil player sound-path)))))
+
+;; Frame transparency (pgtk): only `alpha-background' applies. Applied by
+;; `my-alpha-blend--apply' in init.el.
+(setq my-alpha-frame-params '((alpha-background . 0.60)))

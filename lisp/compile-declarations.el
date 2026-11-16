@@ -176,6 +176,7 @@
 (declare-function my-play-appt-sound "macos")
 (declare-function tab-plus-register-buffer-name-function "tab-plus")
 (declare-function my-modeline-mouse-map "modeline")
+(declare-function my-modeline-busy-icon "modeline")
 (defvar my-modeline-dedicated-window-map)
 (defvar my-modeline-dedicated-label-functions)
 (defvar my-modeline-format)

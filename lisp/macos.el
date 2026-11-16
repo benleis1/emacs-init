@@ -65,14 +65,16 @@
   "Appointment alert sound, called by `my-appt-glass-bell' in init.el."
   (play-mac-sound "Glass"))
 
-;; Frame transparency + blur. Needs the emacs-plus `frame-transparency'
-;; community patch (see ~/.config/emacs-plus/build.yml); on an unpatched build
-;; these parameters are simply ignored. Via `default-frame-alist' so
-;; emacsclient frames get it too, and so blur is set at frame creation.
-(when (bound-and-true-p my-alpha-blend)
-  (add-to-list 'default-frame-alist '(alpha-background . 0.60))
-  (add-to-list 'default-frame-alist '(ns-background-blur . 20))
-  (add-to-list 'default-frame-alist '(ns-alpha-elements ns-alpha-all)))
+;; Frame transparency + blur parameters, applied by `my-alpha-blend--apply'
+;; in init.el. Needs the emacs-plus `frame-transparency' community patch (see
+;; ~/.config/emacs-plus/build.yml); on an unpatched build these parameters are
+;; simply ignored.
+(setq my-alpha-frame-params '((alpha-background . 0.60)
+                              (ns-background-blur . 20)
+                              (ns-alpha-elements ns-alpha-all))
+      my-alpha-frame-reset-params '((alpha-background . 1.0)
+                                    (ns-background-blur . 0)
+                                    (ns-alpha-elements)))
 
 (provide 'macos)
 ;;; macos.el ends here

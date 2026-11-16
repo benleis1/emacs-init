@@ -435,16 +435,17 @@ the segment blends into the rest of the toned down modeline.")
     'my-modeline-position-face-inactive))
 
 (defun my-modeline-segment-position ()
-  "Line/column position, per `my-modeline-position-format', followed by
-the window scroll percentage and, when `size-indication-mode' is on, a
-buffer size indication -- all with the same right-click menu (toggle
+  "Position segment definition.
+Line/column position, per `my-modeline-position-format', followed by the
+window scroll percentage and, when `size-indication-mode' is on, a
+buffer size indication. This uses the same right-click menu (toggle
 line/column/size display) stock `mode-line-position' has, see
 `mode-line-column-line-number-mode-map'. The whole segment is boxed via
 `my-modeline--position-face' to look slightly depressed. Nested
-`:propertize' forms don't inherit an enclosing one's `face' -- each covers
-only the text it directly wraps -- so `face ,face' is listed explicitly in
-every one of them below, including the plain leading/trailing spaces,
-rather than relying on a single outer wrapper."
+`:propertize' forms don't inherit an enclosing one's `face'.  Each
+covers only the text it directly wraps. So `face ,face' is listed
+explicitly in every one of them below, including the plain
+leading/trailing spaces, rather than relying on a single outer wrapper."
   (let ((face (my-modeline--position-face)))
     (my-modeline--render-dual
      `((:propertize " " face ,face)
@@ -482,23 +483,27 @@ rather than relying on a single outer wrapper."
                   'face 'mode-line-emphasis))))
 
 (defun my-modeline-segment-misc-info ()
-  "Whatever third-party packages (flycheck, ...) publish via
-`mode-line-misc-info', except eglot's own bracketed text indicator --
-filtered out (non-destructively, via `remq'; no hook touches the shared
-global list) since `my-modeline-segment-eglot' replaces it with a
-colorized rocket icon instead."
+  "Segment definition for miscellaneous info.
+Whatever third-party packages (flycheck, etc.) publish via
+`mode-line-misc-info', except eglot's own bracketed text indicator is
+filtered out (non-destructively, via `remq'. since
+`my-modeline-segment-eglot' replaces it with a colorized rocket icon
+instead."
   (my-modeline--render-dual
    (remq (assq 'eglot--managed-mode mode-line-misc-info) mode-line-misc-info)))
 
 (defun my-modeline-segment-eglot ()
-  "A rocket icon standing in for eglot's own bracketed text mode-line
-  indicator (see `my-modeline-segment-misc-info'), colored by connection
-  health: `my-modeline-lsp-success' (green) once connected,
+  "Definition of the the eglot segment.
+A rocket icon standing in for eglot's own bracketed text mode-line
+  indicator, colored by connection health:
+  `my-modeline-lsp-success' (green) once connected,
   `my-modeline-lsp-warning' while requests are pending or no project
-  nickname is available yet, and `my-modeline-lsp-error' after a JSON-RPC
-  error -- mirroring doom-modeline's own eglot/lsp segment. Mouse-1 opens
-  eglot's menu, mouse-3 its server-control submenu, exactly as they do on
-  eglot's own indicator."
+  nickname is available yet, and `my-modeline-lsp-error' after a
+  JSON-RPC error.
+
+  Left click opens eglot's menu, right click its server-control submenu,
+  exactly as they do on eglot's own indicator."
+
   (when (bound-and-true-p eglot--managed-mode)
     (let* ((server (eglot-current-server))
            (nick (and server (eglot-project-nickname server)))
@@ -530,6 +535,36 @@ colorized rocket icon instead."
   (or (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-keyboard_outline" :height 1.2)
       "⌨"))
 
+(defun my-modeline-busy-icon ()
+  "Spinner glyph for busy terminals; plain ⟳ without nerd-icons."
+  (or (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-spinner")
+      "⟳"))
+
+(defvar my-modeline--busy-frame 0
+  "Index of the current busy-spinner animation frame.")
+
+(defconst my-modeline--busy-frames
+  '(("nf-md-circle_slice_1" . "◔") ("nf-md-circle_slice_2" . "◔")
+    ("nf-md-circle_slice_3" . "◑") ("nf-md-circle_slice_4" . "◑")
+    ("nf-md-circle_slice_5" . "◕") ("nf-md-circle_slice_6" . "◕")
+    ("nf-md-circle_slice_7" . "●") ("nf-md-circle_slice_8" . "●"))
+  "Spinner frames as (NERD-ICON-NAME . PLAIN-FALLBACK).")
+
+(defun my-modeline--busy-frame-icon ()
+  "Current frame of the animated busy spinner."
+  (let ((frame (nth (mod my-modeline--busy-frame (length my-modeline--busy-frames))
+                    my-modeline--busy-frames)))
+    (or (my-modeline--icon-safe #'nerd-icons-mdicon (car frame))
+        (cdr frame))))
+
+(defun my-modeline--busy-advance ()
+  "Step the spinner one frame while any ghostel terminal is busy.
+Driven by the CPU sampler so no extra timer is needed."
+  (if (my-modeline--ghostel-buffers-where 'ghostel--command-running)
+      (progn (setq my-modeline--busy-frame (1+ my-modeline--busy-frame))
+             (force-mode-line-update t))
+    (setq my-modeline--busy-frame 0)))
+
 (defun my-modeline--ghostel-buffers-where (var)
   "Live ghostel buffers in which buffer-local VAR is non-nil."
   (seq-filter (lambda (buf)
@@ -555,13 +590,13 @@ Check on which if there are more than one."
 
 (defun my-modeline-segment-ghostel-busy ()
   "Define the ghostel segment.
-A keyboard while any ghostel terminal waits for input, else an
-hourglass while any is running a command (per its OSC 133 shell
+A keyboard while any ghostel terminal waits for input, else a
+spinner while any is running a command (per its OSC 133 shell
 integration). The tooltip lists the matching buffers."
   (let ((waiting (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed))
         (busy (my-modeline--ghostel-buffers-where 'ghostel--command-running)))
     (when (or waiting busy)
-      (propertize (if waiting (my-modeline--keyboard-icon) "⏳")
+      (propertize (if waiting (my-modeline--keyboard-icon) (my-modeline--busy-frame-icon))
                   'local-map (and waiting my-modeline-ghostel-waiting-map)
                   'help-echo (mapconcat
                               #'identity
@@ -578,20 +613,25 @@ integration). The tooltip lists the matching buffers."
 ;; Redisplay doesn't happen when a terminal finishes in a hidden buffer, and the
 ;; finish hook runs before ghostel clears `ghostel--command-running', so refresh
 ;; the mode line and the tabs (which also show busy state) on a zero-delay timer.
-(defun my-modeline--refresh-ghostel-busy (&rest _)
+(defun my-modeline--refresh-tabs-and-modeline (&rest _)
+  "A one time refresh for ghostel when it transitions state."
   (run-at-time 0 nil (lambda ()
                        (force-mode-line-update t)
                        (tab-line-force-update t))))
 
 (with-eval-after-load 'ghostel
-  (add-hook 'ghostel-command-start-functions #'my-modeline--refresh-ghostel-busy)
-  (add-hook 'ghostel-command-finish-functions #'my-modeline--refresh-ghostel-busy))
+  (add-hook 'ghostel-command-start-functions #'my-modeline--refresh-tabs-and-modeline)
+  (add-hook 'ghostel-command-finish-functions #'my-modeline--refresh-tabs-and-modeline))
 
 (defun my-modeline-segment-modes ()
-  "Major mode name and `mode-line-process', deliberately without the
-`minor-mode-alist' text stock `mode-line-modes' also shows: mouse-3 on the
-major mode name already pops up the minor-mode toggle menu (see
-`mode-line-major-mode-keymap'), so there's no need to list them inline too."
+  "Definition for the Emacs mode segment.
+Major mode name and `mode-line-process', deliberately without the
+`minor-mode-alist' text stock `mode-line-modes' also shows.
+
+ Right click on the major mode name already pops up the minor-mode
+ toggle menu (see `mode-line-major-mode-keymap'). So there's no need to
+ list them inline too."
+
   (my-modeline--render-dual
    `((:propertize ("" mode-name)
                   help-echo "Major mode\nmouse-1: Display major mode menu\nmouse-2: Show help for major mode\nmouse-3: Toggle minor modes"
@@ -606,67 +646,52 @@ major mode name already pops up the minor-mode toggle menu (see
 
 ;;; VCS state faces
 ;;
-;; Loosely forked from doom-modeline's own `doom-modeline-info'/`-warning'/
-;; `-urgent'/`-vcs-default' faces -- not referenced or inherited from them,
-;; just started from the same idea -- so this file has no dependency on
-;; the doom-modeline package at all, even implicitly via face names a
-;; theme happens to style. doom-modeline's own default (no theme override)
-;; is effectively green/yellow/red via `success'/`warning'/`error', so
-;; that's the static fallback here too. This config's modus-derived themes
-;; (folio, nano-like, ...) don't color plain `success' at all, though --
-;; `my-modeline--refresh-vcs-faces' instead pulls a real green/the
-;; `warning'/`modeline-err' palette slots into these forked faces, so a
-;; clean repository still reads as green under them.
+;; Faces for `success'/`warning'/`error'. Mostly separate to change the color. This config's
+;; modus-derived themes (folio, nano-like, ...) don't color plain `success' at all, so
+;; `my-modeline--refresh-vcs-faces' instead pulls a real green/the `warning'/`modeline-err' palette
+;; slots into these faces, so a clean repository still reads as green under them.
 
 (defface my-modeline-vcs-info
   '((t :inherit success :foreground "ForestGreen"))
   "Face for an up-to-date or otherwise neutral/in-progress VCS state (e.g.
-edited, added, a merge in progress) -- green, like doom-modeline's
-`doom-modeline-info' renders by default.")
+edited, added, a merge in progress).")
 
 (defface my-modeline-vcs-warning
   '((t :inherit warning))
-  "Face for a VCS state that will need attention soon, e.g. an incoming
-pull. Forked from doom-modeline's `doom-modeline-warning'.")
+  "Face for a VCS state that will need attention soon, e.g. an incoming pull.")
 
 (defface my-modeline-vcs-urgent
   '((t :inherit error))
-  "Face for a VCS state that needs attention now, e.g. a conflict. Forked
-from doom-modeline's `doom-modeline-urgent'.")
+  "Face for a VCS state that needs attention now, e.g. a conflict,")
 
 (defface my-modeline-vcs-default
   '((t :inherit (my-modeline-vcs-info bold)))
-  "Default face for a VCS state not otherwise called out above. Forked
-from doom-modeline's `doom-modeline-vcs-default'.")
+  "Default face for a VCS state not otherwise called out above.")
 
 ;; The eglot rocket-icon segment (`my-modeline-segment-eglot') below reuses
-;; this same green/warning/urgent palette, just under its own face names --
-;; `my-modeline-lsp-success' etc., mirroring doom-modeline's own naming for
-;; its lsp/eglot segment -- so both segments read consistently and neither
+;; this same green/warning/urgent palette, just under its own face names:
+;; `my-modeline-lsp-success' etc., So both segments read consistently and neither
 ;; needs its own palette-refresh logic.
 (defface my-modeline-lsp-success
   '((t :inherit my-modeline-vcs-info))
-  "Face for a healthy eglot/LSP connection. Forked from doom-modeline's
-`doom-modeline-lsp-success'.")
+  "Face for a healthy eglot/LSP connection.")
 
 (defface my-modeline-lsp-warning
   '((t :inherit my-modeline-vcs-warning))
-  "Face for an eglot/LSP connection with requests pending, or none
-established yet. Forked from doom-modeline's `doom-modeline-lsp-warning'.")
+  "Face for an eglot/LSP connection with requests pending.
+Also used when none is established yet.")
 
 (defface my-modeline-lsp-error
   '((t :inherit my-modeline-vcs-urgent))
-  "Face for an eglot/LSP connection that hit a JSON-RPC error. Forked from
-doom-modeline's `doom-modeline-lsp-error'.")
+  "Face for an eglot/LSP connection that hit a JSON-RPC error.")
 
 (defun my-modeline--refresh-vcs-faces (&rest _)
-  "Pull `my-modeline-vcs-info'/`-warning'/`-urgent''s colors from the
-active modus-themes palette's `green'/`warning'/`modeline-err' slots --
-green being the closest equivalent to doom-modeline's own default
-green-via-`success' look, since this config's modus-derived themes don't
-color plain `success' at all -- so a clean repository still reads as
-green under them. A no-op when modus-themes isn't loaded, or the current
-theme isn't one of its derivatives."
+  "Seup `my-modeline-vcs-info'/`-warning'/`-urgent''s colors.
+Pulls from the active modus-themes palette's
+`green'/`warning'/`modeline-err' slots. since this config's
+modus-derived themes don't color plain `success' directly use green. A
+no-op when modus-themes isn't loaded, or the current theme isn't one of
+its derivatives."
   (when (fboundp 'modus-themes-get-color-value)
     (dolist (spec '((my-modeline-vcs-info . green)
                     (my-modeline-vcs-warning . warning)
@@ -680,17 +705,17 @@ theme isn't one of its derivatives."
 
 (defun my-modeline--vcs-face (state)
   "Face for STATE, using the forked faces above: `my-modeline-vcs-default'
-for a neutral/in-progress state, bold `my-modeline-vcs-warning' for a
-pending pull, and bold `my-modeline-vcs-urgent' for something that needs
-attention (removed, conflict, unregistered)."
+  for a neutral/in-progress state, bold `my-modeline-vcs-warning' for a
+  pending pull, and bold `my-modeline-vcs-urgent' for something that needs
+  attention (removed, conflict, unregistered)."
   (cond ((eq state 'needs-update) '(my-modeline-vcs-warning bold))
         ((memq state '(removed conflict unregistered)) '(my-modeline-vcs-urgent bold))
         (t 'my-modeline-vcs-default)))
 
 (defun my-modeline--vcs-icon (state face)
-  "Icon for STATE, colored with FACE: a compare/merge/pull-request/branch
-glyph depending on STATE, mirroring doom-modeline's vcs segment (an alert
-triangle instead, for a state that needs attention)."
+  "Standard git icons for STATE, colored with FACE.
+A compare/merge/pull-request/branch glyph depending on STATE. An alert
+triangle instead, for a state that needs attention."
   (if (memq state '(removed conflict unregistered))
       (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
     (my-modeline--icon-safe
@@ -703,15 +728,15 @@ triangle instead, for a state that needs attention)."
 
 (defun my-modeline--vcs-branch-name ()
   "Just the branch/state part of `vc-mode', stripped of its \"Backend:\"
-prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
-backend it is, so showing it twice is redundant."
+  prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
+  backend it is, so showing it twice is redundant."
   (and vc-mode (cadr (split-string (string-trim vc-mode) "^[A-Z]+[-:]+"))))
 
 (defvar my-modeline-vcs-collapsed t
   "When non-nil, `my-modeline-segment-vcs' shows only its icon, with the
-branch name omitted from the text (it's still available in the segment's
-help-echo tooltip). Toggled by mouse-3 on the segment, via
-`my-modeline-vcs-toggle-collapsed'.")
+  branch name omitted from the text (it's still available in the segment's
+					  help-echo tooltip). Toggled by mouse-3 on the segment, via
+  `my-modeline-vcs-toggle-collapsed'.")
 
 (defun my-modeline-vcs-toggle-collapsed ()
   "Toggle whether `my-modeline-segment-vcs' shows the branch name inline."
@@ -722,20 +747,18 @@ help-echo tooltip). Toggled by mouse-3 on the segment, via
 (defvar my-modeline-vcs-map
   (my-modeline-mouse-map '((mouse-3 . my-modeline-vcs-toggle-collapsed)))
   "Keymap composed on top of vc-mode's own click binding in
-`my-modeline-segment-vcs' (see `make-composed-keymap' there), adding
-mouse-3 as `my-modeline-vcs-toggle-collapsed' without disturbing whatever
-vc-mode itself already bound (typically mouse-1).")
+  `my-modeline-segment-vcs' (see `make-composed-keymap' there), adding
+  mouse-3 as `my-modeline-vcs-toggle-collapsed' without disturbing whatever
+  vc-mode itself already bound (typically mouse-1).")
 
 (defun my-modeline-segment-vcs ()
-  "Version-control branch, when the buffer is under version control.
-Icon and coloring mirror doom-modeline's vcs segment: a git
-compare/merge/pull-request/branch glyph depending on `vc-state', with the
-icon and branch name both colored by that same state -- not just the text
--- and the whole segment clickable via `vc-mode''s own binding, mirrored
-onto the header-line too (see `my-modeline--dualize-keymap'). Mouse-3
-toggles `my-modeline-vcs-collapsed', collapsing the segment down to just
-the icon; the branch name stays in the help-echo tooltip either way, so
-it's still reachable by hovering while collapsed."
+  "Version-control sgement, when the buffer is under version control.
+A git compare/merge/pull-request/branch glyph depending on `vc-state',
+  with the icon and branch name both colored by that same state and the
+  whole segment clickable via `vc-mode''s own binding. Right click toggles
+  `my-modeline-vcs-collapsed', collapsing the segment down to just the
+  icon; the branch name stays in the help-echo tooltip either way, so
+  it's still reachable by hovering while collapsed."
   (when vc-mode
     (let* ((state (my-modeline--vcs-state))
            (face (my-modeline--vcs-face state))
@@ -757,8 +780,9 @@ it's still reachable by hovering while collapsed."
 
 ;;; System CPU usage
 
-(defcustom my-modeline-cpu-interval 2
-  "Seconds between samples for `my-modeline-segment-cpu'."
+(defcustom my-modeline-cpu-interval 1
+  "Seconds between samples for `my-modeline-segment-cpu'.
+  Also the busy-spinner frame rate, since it advances on each sample."
   :type 'number
   :group 'my-modeline)
 
@@ -775,13 +799,14 @@ it's still reachable by hovering while collapsed."
   "Cons of (BUSY . TOTAL) jiffies from the previous /proc/stat sample.")
 
 (defun my-modeline--cpu-set (percent)
+  (my-modeline--busy-advance)
   (unless (eql percent my-modeline--cpu-percent)
     (setq my-modeline--cpu-percent percent)
     (force-mode-line-update t)))
 
 (defun my-modeline--cpu-iostat-filter (proc output)
   "Parse `iostat -n 0 -w N' lines, \"us sy id 1m 5m 15m\", from PROC.
-The first data line is the average since boot, so it is skipped."
+  The first data line is the average since boot, so it is skipped."
   (let ((buf (concat (process-get proc 'partial) output)))
     (while (string-match "\n" buf)
       (let ((line (substring buf 0 (match-beginning 0))))
@@ -836,7 +861,7 @@ The first data line is the average since boot, so it is skipped."
 
 (defun my-modeline-segment-cpu ()
   "Whole-system CPU use in percent, sampled every
-`my-modeline-cpu-interval' seconds."
+  `my-modeline-cpu-interval' seconds."
   (my-modeline--cpu-ensure-sampler)
   (when my-modeline--cpu-percent
     (let* ((blocks "▁▂▃▄▅▆▇█")
@@ -870,17 +895,17 @@ The first data line is the average since boot, so it is skipped."
 ;; function handed it, however this format is actually installed.
 
 (defun my-modeline--right-align (trailing)
-  "Return a padding string that right-aligns TRAILING (already-rendered
-mode-line content) against the edge of the window, via stock Emacs's own
-`mode--line-format-right-align'."
+  "Return a padding string that right-aligns TRAILING content.
+Aligned against the edge of the window, via stock Emacs's own
+  `mode--line-format-right-align'."
   (let ((mode-line-format (list "" 'mode-line-format-right-align trailing)))
     (mode--line-format-right-align)))
 
 (defvar my-modeline-right-margin "  "
   "Fixed padding kept between the rightmost content and the true edge of
-the window, in both `my-modeline--render' and `my-modeline--dedicated-render'.
-Without it, the last character renders flush against the very edge, which
-can look clipped even when it technically isn't.")
+  the window, in both `my-modeline--render' and `my-modeline--dedicated-render'.
+  Without it, the last character renders flush against the very edge, which
+  can look clipped even when it technically isn't.")
 
 ;;; Dedicated windows' reduced mode-line
 ;;
@@ -909,8 +934,8 @@ can look clipped even when it technically isn't.")
 
 (defvar my-modeline-dedicated-label-functions nil
   "Alist of (MODE . FUNCTION) overriding the buffer name in dedicated windows.
-FUNCTION is called in the buffer and returns the string to show in place of
-its name, or nil to fall back to the name.")
+  FUNCTION is called in the buffer and returns the string to show in place of
+  its name, or nil to fall back to the name.")
 
 (defun my-modeline--dedicated-label ()
   "The label for the current dedicated buffer: its mode's override or its name."
@@ -931,10 +956,10 @@ its name, or nil to fall back to the name.")
 
 (defun my-modeline--dedicated-render ()
   "The pin icon and buffer label, sharing the same click-to-close
-binding and help text (see `my-modeline-dedicated-window-map') -- so
-mousing over or clicking either half of this reduced mode-line behaves
-the same standard way, rather than only the buffer name being clickable.
-Parts of the label that bring their own `local-map' keep it."
+  binding and help text (see `my-modeline-dedicated-window-map') -- so
+  mousing over or clicking either half of this reduced mode-line behaves
+  the same standard way, rather than only the buffer name being clickable.
+  Parts of the label that bring their own `local-map' keep it."
   (my-modeline--propertize-missing
    (concat (or (my-modeline--pin-icon) "") " " (my-modeline--dedicated-label))
    'help-echo "mouse-1: close the window"
@@ -948,7 +973,7 @@ Parts of the label that bring their own `local-map' keep it."
     my-modeline-segment-remote-host
     my-modeline-segment-selection-info)
   "Segment functions rendered left-to-right on the left side of
-`my-modeline-format'.")
+  `my-modeline-format'.")
 
 (defvar my-modeline-right-segments
   '(my-modeline-segment-misc-info
@@ -957,49 +982,50 @@ Parts of the label that bring their own `local-map' keep it."
     my-modeline-segment-position
     my-modeline-segment-ghostel-busy
     my-modeline-segment-vcs
-    )
-  "Segment functions rendered left-to-right immediately after the left-side
-segments in `my-modeline-format', each separated by a space (see
-`my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
-counter never ends up glued directly to the VCS branch name. See
-`my-modeline-anchored-right-segments' for segments that should instead
-hug the window's right edge.")
+    my-modeline-segment-cpu)
+  "All the segment functions rendered on the RHS of the modeline.
+
+Each is separated by a space (see
+  `my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
+  counter never ends up glued directly to the VCS branch name. See
+  `my-modeline-anchored-right-segments' for segments that should instead
+  hug the window's right edge.")
 
 (defvar my-modeline-anchored-right-segments
   '(tab-plus-view-segment my-modeline-segment-zoom)
   "Segment functions right-justified flush against the window's right
-edge -- separated from `my-modeline-right-segments' by however much space
-remains, and from each other by a couple of spaces, rather than run
-together with everything else. E.g. the current tab-plus view, or the
-rightmost zoom in/out icon.")
+  edge -- separated from `my-modeline-right-segments' by however much space
+  remains, and from each other by a couple of spaces, rather than run
+  together with everything else. E.g. the current tab-plus view, or the
+  rightmost zoom in/out icon.")
 
 (defun my-modeline--eval-segments (segments &optional separator)
   "Concatenate the non-nil results of calling each of SEGMENTS, joined by
-SEPARATOR (default: none)."
+  SEPARATOR (default: none)."
   (let ((results (delq nil (mapcar #'funcall segments))))
     (if separator (mapconcat #'identity results separator) (apply #'concat results))))
 
 (defvar my-modeline-right-gap " "
   "Fixed spacing kept between `my-modeline-right-segments' and
-`my-modeline-anchored-right-segments' in `my-modeline--render', on top of
-whatever space `my-modeline--right-align' leaves -- so e.g. the major
-mode name and the tab-plus view never end up touching just because the rest
-of the line happened to fill the window exactly.")
+  `my-modeline-anchored-right-segments' in `my-modeline--render', on top of
+  whatever space `my-modeline--right-align' leaves -- so e.g. the major
+  mode name and the tab-plus view never end up touching just because the rest
+  of the line happened to fill the window exactly.")
 
 (defcustom my-modeline-box-line-width 4
   "`:line-width' used by `my-modeline--sync-frame-box' to pad out the
-whole mode-line. The box is always drawn in its own background color, so
-this only ever adds height/seamless padding, never a visible border."
+  whole mode-line. The box is always drawn in its own background color, so
+  this only ever adds height/seamless padding, never a visible border."
   :type 'integer
   :group 'my-modeline)
 
 (defun my-modeline--sync-frame-box ()
   "Give `mode-line' (and `mode-line-active', where it exists) and
-`mode-line-inactive' a box `my-modeline-box-line-width' wide, each in its
-own `:background' -- so the box is invisible as a border and just adds
-padding/height, seamlessly, to both the active and inactive mode-line.
-Recomputed on every render, like every other theme-dependent bit in this
-file (see the file commentary), so a theme switch can't leave it stale."
+  `mode-line-inactive' a box `my-modeline-box-line-width' wide, each in its
+  own `:background' -- so the box is invisible as a border and just adds
+  padding/height, seamlessly, to both the active and inactive mode-line.
+  Recomputed on every render, like every other theme-dependent bit in this
+  file (see the file commentary), so a theme switch can't leave it stale."
   (dolist (face (if (facep 'mode-line-active)
                     '(mode-line mode-line-active mode-line-inactive)
                   '(mode-line mode-line-inactive)))
@@ -1012,18 +1038,18 @@ file (see the file commentary), so a theme switch can't leave it stale."
 
 (defun my-modeline--render ()
   "The full mode-line, or, in a dedicated window (see
-`my-modeline-dedicated-window-modes'), the reduced one from
-`my-modeline--dedicated-render'.
+						  `my-modeline-dedicated-window-modes'), the reduced one from
+  `my-modeline--dedicated-render'.
 
-The right side has two zones: `my-modeline-right-segments' is positioned
-(via `my-modeline--right-align') to end exactly `my-modeline-right-gap'
-before `my-modeline-anchored-right-segments' begins, and that second zone
-gets its own, independent `my-modeline--right-align' call measuring only
-itself, so it always lands flush against the window edge regardless of
-how wide the first zone renders -- the git branch and tab-plus view, say,
-don't just run together with everything else, or with the rest of the line.
-`my-modeline-right-margin' keeps the very last character from rendering
-flush against the true edge."
+  The right side has two zones: `my-modeline-right-segments' is positioned
+  (via `my-modeline--right-align') to end exactly `my-modeline-right-gap'
+  before `my-modeline-anchored-right-segments' begins, and that second zone
+  gets its own, independent `my-modeline--right-align' call measuring only
+  itself, so it always lands flush against the window edge regardless of
+  how wide the first zone renders -- the git branch and tab-plus view, say,
+  don't just run together with everything else, or with the rest of the line.
+  `my-modeline-right-margin' keeps the very last character from rendering
+  flush against the true edge."
   (my-modeline--sync-frame-box)
   (if (my-modeline--dedicated-window-p)
       (my-modeline--dedicated-render)
@@ -1041,9 +1067,9 @@ flush against the true edge."
 
 (defvar my-modeline-format
   '("%e" (:eval (my-modeline--render)))
-  "Native replacement for doom-modeline's mode-line spec. Assign this to
-`mode-line-format' (see `my-modeline-mode') or `header-line-format' -- both
-work the same way.")
+  "Full mode-line spec.
+Assign this to `mode-line-format' (see `my-modeline-mode') or
+`header-line-format'.")
 
 (defvar my-modeline--default-format (default-value 'mode-line-format)
   "The stock `mode-line-format' saved before `my-modeline-mode' overrides it.")
@@ -1073,8 +1099,8 @@ work the same way.")
 
 (defun my-flymake-toggle-buffer-diagnostics (event)
   "Toggle the flymake diagnostics list for the buffer clicked in EVENT.
-Close the list if it is already visible, otherwise show it with
-`flymake-show-buffer-diagnostics'."
+  Close the list if it is already visible, otherwise show it with
+  `flymake-show-buffer-diagnostics'."
   (interactive "e")
   (with-selected-window (posn-window (event-start event))
     (let* ((buf (get-buffer (flymake--diagnostics-buffer-name)))
@@ -1100,8 +1126,8 @@ Close the list if it is already visible, otherwise show it with
 
 (defun my-flymake--refresh-pill-faces (&rest _)
   "Pull the flymake pill faces' colors from the active modus palette's
-`err'/`warning'/`info' slots as backgrounds, with text in `bg-main' for
-contrast. A no-op when modus-themes isn't loaded."
+  `err'/`warning'/`info' slots as backgrounds, with text in `bg-main' for
+  contrast. A no-op when modus-themes isn't loaded."
   (when (fboundp 'modus-themes-get-color-value)
     (let ((fg (modus-themes-get-color-value 'bg-main t)))
       (dolist (spec '((my-flymake-pill-error . err)
@@ -1116,25 +1142,25 @@ contrast. A no-op when modus-themes isn't loaded."
 
 (defun my-flymake--pill-svg-source (text bg fg family h)
   "SVG source for a pill of height H showing TEXT in FG on BG using FAMILY.
-Every interpolated string is XML-escaped."
+  Every interpolated string is XML-escaped."
   (let* ((fsize (* h 0.78))
          (w (round (+ (* fsize 0.62 (string-width text)) (* h 0.6)))))
     (format "<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d'>\
-<rect width='%d' height='%d' rx='%f' ry='%f' fill='%s'/>\
-<text x='50%%' y='50%%' dy='.35em' text-anchor='middle' font-family='%s' \
-font-size='%f' font-weight='800' fill='%s'>%s</text></svg>"
+  <rect width='%d' height='%d' rx='%f' ry='%f' fill='%s'/>\
+  <text x='50%%' y='50%%' dy='.35em' text-anchor='middle' font-family='%s' \
+  font-size='%f' font-weight='800' fill='%s'>%s</text></svg>"
             w h w h (/ h 2.0) (/ h 2.0) (xml-escape-string bg)
             (xml-escape-string family) fsize (xml-escape-string fg)
             (xml-escape-string text))))
 
 (defvar my-flymake--pill-svg-cache (make-hash-table :test #'equal)
   "Pill images keyed by (TEXT BG FG FAMILY HEIGHT), so redisplay reuses them.
-Reusing the same image object also lets Emacs's image cache hit.")
+  Reusing the same image object also lets Emacs's image cache hit.")
 
 (defun my-flymake--pill-svg (text face)
   "An SVG image of TEXT in a fully rounded pill colored from FACE, or nil
-when this Emacs can't display SVG. Images are cached per text, colors,
-font and height."
+  when this Emacs can't display SVG. Images are cached per text, colors,
+  font and height."
   (when (and (display-graphic-p) (image-type-available-p 'svg))
     (let* ((h (frame-char-height))
            (bg (face-attribute face :background nil t))
@@ -1150,9 +1176,9 @@ font and height."
 
 (defun my-flymake--pill (text face counter)
   "A pill for the flymake COUNTER string (plain TEXT) in FACE.
-Drawn as a rounded SVG when possible, keeping COUNTER's text properties
-(help-echo, keymap, ...) so clicking and scrolling still work; otherwise a
-padded block of FACE."
+  Drawn as a rounded SVG when possible, keeping COUNTER's text properties
+  (help-echo, keymap, ...) so clicking and scrolling still work; otherwise a
+  padded block of FACE."
   (let ((img (my-flymake--pill-svg text face)))
     (if img
         (let ((s (copy-sequence counter)))
@@ -1164,8 +1190,8 @@ padded block of FACE."
 
 (defun my-flymake--icon-chunk (type chunk)
   "CHUNK, a flymake count of TYPE, prefixed with an emoji for that level.
-The emoji carries CHUNK's mouse properties (keymap, help-echo, ...), so
-clicking and scrolling work over it too."
+  The emoji carries CHUNK's mouse properties (keymap, help-echo, ...), so
+  clicking and scrolling work over it too."
   (let ((icon (copy-sequence (pcase type
                                (:error "⛔")
                                (:warning "⚠️")
@@ -1176,14 +1202,14 @@ clicking and scrolling work over it too."
 
 (defun my-flymake--pillify (counters)
   "Return COUNTERS with each flymake count drawn as a colored pill.
-Runs tagged with a `flymake--diagnostic-type' property (see
-`flymake--mode-line-counter-1') get a pill face by type -- red for
-errors, yellow for warnings, green for notes -- drawn by `my-flymake--pill'.
-Flymake's surrounding "[" and "]" are dropped, and a space is added at
-each end (so the position segment's background, applied by
-`my-flymake-segment', shows around the pills); other text is untouched.
-When `my-modeline-flymake-pills' is nil the counts stay plain text, each
-led by an error/warning/note emoji (see `my-flymake--icon-chunk')."
+  Runs tagged with a `flymake--diagnostic-type' property (see
+							  `flymake--mode-line-counter-1') get a pill face by type -- red for
+  errors, yellow for warnings, green for notes -- drawn by `my-flymake--pill'.
+  Flymake's surrounding "[" and "]" are dropped, and a space is added at
+  each end (so the position segment's background, applied by
+	       `my-flymake-segment', shows around the pills); other text is untouched.
+  When `my-modeline-flymake-pills' is nil the counts stay plain text, each
+  led by an error/warning/note emoji (see `my-flymake--icon-chunk')."
   (let ((pos 0) (len (length counters)) (out nil) (pilled nil))
     (while (< pos len)
       (let* ((type (get-text-property pos 'flymake--diagnostic-type counters))
@@ -1218,19 +1244,19 @@ led by an error/warning/note emoji (see `my-flymake--icon-chunk')."
 
 (defun my-flymake--add-background (s)
   "Return S with the position segment's face added behind everything in it,
-without overriding any face S already carries."
+  without overriding any face S already carries."
   (add-face-text-property 0 (length s) (my-modeline--position-face) t s)
   s)
 
 (defun my-flymake-segment ()
   "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
-When `my-modeline-flymake-pills' is non-nil, each count is drawn as a
-colored pill (see `my-flymake--pillify') on the position segment's
-background.
-Click (mouse-1) anywhere in the segment to toggle flymake's diagnostics
-list for the buffer, even when it's currently empty.
-While a backend is still running and hasn't reported yet, a ⟳ glyph is
-shown after the counters and the tooltip also says \"flymake is running\"."
+  When `my-modeline-flymake-pills' is non-nil, each count is drawn as a
+  colored pill (see `my-flymake--pillify') on the position segment's
+  background.
+  Click (mouse-1) anywhere in the segment to toggle flymake's diagnostics
+  list for the buffer, even when it's currently empty.
+  While a backend is still running and hasn't reported yet, a ⟳ glyph is
+  shown after the counters and the tooltip also says \"flymake is running\"."
   (when (bound-and-true-p flymake-mode)
     (let* ((counters (my-flymake--pillify
                       (format-mode-line flymake-mode-line-counters)))
@@ -1263,22 +1289,23 @@ shown after the counters and the tooltip also says \"flymake is running\"."
   (text-scale-adjust -1))
 
 (defvar-local my-modeline-zoom-slider-active nil
-  "Non-nil when `my-modeline-segment-zoom' should show the draggable
+  "Track the zoom slider state.
+Non-nil when `my-modeline-segment-zoom' should show the draggable
 slider (`my-modeline--zoom-bar') instead of its default magnifying-glass
 icon, in this buffer. Toggled by `my-modeline-zoom-show-slider' (mouse-1
 on the icon) and `my-modeline-zoom-show-icon' (mouse-3 on the slider).")
 
 (defun my-modeline-zoom-show-slider ()
   "Switch `my-modeline-segment-zoom' to its draggable-slider display.
-Bound to `mouse-1' on the magnifying-glass icon via
-`my-modeline-zoom-icon-map'."
+  Bound to `mouse-1' on the magnifying-glass icon via
+  `my-modeline-zoom-icon-map'."
   (interactive)
   (setq my-modeline-zoom-slider-active t)
   (force-mode-line-update))
 
 (defun my-modeline-zoom-show-icon ()
   "Switch `my-modeline-segment-zoom' back to its magnifying-glass-icon
-display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
+  display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
   (interactive)
   (setq my-modeline-zoom-slider-active nil)
   (force-mode-line-update))
@@ -1293,11 +1320,11 @@ display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
 
 (defconst my-modeline-zoom-min -6
   "Lower bound of the zoom slider in `my-modeline-segment-zoom', in
-`text-scale-mode-amount' units. Purely a UI limit on the slider's own
-range -- `text-scale-mode-amount' itself has no hard bound in stock
-Emacs, so a value set by other means (e.g. `text-scale-increase' well
-past this) still displays, just clamped to the near end of the track
-\(see `my-modeline--zoom-frac'), and dragging back onto the track from
+  `text-scale-mode-amount' units. Purely a UI limit on the slider's own
+  range -- `text-scale-mode-amount' itself has no hard bound in stock
+  Emacs, so a value set by other means (e.g. `text-scale-increase' well
+					     past this) still displays, just clamped to the near end of the track
+  \(see `my-modeline--zoom-frac'), and dragging back onto the track from
 there re-takes control normally.")
 
 (defconst my-modeline-zoom-max 5
@@ -1370,7 +1397,7 @@ stale."
 
 (defun my-modeline--zoom-amount-at-x (x)
   "Map X, a pixel offset into the slider's track span (0 at its left
-edge, `my-modeline-zoom-track-width' at its right), to the
+							 edge, `my-modeline-zoom-track-width' at its right), to the
 `text-scale-mode-amount' integer it represents, clamped to
 `my-modeline-zoom-min'/`-max'."
   (let ((frac (max 0.0 (min 1.0 (/ (float x) my-modeline-zoom-track-width)))))
@@ -1399,7 +1426,7 @@ slider's track/thumb via `my-modeline-zoom-map'. Mirrors `mlscroll-mouse'
 almost exactly: jump to the clicked position immediately, then track
 further mouse movement with `track-mouse' -- updating live as the pointer
 moves, not only on release -- until a non-movement event (the button
-release) ends the drag."
+							      release) ends the drag."
   (interactive "e")
   (let* ((start-posn (event-start start-event))
          (win (posn-window start-posn))
@@ -1473,7 +1500,7 @@ to recover on click."
 (defconst my-modeline-zoom-amount-width 2
   "Fixed character width reserved for the digits/sign of the zoom amount
 text in `my-modeline-segment-zoom' (blank-padded on the left when the
-number is narrower, e.g. \" 3\" vs \"-12\"), so the slider itself doesn't
+						 number is narrower, e.g. \" 3\" vs \"-12\"), so the slider itself doesn't
 shift left/right as the amount's digit count changes going from
 positive to negative or between one and two digits.")
 

@@ -700,12 +700,32 @@
 (use-package nano-like-modus-theme
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 
+(defvar my-alpha-frame-params nil
+  "Frame parameters enabling transparency/blur; set by macos.el / linux.el.")
+
+(defvar my-alpha-frame-reset-params '((alpha-background . 1.0))
+  "Frame parameters restoring an opaque frame; OS files may override it.")
+
+(defun my-alpha-blend--apply (sym val)
+  "`:set' function for `my-alpha-blend': update new and existing frames.
+SYM is the variable and VAL its new value."
+  (set-default sym val)
+  (let ((params (if val my-alpha-frame-params my-alpha-frame-reset-params)))
+    (dolist (p params)
+      (setf (alist-get (car p) default-frame-alist) (cdr p)))
+    (dolist (f (frame-list))
+      (modify-frame-parameters f params))
+    (when (fboundp 'my-modeline--sync-file-icon-face)
+      (my-modeline--sync-file-icon-face))
+    (force-mode-line-update t)))
+
 (defcustom my-alpha-blend nil
   "Non-nil means frames get transparency/blur.
-The modeline glyphs are blended to match. Must be set before macos.el
-loads; it only affects `default-frame-alist'."
+The modeline glyphs are blended to match. Change it with `setopt' or
+`customize-set-variable' to update live frames; `setq' does not."
   :type 'boolean
-  :group 'frames)
+  :group 'frames
+  :set #'my-alpha-blend--apply)
 
 ;; OS-specific config lives in macos.el (homebrew exec-path, ns-auto-titlebar,
 ;; pbcopy/paste, appt sound) and linux.el (wl-copy clipboard, appt sound).
@@ -714,6 +734,10 @@ loads; it only affects `default-frame-alist'."
        (load "macos"))
       ((eq system-type 'gnu/linux)
        (load "linux")))
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (when my-alpha-blend
+              (my-alpha-blend--apply 'my-alpha-blend my-alpha-blend))))
 
 ;; See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
 ;; All customizations are stored on the side in custom.el
@@ -736,10 +760,8 @@ loads; it only affects `default-frame-alist'."
 (setq-default major-mode 'text-mode)
 ;; break paragraphs on after 100 characters.
 (setq-default fill-column 100)
-;; Make the cursor consistent in text mode with other modes.
-(add-hook 'text-mode-hook
-          (lambda ()
-            (setq cursor-type 'box)))
+;; Box cursor everywhere.
+(setq-default cursor-type 'box)
 
 ;; turn off menu mode in text mode to save space
 (unless (display-graphic-p)
@@ -771,8 +793,8 @@ loads; it only affects `default-frame-alist'."
 
   ;; Add dividers on the right and bottom
   (setq window-divider-default-places t)
-  ;; Set the width of the dividers to 1 pixel
-  (setq window-divider-default-right-width 1
+  ;; Set the width of the dividers to 8 pixels
+  (setq window-divider-default-right-width 8
 	window-divider-default-bottom-width 1)
   (window-divider-mode 1)
 
@@ -2186,15 +2208,16 @@ terminal icon plus input-needed / command-running status."
     (setq name (concat (match-string 1 name) (match-string 2 name))))
   ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
   (setq name (string-replace "\u2003" " " name))
-  (concat (when-let* ((icon (my-modeline--icon-safe
-                             #'nerd-icons-octicon "nf-oct-terminal")))
-            (concat icon "  "))
-          (cond
-           ((buffer-local-value 'my-ghostel-input-needed buffer)
-            (concat (my-modeline--keyboard-icon) " " name))
-           ((buffer-local-value 'ghostel--command-running buffer)
-            (concat "⏳ " name))
-           (t name))))
+  (let ((busy (and (not (buffer-local-value 'my-ghostel-input-needed buffer))
+                   (buffer-local-value 'ghostel--command-running buffer))))
+    (concat (if busy
+                (concat (my-modeline-busy-icon) "  ")
+              (when-let* ((icon (my-modeline--icon-safe
+                                 #'nerd-icons-octicon "nf-oct-terminal")))
+                (concat icon "  ")))
+            (if (buffer-local-value 'my-ghostel-input-needed buffer)
+                (concat (my-modeline--keyboard-icon) " " name)
+              name))))
 
 (tab-plus-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
@@ -3417,12 +3440,15 @@ does not use."
   (add-to-list 'my-modeline-dedicated-label-functions
                '(ilist-plus-major-mode . ilist-plus-mode-line-label)))
 
-;; Don't save/restore frame colors; otherwise a restored desktop pins the colors
-;; from when it was saved and overrides the currently loaded theme. Applied on
-;; restore too, so already-saved desktop files are fixed as well.
+;; Don't save/restore frame colors, alpha blending or window-divider widths;
+;; otherwise a restored desktop pins the values from when it was saved and
+;; overrides the currently loaded theme/config. Applied on restore too, so
+;; already-saved desktop files are fixed as well.
 (with-eval-after-load 'frameset
   (dolist (param '(background-color foreground-color background-mode
-				    border-color cursor-color mouse-color))
+				    border-color cursor-color mouse-color
+				    alpha-background ns-background-blur ns-alpha-elements
+				    right-divider-width bottom-divider-width))
     (setf (alist-get param frameset-filter-alist) :never)))
 
 ;; Persist only the primary frame in the desktop.  Any frame made while another
