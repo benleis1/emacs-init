@@ -32,4 +32,5 @@
 
 ;; Frame transparency (pgtk): only `alpha-background' applies. Applied by
 ;; `my-alpha-blend--apply' in init.el.
+(defvar my-alpha-frame-params)
 (setq my-alpha-frame-params '((alpha-background . 0.60)))

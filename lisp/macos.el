@@ -69,6 +69,8 @@
 ;; in init.el. Needs the emacs-plus `frame-transparency' community patch (see
 ;; ~/.config/emacs-plus/build.yml); on an unpatched build these parameters are
 ;; simply ignored.
+(defvar my-alpha-frame-params)
+(defvar my-alpha-frame-reset-params)
 (setq my-alpha-frame-params '((alpha-background . 0.60)
                               (ns-background-blur . 20)
                               (ns-alpha-elements ns-alpha-all))
