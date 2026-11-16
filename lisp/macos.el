@@ -69,9 +69,10 @@
 ;; community patch (see ~/.config/emacs-plus/build.yml); on an unpatched build
 ;; these parameters are simply ignored. Via `default-frame-alist' so
 ;; emacsclient frames get it too, and so blur is set at frame creation.
-(add-to-list 'default-frame-alist '(alpha-background . 0.85))
-(add-to-list 'default-frame-alist '(ns-background-blur . 20))
-(add-to-list 'default-frame-alist '(ns-alpha-elements ns-alpha-all))
+(when (bound-and-true-p my-alpha-blend)
+  (add-to-list 'default-frame-alist '(alpha-background . 0.60))
+  (add-to-list 'default-frame-alist '(ns-background-blur . 20))
+  (add-to-list 'default-frame-alist '(ns-alpha-elements ns-alpha-all)))
 
 (provide 'macos)
 ;;; macos.el ends here

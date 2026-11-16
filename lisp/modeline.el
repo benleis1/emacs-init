@@ -165,7 +165,7 @@ pre-blended with the default background to match."
          (bg (face-background 'default nil t))
          (c (color-name-to-rgb color))
          (d (and (stringp bg) (color-name-to-rgb bg))))
-    (if (and c d (< a 1.0))
+    (if (and (bound-and-true-p my-alpha-blend) c d (< a 1.0))
         (apply #'color-rgb-to-hex
                (append (seq-mapn (lambda (x y) (+ (* a x) (* (- 1 a) y))) c d) '(2)))
       color)))
@@ -1492,18 +1492,19 @@ after a `mouse-1' click on it -- the draggable slider
 `my-modeline-zoom-slider-active'), followed either way by the buffer's
 current zoom amount (see `text-scale-mode-amount') in a fixed-width
 field (see `my-modeline-zoom-amount-width'), blank when at its default
-of zero."
-  (let ((amount (string-pad (if (bound-and-true-p text-scale-mode)
-                                (number-to-string text-scale-mode-amount)
-                              "")
-                            my-modeline-zoom-amount-width ?\s t))
-        (control (if my-modeline-zoom-slider-active
-                     (my-modeline--zoom-bar)
-                   (propertize (my-modeline--zoom-icon)
-                               'help-echo "mouse-1: show zoom slider"
-                               'mouse-face 'mode-line-highlight
-                               'local-map my-modeline-zoom-icon-map))))
-    (concat control amount)))
+of zero. Omitted (nil) in TUI Emacs."
+  (when (display-graphic-p)
+    (let ((amount (string-pad (if (bound-and-true-p text-scale-mode)
+                                  (number-to-string text-scale-mode-amount)
+                                "")
+                              my-modeline-zoom-amount-width ?\s t))
+          (control (if my-modeline-zoom-slider-active
+                       (my-modeline--zoom-bar)
+                     (propertize (my-modeline--zoom-icon)
+                                 'help-echo "mouse-1: show zoom slider"
+                                 'mouse-face 'mode-line-highlight
+                                 'local-map my-modeline-zoom-icon-map))))
+      (concat control amount))))
 
 (provide 'modeline)
 
