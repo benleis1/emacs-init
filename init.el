@@ -700,6 +700,13 @@
 (use-package nano-like-modus-theme
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
 
+(defcustom my-alpha-blend nil
+  "Non-nil means frames get transparency/blur.
+The modeline glyphs are blended to match. Must be set before macos.el
+loads; it only affects `default-frame-alist'."
+  :type 'boolean
+  :group 'frames)
+
 ;; OS-specific config lives in macos.el (homebrew exec-path, ns-auto-titlebar,
 ;; pbcopy/paste, appt sound) and linux.el (wl-copy clipboard, appt sound).
 ;; Loaded here, after elpaca/use-package are ready.
@@ -3877,7 +3884,7 @@ editable field."
         xref-show-definitions-function #'consult-xref))
 
 (my-profile-mark "temptemp - try out new builtin completion")
-;;; temptemp - try out new builtin completion.
+;;; Configure the new builtin completion code in emacs 31.
 
 (when (> emacs-major-version 30)
   (use-package completion-preview
