@@ -61,6 +61,7 @@
 (require 'nerd-icons nil t)
 (require 'tab-line)
 (require 'xml)
+(require 'color)
 
 ;; Modeline loads before tab-plus but needs to reference a few functions.
 (declare-function tab-plus-view-name "tab-plus")
@@ -640,6 +641,8 @@ Major mode name and `mode-line-process', deliberately without the
      ("" mode-line-process))))
 
 (defun my-modeline--vcs-state ()
+  "Return back the `vc-state' value for the current buffer.
+nil will be returned if it isn't vc backed."
   (and buffer-file-name
        (let ((backend (vc-backend buffer-file-name)))
          (and backend (vc-state buffer-file-name backend)))))
@@ -653,8 +656,8 @@ Major mode name and `mode-line-process', deliberately without the
 
 (defface my-modeline-vcs-info
   '((t :inherit success :foreground "ForestGreen"))
-  "Face for an up-to-date or otherwise neutral/in-progress VCS state (e.g.
-edited, added, a merge in progress).")
+  "Face for an up-to-date or otherwise neutral/in-progress VCS state.
+E.g. edited, a merge in progress).")
 
 (defface my-modeline-vcs-warning
   '((t :inherit warning))
@@ -662,7 +665,7 @@ edited, added, a merge in progress).")
 
 (defface my-modeline-vcs-urgent
   '((t :inherit error))
-  "Face for a VCS state that needs attention now, e.g. a conflict,")
+  "Face for a VCS state that needs attention now, e.g. a conflict.")
 
 (defface my-modeline-vcs-default
   '((t :inherit (my-modeline-vcs-info bold)))
@@ -714,8 +717,8 @@ its derivatives."
 
 (defun my-modeline--vcs-icon (state face)
   "Standard git icons for STATE, colored with FACE.
-A compare/merge/pull-request/branch glyph depending on STATE. An alert
-triangle instead, for a state that needs attention."
+  A compare/merge/pull-request/branch glyph depending on STATE. An alert
+  triangle instead, for a state that needs attention."
   (if (memq state '(removed conflict unregistered))
       (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
     (my-modeline--icon-safe
@@ -753,7 +756,7 @@ triangle instead, for a state that needs attention."
 
 (defun my-modeline-segment-vcs ()
   "Version-control sgement, when the buffer is under version control.
-A git compare/merge/pull-request/branch glyph depending on `vc-state',
+  A git compare/merge/pull-request/branch glyph depending on `vc-state',
   with the icon and branch name both colored by that same state and the
   whole segment clickable via `vc-mode''s own binding. Right click toggles
   `my-modeline-vcs-collapsed', collapsing the segment down to just the
@@ -859,6 +862,14 @@ A git compare/merge/pull-request/branch glyph depending on `vc-state',
     (apply #'color-rgb-to-hex
            (append (cl-mapcar (lambda (b r) (+ b (* f (- r b)))) base red) '(2)))))
 
+(defun my-modeline--cpu-background ()
+  "Mode-line background nudged lighter in dark themes, darker in light ones."
+  (let ((bg (face-background 'mode-line-emphasis nil 'default)))
+    (when (and (stringp bg) (color-name-to-rgb bg))
+      (if (eq (frame-parameter nil 'background-mode) 'dark)
+          (color-lighten-name bg 8)
+        (color-darken-name bg 8)))))
+
 (defun my-modeline-segment-cpu ()
   "Whole-system CPU use in percent, sampled every
   `my-modeline-cpu-interval' seconds."
@@ -868,8 +879,11 @@ A git compare/merge/pull-request/branch glyph depending on `vc-state',
            (idx (min (1- (length blocks))
                      (max 0 (/ (* my-modeline--cpu-percent (length blocks)) 100)))))
       (propertize (string (aref blocks idx))
-                  'face (list 'mode-line-emphasis
-                              (list :foreground (my-modeline--cpu-color my-modeline--cpu-percent)))
+                  'face (list (append
+                               (list :foreground (my-modeline--cpu-color my-modeline--cpu-percent))
+                               (when-let* ((bg (my-modeline--cpu-background)))
+                                 (list :background bg)))
+                              'mode-line-emphasis)
                   'help-echo (format "System CPU use (user + system): %d%%"
                                      my-modeline--cpu-percent)))))
 
@@ -896,7 +910,7 @@ A git compare/merge/pull-request/branch glyph depending on `vc-state',
 
 (defun my-modeline--right-align (trailing)
   "Return a padding string that right-aligns TRAILING content.
-Aligned against the edge of the window, via stock Emacs's own
+  Aligned against the edge of the window, via stock Emacs's own
   `mode--line-format-right-align'."
   (let ((mode-line-format (list "" 'mode-line-format-right-align trailing)))
     (mode--line-format-right-align)))
@@ -985,8 +999,8 @@ Aligned against the edge of the window, via stock Emacs's own
     my-modeline-segment-cpu)
   "All the segment functions rendered on the RHS of the modeline.
 
-Each is separated by a space (see
-  `my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
+  Each is separated by a space (see
+				`my-modeline--eval-segments''s SEPARATOR argument) so e.g. the flymake
   counter never ends up glued directly to the VCS branch name. See
   `my-modeline-anchored-right-segments' for segments that should instead
   hug the window's right edge.")
@@ -1068,8 +1082,8 @@ Each is separated by a space (see
 (defvar my-modeline-format
   '("%e" (:eval (my-modeline--render)))
   "Full mode-line spec.
-Assign this to `mode-line-format' (see `my-modeline-mode') or
-`header-line-format'.")
+  Assign this to `mode-line-format' (see `my-modeline-mode') or
+  `header-line-format'.")
 
 (defvar my-modeline--default-format (default-value 'mode-line-format)
   "The stock `mode-line-format' saved before `my-modeline-mode' overrides it.")
@@ -1290,10 +1304,11 @@ Assign this to `mode-line-format' (see `my-modeline-mode') or
 
 (defvar-local my-modeline-zoom-slider-active nil
   "Track the zoom slider state.
-Non-nil when `my-modeline-segment-zoom' should show the draggable
-slider (`my-modeline--zoom-bar') instead of its default magnifying-glass
-icon, in this buffer. Toggled by `my-modeline-zoom-show-slider' (mouse-1
-on the icon) and `my-modeline-zoom-show-icon' (mouse-3 on the slider).")
+  Non-nil when `my-modeline-segment-zoom' should show the draggable
+  slider (`my-modeline--zoom-bar') instead of its default
+  magnifying-glass icon, in this buffer. Toggled by
+  `my-modeline-zoom-show-slider' (mouse-1 on the icon) and
+  `my-modeline-zoom-show-icon' (mouse-3 on the slider).")
 
 (defun my-modeline-zoom-show-slider ()
   "Switch `my-modeline-segment-zoom' to its draggable-slider display.
