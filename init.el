@@ -2203,21 +2203,22 @@ the next prompt reports its title."
 (defun my-ghostel-tab-name (name buffer)
   "Return the tab text for ghostel BUFFER named NAME.
 Strips the \"*ghostel: \" decoration (keeping any <N> suffix) and adds a
-terminal icon plus input-needed / command-running status."
+a status icon: keyboard when input is needed, spinner when a command is
+running, otherwise a terminal icon."
   (when (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name)
     (setq name (concat (match-string 1 name) (match-string 2 name))))
   ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
   (setq name (string-replace "\u2003" " " name))
-  (let ((busy (and (not (buffer-local-value 'my-ghostel-input-needed buffer))
-                   (buffer-local-value 'ghostel--command-running buffer))))
-    (concat (if busy
-                (concat (my-modeline-busy-icon) "  ")
-              (when-let* ((icon (my-modeline--icon-safe
-                                 #'nerd-icons-octicon "nf-oct-terminal")))
-                (concat icon "  ")))
-            (if (buffer-local-value 'my-ghostel-input-needed buffer)
-                (concat (my-modeline--keyboard-icon) " " name)
-              name))))
+  (cond
+   ((buffer-local-value 'my-ghostel-input-needed buffer)
+    (concat (my-modeline--keyboard-icon) "  " name))
+   ((buffer-local-value 'ghostel--command-running buffer)
+    (concat (my-modeline-busy-icon) "  " name))
+   (t
+    (concat (when-let* ((icon (my-modeline--icon-safe
+                               #'nerd-icons-octicon "nf-oct-terminal")))
+              (concat icon "  "))
+            name))))
 
 (tab-plus-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
@@ -3202,6 +3203,12 @@ The left margin is only opened up when the buffer has at least one test."
                (slot . 0)
                (window-height . 0.25)
                (dedicated . t)))
+
+;; Keep the default placement but dedicate the window, so `q' (special-mode's
+;; `quit-window', which kills per `quit-window-kill-buffer') also deletes it
+;; rather than showing some other buffer in it.
+(add-to-list 'display-buffer-alist
+             '("\\`\\*Warnings\\*\\'" nil (dedicated . t)))
 
 ;; [mode-line mouse-1] is globally bound to `mouse-select-window' (see
 ;; mouse.el), so clicking the flymake diagnostics window's mode-line
