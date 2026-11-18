@@ -933,6 +933,25 @@ Customize the thresholds via `my-max-auto-revert-size'."
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
 
+;; Setup the speedbar if loaded
+(with-eval-after-load 'speedbar
+  ;; show all files
+  (setq speedbar-show-unknown-files t)
+  ;; Don't check and show vc or compile state.
+  (setq speedbar-obj-do-check nil)
+  (setq speedbar-vc-do-check nil)
+  ;; don't use a separate frame,
+  (setq speedbar-prefer-window t)
+
+  ;; Emacs 31's `speedbar-window-mode' never runs `speedbar-mode' in its buffer
+  ;; (unlike `speedbar-frame-mode'). Fix that so it runs normally.
+  (defun my-speedbar-window-ensure-mode (&rest _)
+    (unless (buffer-live-p speedbar-buffer)
+      (with-current-buffer
+          (setq speedbar-buffer (get-buffer-create speedbar--buffer-name))
+        (speedbar-mode))))
+  (advice-add 'speedbar-window-mode :before #'my-speedbar-window-ensure-mode))
+
 (my-profile-mark "backup and autosave")
 ;;; backup and autosave.
 ;; put old version in .saves under .emacs.d and disable autosaves.
@@ -1903,7 +1922,7 @@ dismissing the mode-line notice."
   (setq org-modern-table nil)
   ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
   ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts, so
-  ;; reuse level 4.
+  ;; reuse level 4.t
   (setq org-modern-fold-stars
         '(("▶" . "▼") ("▷" . "▽") ("▹" . "▿") ("▹" . "▿") ("▸" . "▾"))))
 

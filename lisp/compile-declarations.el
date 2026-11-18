@@ -66,6 +66,13 @@
 (declare-function widget-field-value-create "wid-edit")
 (declare-function widget-value-set "wid-edit")
 (defvar c-basic-offset)
+(defvar speedbar-prefer-window)
+(defvar speedbar-show-unknown-files)
+(defvar speedbar-obj-do-check)
+(defvar speedbar-vc-do-check)
+(defvar speedbar-buffer)
+(defvar speedbar--buffer-name)
+(declare-function speedbar-mode "speedbar")
 (declare-function profiler-report "profiler")
 (declare-function profiler-stop "profiler")
 (declare-function dired-mouse-find-file "dired")
@@ -216,5 +223,6 @@
 (declare-function my-ediff-nav-button "init")
 (declare-function my-ediff-nav-string "init")
 (declare-function my-ediff-install-nav-overlay "init")
+(declare-function my-speedbar-window-ensure-mode "init")
 
 ;;; compile-declarations.el ends here
