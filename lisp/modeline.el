@@ -319,8 +319,9 @@ rather than at position 0."
     (emacs-lisp-compilation-mode . t) (help-mode . t) (occur-mode . t) (ilist-plus-major-mode . t))
   "Major modes whose buffers get a click-to-close mode-line/header-line.
 Each entry is (MODE . KILL): KILL non-nil kills the buffer when the
-window is closed, nil just closes the window."
-  :type '(alist :key-type symbol :value-type boolean)
+window is closed, nil just closes the window.  KILL may also be a
+function, called with the window to close instead of `quit-window'."
+  :type '(alist :key-type symbol :value-type (choice boolean function))
   :group 'my-modeline)
 
 (defun my-modeline--dedicated-window-entry ()
@@ -339,12 +340,14 @@ window is closed, nil just closes the window."
 Kills its buffer too if the mode's entry in
 `my-modeline-dedicated-window-modes' says so."
   (interactive "e")
-  (let ((window (posn-window (event-start event)))
-        ;; init.el sets this to t globally, which would kill every buffer.
-        (quit-window-kill-buffer nil))
-    (quit-window (with-current-buffer (window-buffer window)
-                   (cdr (my-modeline--dedicated-window-entry)))
-                 window)))
+  (let* ((window (posn-window (event-start event)))
+         ;; init.el sets this to t globally, which would kill every buffer.
+         (quit-window-kill-buffer nil)
+         (kill (with-current-buffer (window-buffer window)
+                 (cdr (my-modeline--dedicated-window-entry)))))
+    (if (functionp kill)
+        (funcall kill window)
+      (quit-window kill window))))
 
 (defvar my-modeline-dedicated-window-map
   (my-modeline-mouse-map '((mouse-1 . my-modeline-close-dedicated-window))))
@@ -574,10 +577,12 @@ Driven by the CPU sampler so no extra timer is needed."
               (buffer-list)))
 
 (defun my-modeline-switch-to-waiting-terminal (event)
-  "Switch to a ghostel terminal waiting for input on the EVENT.
-Check on which if there are more than one."
+  "Switch to a ghostel terminal on the EVENT's window.
+Prefer terminals waiting for input, else busy ones.  Prompt for which if
+there are more than one."
   (interactive "e")
-  (let ((waiting (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed)))
+  (let ((waiting (or (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed)
+                     (my-modeline--ghostel-buffers-where 'ghostel--command-running))))
     (when waiting
       (let ((window (posn-window (event-start event))))
         (when (window-live-p window) (select-window window)))
@@ -598,7 +603,7 @@ integration). The tooltip lists the matching buffers."
         (busy (my-modeline--ghostel-buffers-where 'ghostel--command-running)))
     (when (or waiting busy)
       (propertize (if waiting (my-modeline--keyboard-icon) (my-modeline--busy-frame-icon))
-                  'local-map (and waiting my-modeline-ghostel-waiting-map)
+                  'local-map my-modeline-ghostel-waiting-map
                   'help-echo (mapconcat
                               #'identity
                               (delq nil
@@ -606,7 +611,7 @@ integration). The tooltip lists the matching buffers."
                                                (concat "Terminals waiting for input (mouse-1: switch):\n"
                                                        (mapconcat #'buffer-name waiting "\n")))
                                           (and busy
-                                               (concat "Busy terminals:\n"
+                                               (concat "Busy terminals" (unless waiting " (mouse-1: switch)") ":\n"
                                                        (mapconcat #'buffer-name busy "\n")))))
                               "\n\n")
                   'mouse-face 'mode-line-highlight))))
@@ -707,18 +712,19 @@ its derivatives."
 (my-modeline--refresh-vcs-faces)
 
 (defun my-modeline--vcs-face (state)
-  "Face for STATE, using the forked faces above: `my-modeline-vcs-default'
-  for a neutral/in-progress state, bold `my-modeline-vcs-warning' for a
-  pending pull, and bold `my-modeline-vcs-urgent' for something that needs
-  attention (removed, conflict, unregistered)."
+  "Return the face for the given vc STATE to use in the segment.
+Using the faces above: `my-modeline-vcs-default' for a
+neutral/in-progress state, bold `my-modeline-vcs-warning' for a pending
+pull, and bold `my-modeline-vcs-urgent' for something that needs
+attention (removed, conflict, unregistered)."
   (cond ((eq state 'needs-update) '(my-modeline-vcs-warning bold))
         ((memq state '(removed conflict unregistered)) '(my-modeline-vcs-urgent bold))
         (t 'my-modeline-vcs-default)))
 
 (defun my-modeline--vcs-icon (state face)
-  "Standard git icons for STATE, colored with FACE.
-  A compare/merge/pull-request/branch glyph depending on STATE. An alert
-  triangle instead, for a state that needs attention."
+  "Return standard git icons for STATE, colored with FACE.
+A compare/merge/pull-request/branch glyph depending on STATE. An alert
+triangle instead, for a state that needs attention."
   (if (memq state '(removed conflict unregistered))
       (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
     (my-modeline--icon-safe
@@ -730,16 +736,16 @@ its derivatives."
      :face face)))
 
 (defun my-modeline--vcs-branch-name ()
-  "Just the branch/state part of `vc-mode', stripped of its \"Backend:\"
-  prefix (e.g. \"Git:main\" -> \"main\") -- the icon already conveys which
-  backend it is, so showing it twice is redundant."
+  "Return the branch/state part of `vc-mode' stripped of any prefixes.
+e.g. \"Git:main\" -> \"main\")."
   (and vc-mode (cadr (split-string (string-trim vc-mode) "^[A-Z]+[-:]+"))))
 
 (defvar my-modeline-vcs-collapsed t
-  "When non-nil, `my-modeline-segment-vcs' shows only its icon, with the
-  branch name omitted from the text (it's still available in the segment's
-					  help-echo tooltip). Toggled by mouse-3 on the segment, via
-  `my-modeline-vcs-toggle-collapsed'.")
+  "Track the vcs segment state.
+When non-nil, `my-modeline-segment-vcs' shows only its icon, with the
+branch name omitted from the text (it's still available in the
+segment's help-echo tooltip). Toggled by right clicking on the
+segment.")
 
 (defun my-modeline-vcs-toggle-collapsed ()
   "Toggle whether `my-modeline-segment-vcs' shows the branch name inline."
@@ -749,14 +755,14 @@ its derivatives."
 
 (defvar my-modeline-vcs-map
   (my-modeline-mouse-map '((mouse-3 . my-modeline-vcs-toggle-collapsed)))
-  "Keymap composed on top of vc-mode's own click binding in
-  `my-modeline-segment-vcs' (see `make-composed-keymap' there), adding
-  mouse-3 as `my-modeline-vcs-toggle-collapsed' without disturbing whatever
-  vc-mode itself already bound (typically mouse-1).")
+  "Keymap composed on top of vc-mode's own click binding.
+This binds right click as `my-modeline-vcs-toggle-collapsed' without
+disturbing whatever `vc-mode' itself already bound (typically the left
+click).")
 
 (defun my-modeline-segment-vcs ()
   "Version-control sgement, when the buffer is under version control.
-  A git compare/merge/pull-request/branch glyph depending on `vc-state',
+A git compare/merge/pull-request/branch glyph depending on `vc-state',
   with the icon and branch name both colored by that same state and the
   whole segment clickable via `vc-mode''s own binding. Right click toggles
   `my-modeline-vcs-collapsed', collapsing the segment down to just the
@@ -785,7 +791,7 @@ its derivatives."
 
 (defcustom my-modeline-cpu-interval 1
   "Seconds between samples for `my-modeline-segment-cpu'.
-  Also the busy-spinner frame rate, since it advances on each sample."
+Also the busy-spinner frame rate, since it advances on each sample."
   :type 'number
   :group 'my-modeline)
 
@@ -802,6 +808,7 @@ its derivatives."
   "Cons of (BUSY . TOTAL) jiffies from the previous /proc/stat sample.")
 
 (defun my-modeline--cpu-set (percent)
+  "Set the cpu bar PERCENT in the cpu segment."
   (my-modeline--busy-advance)
   (unless (eql percent my-modeline--cpu-percent)
     (setq my-modeline--cpu-percent percent)
@@ -809,7 +816,8 @@ its derivatives."
 
 (defun my-modeline--cpu-iostat-filter (proc output)
   "Parse `iostat -n 0 -w N' lines, \"us sy id 1m 5m 15m\", from PROC.
-  The first data line is the average since boot, so it is skipped."
+OUTPUT contains the lines. Note: the first data line is the average since
+boot, so it is skipped."
   (let ((buf (concat (process-get proc 'partial) output)))
     (while (string-match "\n" buf)
       (let ((line (substring buf 0 (match-beginning 0))))
@@ -835,7 +843,8 @@ its derivatives."
            (round (* 100.0 (/ (float (- busy (car prev)))
                               (- total (cdr prev)))))))))))
 
-(defun my-modeline--cpu-ensure-sampler ()
+(defun my-modeline--start-cpu-sampling-timer ()
+  "Setup the sample thread that takes cpu usage measurements."
   (cond
    ((eq system-type 'darwin)
     (unless (process-live-p my-modeline--cpu-process)
@@ -871,9 +880,8 @@ its derivatives."
         (color-darken-name bg 8)))))
 
 (defun my-modeline-segment-cpu ()
-  "Whole-system CPU use in percent, sampled every
-  `my-modeline-cpu-interval' seconds."
-  (my-modeline--cpu-ensure-sampler)
+  "Whole-system CPU use in percent, sampled every `my-modeline-cpu-interval' seconds."
+  (my-modeline--start-cpu-sampling-timer)
   (when my-modeline--cpu-percent
     (let* ((blocks "▁▂▃▄▅▆▇█")
            (idx (min (1- (length blocks))
@@ -958,6 +966,18 @@ its derivatives."
     (or (and entry (funcall (cdr entry)))
         (format-mode-line (my-modeline--buffer-id)))))
 
+(defvar my-modeline-dedicated-help-functions nil
+  "Alist of (MODE . FUNCTION) adding to the help text in dedicated windows.
+FUNCTION is called in the buffer and returns a string shown above the
+standard \"mouse-1: close the window\" line, or nil for nothing extra.")
+
+(defun my-modeline--dedicated-help ()
+  "The help text for the current dedicated buffer's mode-line."
+  (let* ((entry (seq-find (lambda (e) (derived-mode-p (car e)))
+                          my-modeline-dedicated-help-functions))
+         (extra (and entry (funcall (cdr entry)))))
+    (concat (and extra (concat extra "\n\n")) "mouse-1: close the window")))
+
 (defun my-modeline--propertize-missing (string &rest props)
   "Add PROPS to the parts of STRING that have no `local-map' of their own."
   (let ((pos 0) (len (length string)))
@@ -976,7 +996,7 @@ its derivatives."
   Parts of the label that bring their own `local-map' keep it."
   (my-modeline--propertize-missing
    (concat (or (my-modeline--pin-icon) "") " " (my-modeline--dedicated-label))
-   'help-echo "mouse-1: close the window"
+   'help-echo (my-modeline--dedicated-help)
    'mouse-face 'my-modeline-dedicated-highlight
    'local-map my-modeline-dedicated-window-map))
 
@@ -1210,6 +1230,7 @@ its derivatives."
                                (:error "⛔")
                                (:warning "⚠️")
                                (_ "💡")))))
+    (add-face-text-property 0 (length icon) '(:height 0.80) nil icon)
     (dolist (prop '(keymap mouse-face help-echo flymake--diagnostic-type))
       (put-text-property 0 (length icon) prop (get-text-property 0 prop chunk) icon))
     (concat icon (propertize " " 'display '(space :width 0.3)) chunk)))
