@@ -1094,7 +1094,47 @@ Customize the thresholds via `my-max-auto-revert-size'."
                             (car e) (nth 2 e)))))
         (goto-char (point-min))
         (special-mode))
-      (pop-to-buffer (current-buffer)))))
+      (pop-to-buffer (current-buffer))))
+
+  (defun my-show-nerd-icon-for-file (file)
+    "Show the icon nerd-icons picks for FILE, and which rule chose it.
+Directories follow `nerd-icons-icon-for-dir' (remote, symlink, submodule and
+.git rules first); anything else follows `nerd-icons-icon-for-file'."
+    (interactive "FFile: ")
+    (let* ((case-fold-search nil)
+           (path (expand-file-name file))
+           (name (file-name-nondirectory (directory-file-name path)))
+           (isdir (or (directory-name-p file) (file-directory-p path)))
+           icon spec why)
+      (if isdir
+          (let ((entry (assoc (file-name-base (directory-file-name path))
+                              nerd-icons-dir-icon-alist #'string-match)))
+            (setq icon (nerd-icons-icon-for-dir path))
+            (cond ((file-remote-p path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-remote")
+                         why "remote path"))
+                  ((file-symlink-p path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-file_symlink_directory")
+                         why "directory is a symlink"))
+                  ((nerd-icons-dir-is-submodule path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-file_submodule")
+                         why "git submodule (listed in .gitmodules)"))
+                  ((file-exists-p (format "%s/.git" path))
+                   (setq spec '(nerd-icons-octicon "nf-oct-repo")
+                         why "contains .git (repo root)"))
+                  (t (setq spec (cdr entry)
+                           why (format "directory name %S in `nerd-icons-dir-icon-alist'"
+                                       (car entry))))))
+        (let* ((ext (file-name-extension name))
+               (re-entry (assoc name nerd-icons-regexp-icon-alist #'string-match))
+               (ext-entry (and ext (assoc (downcase ext) nerd-icons-extension-icon-alist)))
+               (entry (or re-entry ext-entry)))
+          (setq icon (nerd-icons-icon-for-file name)
+                spec (if entry (cdr entry) nerd-icons-default-file-icon)
+                why (cond (re-entry (format "regexp %S in `nerd-icons-regexp-icon-alist'" (car re-entry)))
+                          (ext-entry (format "extension %S in `nerd-icons-extension-icon-alist'" (car ext-entry)))
+                          (t "no match; `nerd-icons-default-file-icon'")))))
+      (message "%s  %s -> %s %S (%s)" icon name (nth 0 spec) (nth 1 spec) why))))
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 (use-package nerd-icons-dired
