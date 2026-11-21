@@ -971,9 +971,11 @@ Customize the thresholds via `my-max-auto-revert-size'."
 
   ;; Replace the folder and file XPM images with nerd-icons glyphs
   (defface my-speedbar-dir-icon '((t :inherit dired-directory))
-    "Face for speedbar directory glyphs.")
+    "Face for speedbar directory glyphs."
+    :group 'speedbar)
   (defface my-speedbar-file-icon '((t :inherit default :height 1.2))
-    "Face for speedbar file glyphs.")
+    "Face for speedbar file glyphs."
+    :group 'speedbar)
 
   (defun my-speedbar-glyph (orig start length)
     "Show a nerd-icons folder or file for its marker, else defer to ORIG."
@@ -992,6 +994,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
                  'face nil
                  'rear-nonsticky '(display face)))
         (funcall orig start length))))
+  (declare-function my-speedbar-glyph "init")
   (advice-add 'speedbar-insert-image-button-maybe :around #'my-speedbar-glyph))
 
 (my-profile-mark "backup and autosave")
