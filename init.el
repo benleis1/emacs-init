@@ -950,7 +950,24 @@ Customize the thresholds via `my-max-auto-revert-size'."
       (with-current-buffer
           (setq speedbar-buffer (get-buffer-create speedbar--buffer-name))
         (speedbar-mode))))
-  (advice-add 'speedbar-window-mode :before #'my-speedbar-window-ensure-mode))
+  (advice-add 'speedbar-window-mode :before #'my-speedbar-window-ensure-mode)
+
+  ;; Append the file's `vc-state' to the echo-area info shown for a file line.
+  (defun my-speedbar-item-info-file (&optional filename)
+    "Like `speedbar-item-info-file-helper', but also show the `vc-state'."
+    (let* ((item (or filename (speedbar-line-file)))
+           (attr (and item (file-attributes item))))
+      (when attr
+        (let ((state (and (not (file-remote-p item))
+                          (not (file-directory-p item))
+                          (ignore-errors (vc-state item)))))
+          (dframe-message "%s %-6d %s%s"
+                          (file-attribute-modes attr)
+                          (file-attribute-size attr)
+                          item
+                          (if state (format "  [vc: %s]" state) ""))))))
+  (advice-add 'speedbar-item-info-file-helper :override
+              #'my-speedbar-item-info-file))
 
 (my-profile-mark "backup and autosave")
 ;;; backup and autosave.
@@ -1066,7 +1083,7 @@ Customize the thresholds via `my-max-auto-revert-size'."
 ;; my preference is for short key strokes and to usually bind other global things to
 ;; Control + a number key which are closer than the function keys and not in use.
 
-(global-set-key (kbd "C-1") 'treemacs)
+(global-set-key (kbd "C-1") 'speedbar)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-3") 'wikimode-toggle)
 (global-set-key (kbd "C-\\") 'ilist-plus-toggle)
@@ -1922,7 +1939,7 @@ dismissing the mode-line notice."
   (setq org-modern-table nil)
   ;; Level-3's default fold indicator (⯈/⯆, U+2BC8/U+2BC6) lives in the sparse
   ;; Miscellaneous Symbols and Arrows block and doesn't render in our fonts, so
-  ;; reuse level 4.t
+  ;; reuse level 4.
   (setq org-modern-fold-stars
         '(("▶" . "▼") ("▷" . "▽") ("▹" . "▿") ("▹" . "▿") ("▸" . "▾"))))
 

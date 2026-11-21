@@ -73,6 +73,8 @@
 (defvar speedbar-buffer)
 (defvar speedbar--buffer-name)
 (declare-function speedbar-mode "speedbar")
+(declare-function speedbar-line-file "speedbar")
+(declare-function dframe-message "dframe")
 (declare-function profiler-report "profiler")
 (declare-function profiler-stop "profiler")
 (declare-function dired-mouse-find-file "dired")
@@ -224,5 +226,6 @@
 (declare-function my-ediff-nav-string "init")
 (declare-function my-ediff-install-nav-overlay "init")
 (declare-function my-speedbar-window-ensure-mode "init")
+(declare-function my-speedbar-item-info-file "init")
 
 ;;; compile-declarations.el ends here
