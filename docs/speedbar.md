@@ -61,7 +61,7 @@ After looking through the code a bit, it did appear there was a `speedbar-mode` 
 by the frame version. No problem: I can write that in. I also figured out eventually after looking
 things up in the Emacs manual that the glyphs were meant to indicate version control state and byte
 compile state. Those are both pieces of info that I don't really want at this level of abstraction
-but there are some simple settings to turn them off. Next up I noticed very few of the files I
+but there are some simple settings to turn them off. Soon after,  I noticed very few of the files I
 expected to see were displayed. With a look through the code and the manual again, I discovered
 speedbar only shows recognized file types by default but that is also configurable.
 
@@ -226,7 +226,7 @@ Tries the major mode `auto-mode-alist' picks, then the bare extension."
 
 # Tagging
 
-Next up I started to explore the support for tags under a file if it's clicked or + is pressed.
+Next,  I started to explore the support for tags under a file if it's clicked or + is pressed.
 
 ![Tags](../images/speedbar-tags.png)
 
@@ -251,7 +251,7 @@ This functionality mostly worked but needed two fixes.
 (define-advice speedbar-fetch-dynamic-imenu (:filter-return (result)
                                                             my-no-tags)
   "Return nil when RESULT has only *Rescan* or nils."
-  (if (and (consp result)
+   (if (and (consp result)
            (seq-every-p (lambda (e) (or (null e) (equal (car-safe e) "*Rescan*")))
                         result))
       nil
@@ -270,7 +270,7 @@ ORIG returns (INSERT-FN) with no entries when the imenu result was empty."
 
 # Making refresh work
 
-Next up I noticed that refresh of the window was sluggish and sometimes would leave the cursor at the
+At this point, I noticed that refresh of the window was sluggish and sometimes would leave the cursor at the
 bottom of a buffer that had scrolled completely off the page. For this I decoupled the refresh timer rate
 from the dframe stock value of 2 seconds and chose a more standard UX response time of 0.2 seconds instead.
 Then I had to add advice to move the cursor when redrawing in two separate places: first for cases
