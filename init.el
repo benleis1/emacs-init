@@ -1068,7 +1068,33 @@ Customize the thresholds via `my-max-auto-revert-size'."
   :config
   ;; set the nerd icon color for lisp mode prior to starting up. Yellow doesn't read well.
   (add-to-list 'nerd-icons-mode-icon-alist
-               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green)))
+               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green))
+
+  (defun my-show-file-icons ()
+    "Show the dir/regexp/extension icon mappings used by `nerd-icons-icon-for-dir' and `-for-file'."
+    (interactive)
+    (with-current-buffer (get-buffer-create "*nerd-icon-map*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert "\n== special-case dirs (checked first by nerd-icons-icon-for-dir) ==\n")
+        (dolist (e '(("remote path"         nerd-icons-codicon "nf-cod-remote")
+                     ("symlink"             nerd-icons-codicon "nf-cod-file_symlink_directory")
+                     ("git submodule"       nerd-icons-codicon "nf-cod-file_submodule")
+                     ("contains .git (repo)" nerd-icons-octicon "nf-oct-repo")))
+          (insert (format "%s  %-24s %s\n"
+                          (funcall (nth 1 e) (nth 2 e))
+                          (car e) (nth 2 e))))
+        (dolist (tbl '(nerd-icons-dir-icon-alist
+                       nerd-icons-regexp-icon-alist
+                       nerd-icons-extension-icon-alist))
+          (insert (format "\n== %s ==\n" tbl))
+          (dolist (e (symbol-value tbl))
+            (insert (format "%s  %-24s %s\n"
+                            (apply (nth 1 e) (nth 2 e) (nthcdr 3 e))
+                            (car e) (nth 2 e)))))
+        (goto-char (point-min))
+        (special-mode))
+      (pop-to-buffer (current-buffer)))))
 
 ;; Icons for dired. I'm not sure if I care enough to keep this longterm yet.
 (use-package nerd-icons-dired
