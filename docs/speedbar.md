@@ -282,7 +282,7 @@ same directory.
   (define-advice speedbar-set-timer (:filter-args (args) my-update-speed)
     (if (car args) (list my-speedbar-update-speed) args))
 ```
-	>Timer
+> Timer
 
 ```
     ;; A redraw erases the buffer and restores the old scroll position, which no
@@ -320,7 +320,7 @@ same directory.
                   (set-window-point win (point-min))
                   (set-window-start win (point-min)))))))))
 ```
-	>Scroll on complete refresh
+> Scroll on complete refresh
 
 ```
   ;; In window mode the speedbar window isn't selected, so moving point to the
@@ -341,7 +341,7 @@ same directory.
                 (unless (pos-visible-in-window-p (point) win)
                   (with-selected-window win (recenter)))))))))
 ```
-	>Scroll when changing which file is currently selected
+> Scroll when changing which file is currently selected
 
 # A little bit of styling
 And finally I made a few changes to the faces and mode lines used.
@@ -464,5 +464,5 @@ leave around the UX styling that is more personal preference than essential.
 
 # Quick demo video
 
-<iframe width="560" height="315" src="https://youtu.be/XUCC5QitkB8?si=jtOzFR3O2OAzgxis" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe> <p><p>
+[![Speedbar demo video](https://img.youtube.com/vi/XUCC5QitkB8/hqdefault.jpg)](https://youtu.be/XUCC5QitkB8)
 
