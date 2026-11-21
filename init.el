@@ -967,11 +967,36 @@ Customize the thresholds via `my-max-auto-revert-size'."
                           item
                           (if state (format "  [vc: %s]" state) ""))))))
   (advice-add 'speedbar-item-info-file-helper :override
-              #'my-speedbar-item-info-file))
+              #'my-speedbar-item-info-file)
+
+  ;; Replace the folder and file XPM images with nerd-icons glyphs
+  (defface my-speedbar-dir-icon '((t :inherit dired-directory))
+    "Face for speedbar directory glyphs.")
+  (defface my-speedbar-file-icon '((t :inherit default :height 1.2))
+    "Face for speedbar file glyphs.")
+
+  (defun my-speedbar-glyph (orig start length)
+    "Show a nerd-icons folder or file for its marker, else defer to ORIG."
+    (let* ((text (buffer-substring-no-properties start (+ start length)))
+           (spec (pcase text
+                   ("<+>" '(nerd-icons-mdicon "nf-md-folder" my-speedbar-dir-icon))
+                   ("<->" '(nerd-icons-mdicon "nf-md-folder_open" my-speedbar-dir-icon))
+                   ("< >" '(nerd-icons-mdicon "nf-md-folder_outline" my-speedbar-dir-icon))
+                   ((or "[ ]" "[?]") '(nerd-icons-mdicon "nf-md-file" my-speedbar-file-icon))
+                   ((or "[+]" "[-]")
+                    '(nerd-icons-mdicon "nf-md-note_plus" my-speedbar-file-icon)))))
+      (if (and spec (require 'nerd-icons nil t))
+          (add-text-properties
+           start (+ start length)
+           (list 'display (funcall (nth 0 spec) (nth 1 spec) :face (nth 2 spec))
+                 'face nil
+                 'rear-nonsticky '(display face)))
+        (funcall orig start length))))
+  (advice-add 'speedbar-insert-image-button-maybe :around #'my-speedbar-glyph))
 
 (my-profile-mark "backup and autosave")
 ;;; backup and autosave.
-;; put old version in .saves under .emacs.d and disable autosaves.
+;; put old version in .saves under .emxacs.d and disable autosaves.
 
 ;; Define a directory for auto-save and backup files
 (defconst my-save-folder (file-name-as-directory (locate-user-emacs-file ".saves")))
