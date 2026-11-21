@@ -379,7 +379,7 @@ And finally I made a few changes to the faces and mode lines used.
    just replaced it with a true file count.
    
    
-   ```
+```
   ;; Speedbar wraps every mode's mode line in << and >>; strip them off.
   (define-advice speedbar-set-mode-line-format (:after () my-strip-arrows)
     "Restyle the speedbar mode line.
@@ -398,7 +398,7 @@ the others just lose the leading << and trailing >>."
                                     elt))
                                 mode-line-format))))
         (force-mode-line-update))))
-   ```
+```
 
 ```
     (defun my-speedbar--file-count ()
