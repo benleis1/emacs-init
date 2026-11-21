@@ -74,12 +74,45 @@ mode glyph which I'm leveraging on the far left
 * The desktop auto-saves hourly once it has been loaded, so views and terminals
   survive a crash.
 * The flymake modeline segment is now universal and shows an indicator while
-  flymake is running. Flymake itself is working properly now with elisp. q
-
-# 10/2026
-
+  flymake is running. Flymake itself is working properly now with elisp.
+* Elisp byte-compile hygiene: compile-declarations.el predeclares variables and
+  functions to quiet warnings, with ERTs covering compile warnings and
+  top-level unbound variable detection. Flymake for elisp is hooked in
+  permanently (see docs/flymake.md).
+* trusted-content setup (including symlinked paths) so flymake and elisp
+  checking can run without prompting on files I own.
 * menu-config.el: menu bar reorganization adapted from anju. Help is replaced
   wholesale with a short menu (manual opens in a new frame), consult/ghostel
   replacements fall back to stock entries when those packages are absent, Edit gains
   Rectangle/Transpose/Delete submenus plus Flush/Keep Lines, Align Regexp and
   Duplicate, and the Text menu gets Transform Text/Center/Fill submenus.
+  Menus are set up after elpaca loads all packages. See docs/menu-config.md.
+* Right-click context menus: dictionary/thesaurus entries in text modes and a
+  ghostel hyperlink that copies to the kill ring for pasting later.
+
+# 11/2026
+
+* tab-config renamed to tab-plus and cut over to tab-plus-mode, with function
+  names cleaned up to separate internal from external. Closing a tab prefers
+  staying in the current project group, and desktop restore handles frames
+  that are out of range. ghostel tab names survive a desktop restore.
+
+* ilist-plus replaces my imenu-list customizations (cutover plus a matching
+  modeline segment).
+
+* Transparency: alpha blending is now a global defcustom with a
+  my-alpha-blend toggle, glyphs are blended explicitly, the cursor is a box
+  everywhere and the window divider is wider so it's easier to drag. An
+  experimental Emacs patch for a gradient divider on macOS lives in patches/.
+
+* More context menus: diff-hl menus on the fringe and in the line-number
+  margin (with dape/diff-hl ownership of the fringe sorted out), and word
+  count in the Edit menu. See docs/context-menus.md.
+
+* Trust: prompt before opening untrusted files.
+
+* speedbar adopted, with nerd-font icons and helpers for decoding file icons.
+  See docs/speedbar.md.
+
+* Smaller items: windmove moved to C-S, profiling code moved from init.el to
+  early-init.el,

@@ -21,8 +21,8 @@ completion and integrated development tools.
 ## Quick Start
 
 ```
-git clone <repo> ~/dev/emacs-init
-cd ~/dev/emacs-init
+git clone https://github.com/benleis1/emacs-init.git ~/emacs-init
+cd ~/emacs-init
 ./install.sh              # or: ./install.sh -d /path/to/emacs.d
 ```
 
@@ -30,6 +30,8 @@ To try it out without touching your existing `~/.emacs.d`, install into a scratc
 and point Emacs at it (Emacs 29+):
 
 ```
+git clone https://github.com/benleis1/emacs-init.git ~/emacs-init
+cd ~/emacs-init
 ./install.sh -d ~/emacs-try
 emacs --init-directory ~/emacs-try
 ```
@@ -298,8 +300,7 @@ Further writeups live in the docs directory:
 - [Modus theme configuration.](#modus-theme-configuration)
   - [my-theme-margin-color](#my-theme-margin-color)
   - [my-reload-fonts](#my-reload-fonts)
-  - [my-ghostel-apply-terminal-colors](#my-ghostel-apply-terminal-colors)
-  - [my-ghostel-reset-terminal-colors](#my-ghostel-reset-terminal-colors)
+  - [my-alpha-blend--apply](#my-alpha-blend--apply)
 - [Basic Appearance and startup](#basic-appearance-and-startup)
   - [my-pixel-scroll-setup](#my-pixel-scroll-setup)
   - [my-before-save-hook](#my-before-save-hook)
@@ -412,7 +413,7 @@ Further writeups live in the docs directory:
 - [Snippets](#snippets)
 - [Wikimode](#wikimode)
 - [Consult navigation package](#consult-navigation-package)
-- [temptemp - try out new builtin completion.](#temptemp---try-out-new-builtin-completion)
+- [Configure the new builtin completion code in emacs 31.](#configure-the-new-builtin-completion-code-in-emacs-31)
 - [Config diagnostics](#config-diagnostics)
 - [Menu bar reorganization](#menu-bar-reorganization)
 - [Local.el loading](#localel-loading)
@@ -904,52 +905,6 @@ Add the font changes onto the enable theme hook
 				    (modus-themes-get-color-value 'bg-mode-line-emphasis t)))))
 ```
 
-TEMPTEMP This is experimental and may be removed but it will not have any effect unless
-terminal-colors is loaded which I am only doing manually for now.
-
-terminal-colors (modus mode) only maps the 16 ANSI colors into the modus palette.  The terminal
-default foreground/background that ghostel draws with comes from `ghostel-default', so follow the
-active terminal-colors theme there and put the original face spec back on reset.
-```
-(defvar my-ghostel-default-saved-spec nil
-  "This holds the original override spec of `ghostel-default'.")
-```
-
-## my-ghostel-apply-terminal-colors
->Set `ghostel-default' to the terminal-colors default foreground and background.
-
-```
-(defun my-ghostel-apply-terminal-colors ()
-  "Set `ghostel-default' to the terminal-colors default foreground and background."
-  (when (and (bound-and-true-p terminal-colors-modus-mode)
-             (facep 'ghostel-default) terminal-colors--foreground terminal-colors--background)
-    (unless my-ghostel-default-saved-spec
-      (setq my-ghostel-default-saved-spec (list (get 'ghostel-default 'face-override-spec))))
-    (face-spec-set 'ghostel-default
-                   `((t :foreground ,terminal-colors--foreground
-                        :background ,terminal-colors--background))
-                   'face-override-spec)
-    (ghostel-sync-theme)))
-```
-
-## my-ghostel-reset-terminal-colors
->Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'.
-
-```
-(defun my-ghostel-reset-terminal-colors ()
-  "Restore the `ghostel-default' spec saved by `my-ghostel-apply-terminal-colors'."
-  (when my-ghostel-default-saved-spec
-    (face-spec-set 'ghostel-default (car my-ghostel-default-saved-spec) 'face-override-spec)
-    (setq my-ghostel-default-saved-spec nil)
-    (ghostel-sync-theme)))
-
-(with-eval-after-load 'terminal-colors
-  (add-hook 'terminal-colors--after-load-hook #'my-ghostel-apply-terminal-colors)
-  (add-hook 'terminal-colors--reset-hook #'my-ghostel-reset-terminal-colors)
-  (add-hook 'terminal-colors-modus-mode-off-hook #'my-ghostel-reset-terminal-colors)
-  (add-hook 'ghostel-mode-hook #'my-ghostel-apply-terminal-colors))
-```
-
 Currently folio is my main theme.
 ```
 (use-package folio-theme
@@ -959,6 +914,39 @@ Currently folio is my main theme.
 
 (use-package nano-like-modus-theme
   :ensure (:host github :repo "benleis1/nano-like-modus-theme"))
+
+(defvar my-alpha-frame-params nil
+  "Frame parameters enabling transparency/blur; set by macos.el / linux.el.")
+
+(defvar my-alpha-frame-reset-params '((alpha-background . 1.0))
+  "Frame parameters restoring an opaque frame; OS files may override it.")
+```
+
+## my-alpha-blend--apply
+>`:set' function for `my-alpha-blend': update new and existing frames.
+SYM is the variable and VAL its new value.
+
+```
+(defun my-alpha-blend--apply (sym val)
+  "`:set' function for `my-alpha-blend': update new and existing frames.
+SYM is the variable and VAL its new value."
+  (set-default sym val)
+  (let ((params (if val my-alpha-frame-params my-alpha-frame-reset-params)))
+    (dolist (p params)
+      (setf (alist-get (car p) default-frame-alist) (cdr p)))
+    (dolist (f (frame-list))
+      (modify-frame-parameters f params))
+    (when (fboundp 'my-modeline--sync-file-icon-face)
+      (my-modeline--sync-file-icon-face))
+    (force-mode-line-update t)))
+
+(defcustom my-alpha-blend nil
+  "Non-nil means frames get transparency/blur.
+The modeline glyphs are blended to match. Change it with `setopt' or
+`customize-set-variable' to update live frames; `setq' does not."
+  :type 'boolean
+  :group 'frames
+  :set #'my-alpha-blend--apply)
 ```
 
 OS-specific config lives in macos.el (homebrew exec-path, ns-auto-titlebar,
@@ -969,6 +957,10 @@ Loaded here, after elpaca/use-package are ready.
        (load "macos"))
       ((eq system-type 'gnu/linux)
        (load "linux")))
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (when my-alpha-blend
+              (my-alpha-blend--apply 'my-alpha-blend my-alpha-blend))))
 ```
 
 See https://www.gnu.org/software/emacs/manual/html_node/emacs/Easy-Customization.html
@@ -1000,11 +992,9 @@ break paragraphs on after 100 characters.
 ```
 (setq-default fill-column 100)
 ```
-Make the cursor consistent in text mode with other modes.
+Box cursor everywhere.
 ```
-(add-hook 'text-mode-hook
-          (lambda ()
-            (setq cursor-type 'box)))
+(setq-default cursor-type 'box)
 ```
 
 turn off menu mode in text mode to save space
@@ -1042,8 +1032,8 @@ Add a faint window divider
 
   ;; Add dividers on the right and bottom
   (setq window-divider-default-places t)
-  ;; Set the width of the dividers to 1 pixel
-  (setq window-divider-default-right-width 1
+  ;; Set the width of the dividers to 8 pixels
+  (setq window-divider-default-right-width 8
 	window-divider-default-bottom-width 1)
   (window-divider-mode 1)
 
@@ -1225,11 +1215,77 @@ Switch focus to help windows when they come up and kill rather than bury them wh
 ```
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
+```
+
+Setup the speedbar if loaded
+```
+(with-eval-after-load 'speedbar
+  ;; show all files
+  (setq speedbar-show-unknown-files t)
+  ;; Don't check and show vc or compile state.
+  (setq speedbar-obj-do-check nil)
+  (setq speedbar-vc-do-check nil)
+  ;; don't use a separate frame,
+  (setq speedbar-prefer-window t)
+
+  ;; Emacs 31's `speedbar-window-mode' never runs `speedbar-mode' in its buffer
+  ;; (unlike `speedbar-frame-mode'). Fix that so it runs normally.
+  (defun my-speedbar-window-ensure-mode (&rest _)
+    (unless (buffer-live-p speedbar-buffer)
+      (with-current-buffer
+          (setq speedbar-buffer (get-buffer-create speedbar--buffer-name))
+        (speedbar-mode))))
+  (advice-add 'speedbar-window-mode :before #'my-speedbar-window-ensure-mode)
+
+  ;; Append the file's `vc-state' to the echo-area info shown for a file line.
+  (defun my-speedbar-item-info-file (&optional filename)
+    "Like `speedbar-item-info-file-helper', but also show the `vc-state'."
+    (let* ((item (or filename (speedbar-line-file)))
+           (attr (and item (file-attributes item))))
+      (when attr
+        (let ((state (and (not (file-remote-p item))
+                          (not (file-directory-p item))
+                          (ignore-errors (vc-state item)))))
+          (dframe-message "%s %-6d %s%s"
+                          (file-attribute-modes attr)
+                          (file-attribute-size attr)
+                          item
+                          (if state (format "  [vc: %s]" state) ""))))))
+  (advice-add 'speedbar-item-info-file-helper :override
+              #'my-speedbar-item-info-file)
+
+  ;; Replace the folder and file XPM images with nerd-icons glyphs
+  (defface my-speedbar-dir-icon '((t :inherit dired-directory))
+    "Face for speedbar directory glyphs."
+    :group 'speedbar)
+  (defface my-speedbar-file-icon '((t :inherit default :height 1.2))
+    "Face for speedbar file glyphs."
+    :group 'speedbar)
+
+  (defun my-speedbar-glyph (orig start length)
+    "Show a nerd-icons folder or file for its marker, else defer to ORIG."
+    (let* ((text (buffer-substring-no-properties start (+ start length)))
+           (spec (pcase text
+                   ("<+>" '(nerd-icons-mdicon "nf-md-folder" my-speedbar-dir-icon))
+                   ("<->" '(nerd-icons-mdicon "nf-md-folder_open" my-speedbar-dir-icon))
+                   ("< >" '(nerd-icons-mdicon "nf-md-folder_outline" my-speedbar-dir-icon))
+                   ((or "[ ]" "[?]") '(nerd-icons-mdicon "nf-md-file" my-speedbar-file-icon))
+                   ((or "[+]" "[-]")
+                    '(nerd-icons-mdicon "nf-md-note_plus" my-speedbar-file-icon)))))
+      (if (and spec (require 'nerd-icons nil t))
+          (add-text-properties
+           start (+ start length)
+           (list 'display (funcall (nth 0 spec) (nth 1 spec) :face (nth 2 spec))
+                 'face nil
+                 'rear-nonsticky '(display face)))
+        (funcall orig start length))))
+  (declare-function my-speedbar-glyph "init")
+  (advice-add 'speedbar-insert-image-button-maybe :around #'my-speedbar-glyph))
 
 (my-profile-mark "backup and autosave")
 ```
 # backup and autosave.
-put old version in .saves under .emacs.d and disable autosaves.
+put old version in .saves under .emxacs.d and disable autosaves.
 
 Define a directory for auto-save and backup files
 ```
@@ -1269,12 +1325,12 @@ alternative strategy - just turn off auto-save.
 
 Zone / screensaver is whimsical but its built-in and lightweight,
 ```
-(when (display-graphic-p)
-  (use-package zone
-    :ensure nil ; Built-in package
-    :config
-    ;; 1 hour
-    (zone-when-idle 3600)))
+(my-ignore (when (display-graphic-p)
+	     (use-package zone
+	       :ensure nil ; Built-in package
+	       :config
+	       ;; 1 hour
+	       (zone-when-idle 3600))))
 ```
 
 Brief pulse/highlight for various motions
@@ -1311,7 +1367,73 @@ adjustments need to be done prior to loading either.
   :config
   ;; set the nerd icon color for lisp mode prior to starting up. Yellow doesn't read well.
   (add-to-list 'nerd-icons-mode-icon-alist
-               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green)))
+               '(lisp-interaction-mode nerd-icons-sucicon "nf-custom-emacs" :face nerd-icons-green))
+
+  (defun my-show-file-icons ()
+    "Show the dir/regexp/extension icon mappings used by `nerd-icons-icon-for-dir' and `-for-file'."
+    (interactive)
+    (with-current-buffer (get-buffer-create "*nerd-icon-map*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert "\n== special-case dirs (checked first by nerd-icons-icon-for-dir) ==\n")
+        (dolist (e '(("remote path"         nerd-icons-codicon "nf-cod-remote")
+                     ("symlink"             nerd-icons-codicon "nf-cod-file_symlink_directory")
+                     ("git submodule"       nerd-icons-codicon "nf-cod-file_submodule")
+                     ("contains .git (repo)" nerd-icons-octicon "nf-oct-repo")))
+          (insert (format "%s  %-24s %s\n"
+                          (funcall (nth 1 e) (nth 2 e))
+                          (car e) (nth 2 e))))
+        (dolist (tbl '(nerd-icons-dir-icon-alist
+                       nerd-icons-regexp-icon-alist
+                       nerd-icons-extension-icon-alist))
+          (insert (format "\n== %s ==\n" tbl))
+          (dolist (e (symbol-value tbl))
+            (insert (format "%s  %-24s %s\n"
+                            (apply (nth 1 e) (nth 2 e) (nthcdr 3 e))
+                            (car e) (nth 2 e)))))
+        (goto-char (point-min))
+        (special-mode))
+      (pop-to-buffer (current-buffer))))
+
+  (defun my-show-nerd-icon-for-file (file)
+    "Show the icon nerd-icons picks for FILE, and which rule chose it.
+Directories follow `nerd-icons-icon-for-dir' (remote, symlink, submodule and
+.git rules first); anything else follows `nerd-icons-icon-for-file'."
+    (interactive "FFile: ")
+    (let* ((case-fold-search nil)
+           (path (expand-file-name file))
+           (name (file-name-nondirectory (directory-file-name path)))
+           (isdir (or (directory-name-p file) (file-directory-p path)))
+           icon spec why)
+      (if isdir
+          (let ((entry (assoc (file-name-base (directory-file-name path))
+                              nerd-icons-dir-icon-alist #'string-match)))
+            (setq icon (nerd-icons-icon-for-dir path))
+            (cond ((file-remote-p path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-remote")
+                         why "remote path"))
+                  ((file-symlink-p path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-file_symlink_directory")
+                         why "directory is a symlink"))
+                  ((nerd-icons-dir-is-submodule path)
+                   (setq spec '(nerd-icons-codicon "nf-cod-file_submodule")
+                         why "git submodule (listed in .gitmodules)"))
+                  ((file-exists-p (format "%s/.git" path))
+                   (setq spec '(nerd-icons-octicon "nf-oct-repo")
+                         why "contains .git (repo root)"))
+                  (t (setq spec (cdr entry)
+                           why (format "directory name %S in `nerd-icons-dir-icon-alist'"
+                                       (car entry))))))
+        (let* ((ext (file-name-extension name))
+               (re-entry (assoc name nerd-icons-regexp-icon-alist #'string-match))
+               (ext-entry (and ext (assoc (downcase ext) nerd-icons-extension-icon-alist)))
+               (entry (or re-entry ext-entry)))
+          (setq icon (nerd-icons-icon-for-file name)
+                spec (if entry (cdr entry) nerd-icons-default-file-icon)
+                why (cond (re-entry (format "regexp %S in `nerd-icons-regexp-icon-alist'" (car re-entry)))
+                          (ext-entry (format "extension %S in `nerd-icons-extension-icon-alist'" (car ext-entry)))
+                          (t "no match; `nerd-icons-default-file-icon'")))))
+      (message "%s  %s -> %s %S (%s)" icon name (nth 0 spec) (nth 1 spec) why))))
 ```
 
 Icons for dired. I'm not sure if I care enough to keep this longterm yet.
@@ -1368,7 +1490,7 @@ my preference is for short key strokes and to usually bind other global things t
 Control + a number key which are closer than the function keys and not in use.
 
 ```
-(global-set-key (kbd "C-1") 'treemacs)
+(global-set-key (kbd "C-1") 'speedbar)
 (global-set-key (kbd "C-2") 'org-capture)
 (global-set-key (kbd "C-3") 'wikimode-toggle)
 (global-set-key (kbd "C-\\") 'ilist-plus-toggle)
@@ -2830,26 +2952,29 @@ the next prompt reports its title."
 ## my-ghostel-tab-name
 >Return the tab text for ghostel BUFFER named NAME.
 Strips the "*ghostel: " decoration (keeping any <N> suffix) and adds a
-terminal icon plus input-needed / command-running status.
+a status icon: keyboard when input is needed, spinner when a command is
+running, otherwise a terminal icon.
 
 ```
 (defun my-ghostel-tab-name (name buffer)
   "Return the tab text for ghostel BUFFER named NAME.
 Strips the \"*ghostel: \" decoration (keeping any <N> suffix) and adds a
-terminal icon plus input-needed / command-running status."
+a status icon: keyboard when input is needed, spinner when a command is
+running, otherwise a terminal icon."
   (when (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name)
     (setq name (concat (match-string 1 name) (match-string 2 name))))
   ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
   (setq name (string-replace "\u2003" " " name))
-  (concat (when-let* ((icon (my-modeline--icon-safe
-                             #'nerd-icons-octicon "nf-oct-terminal")))
-            (concat icon "  "))
-          (cond
-           ((buffer-local-value 'my-ghostel-input-needed buffer)
-            (concat (my-modeline--keyboard-icon) " " name))
-           ((buffer-local-value 'ghostel--command-running buffer)
-            (concat "⏳ " name))
-           (t name))))
+  (cond
+   ((buffer-local-value 'my-ghostel-input-needed buffer)
+    (concat (my-modeline--keyboard-icon) "  " name))
+   ((buffer-local-value 'ghostel--command-running buffer)
+    (concat (my-modeline-busy-icon) "  " name))
+   (t
+    (concat (when-let* ((icon (my-modeline--icon-safe
+                               #'nerd-icons-octicon "nf-oct-terminal")))
+              (concat icon "  "))
+            name))))
 
 (tab-plus-register-buffer-name-function 'ghostel-mode #'my-ghostel-tab-name)
 
@@ -4053,6 +4178,14 @@ letting it split whatever window happens to be current.
                (dedicated . t)))
 ```
 
+Keep the default placement but dedicate the window, so `q' (special-mode's
+`quit-window', which kills per `quit-window-kill-buffer') also deletes it
+rather than showing some other buffer in it.
+```
+(add-to-list 'display-buffer-alist
+             '("\\`\\*Warnings\\*\\'" nil (dedicated . t)))
+```
+
 ### flymake-buffer-quit
 >Handle an EVENT for the flymake diagnostics window.
 The only action we do is close on click.
@@ -4338,13 +4471,16 @@ Render the *Ilist* mode-line with my-modeline; ilist-plus supplies the label.
                '(ilist-plus-major-mode . ilist-plus-mode-line-label)))
 ```
 
-Don't save/restore frame colors; otherwise a restored desktop pins the colors
-from when it was saved and overrides the currently loaded theme. Applied on
-restore too, so already-saved desktop files are fixed as well.
+Don't save/restore frame colors, alpha blending or window-divider widths;
+otherwise a restored desktop pins the values from when it was saved and
+overrides the currently loaded theme/config. Applied on restore too, so
+already-saved desktop files are fixed as well.
 ```
 (with-eval-after-load 'frameset
   (dolist (param '(background-color foreground-color background-mode
-				    border-color cursor-color mouse-color))
+				    border-color cursor-color mouse-color
+				    alpha-background ns-background-blur ns-alpha-elements
+				    right-divider-width bottom-divider-width))
     (setf (alist-get param frameset-filter-alist) :never)))
 ```
 
@@ -4897,7 +5033,7 @@ No key binding for now.
 
 (my-profile-mark "temptemp - try out new builtin completion")
 ```
-# temptemp - try out new builtin completion.
+# Configure the new builtin completion code in emacs 31.
 
 ```
 (when (> emacs-major-version 30)
