@@ -15,6 +15,8 @@
   (require 'speedbar)
   (require 'nerd-icons nil t))
 
+(defvar speedbar--buffer-name)
+(defvar speedbar--window)
 (defvar my-modeline-format)
 (defvar my-modeline-dedicated-window-modes)
 (defvar my-modeline-dedicated-label-functions)
