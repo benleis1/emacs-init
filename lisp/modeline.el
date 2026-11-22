@@ -991,15 +991,20 @@ standard close the window line, or nil for nothing extra.")
         (setq pos next))))
   string)
 
-(defun my-modeline--dedicated-render ()
-  "Return a full dedicated modeline string.
-This includes The pin icon and buffer label. Custom parts of the label
-that bring their own `local-map' keep it."
+(defun my-modeline-dedicated-line (label &optional help)
+  "Return a dedicated-window mode-line string: the pin icon, then LABEL.
+HELP is the `help-echo' text; it defaults to the current buffer's
+`my-modeline--dedicated-help'.  Clicking closes the window.  Parts of
+LABEL that bring their own `local-map' keep it."
   (my-modeline--propertize-missing
-   (concat (or (my-modeline--pin-icon) "") " " (my-modeline--dedicated-label))
-   'help-echo (my-modeline--dedicated-help)
+   (concat (or (my-modeline--pin-icon) "") " " label)
+   'help-echo (or help (my-modeline--dedicated-help))
    'mouse-face 'my-modeline-dedicated-highlight
    'local-map my-modeline-dedicated-window-map))
+
+(defun my-modeline--dedicated-render ()
+  "Return the dedicated modeline string for the current buffer."
+  (my-modeline-dedicated-line (my-modeline--dedicated-label)))
 
 ;;; Assembly
 

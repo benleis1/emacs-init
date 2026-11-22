@@ -161,6 +161,7 @@
 ;;     ├── menu-config.el
 ;;     ├── dape-java.el
 ;;     ├── config-diagnostics.el
+;;     ├── speedbar-config.el
 ;;     └── local.el              (optional, yours, not in the repo)
 ;; ```
 ;;
@@ -784,6 +785,23 @@ The modeline glyphs are blended to match. Change it with `setopt' or
   (use-package on-demand-scroll-bar
     :ensure (:host github :repo "florommel/on-demand-scroll-bar")
     :config
+    ;; Folded ilist entries are invisible overlays, so window-end falls short of point-max
+    ;; and the package wrongly shows the bar when the window is fitted to the content.
+    ;; Exclude ilist from the package's check and run our own that uses
+    ;; `pos-visible-in-window-p', which accounts for invisible text.
+    (add-to-list 'on-demand-scroll-bar-exclude-major-modes 'ilist-plus-major-mode)
+    (defun my-ilist-scroll-bar-update (&rest _)
+      (dolist (frame (frame-list))
+        (dolist (window (window-list frame t))
+          (with-current-buffer (window-buffer window)
+            (when (derived-mode-p 'ilist-plus-major-mode)
+              (let ((bar (unless (and (= (window-start window) (point-min))
+                                      (pos-visible-in-window-p (point-max) window))
+                           'right)))
+                (unless (eq bar (nth 2 (window-scroll-bars window)))
+                  (set-window-scroll-bars window scroll-bar-width bar)
+                  (force-window-update window))))))))
+    (advice-add 'on-demand-scroll-bar--update :after #'my-ilist-scroll-bar-update)
     (on-demand-scroll-bar-mode 1))
 
   (context-menu-mode)
@@ -932,70 +950,6 @@ Customize the thresholds via `my-max-auto-revert-size'."
 ;; Switch focus to help windows when they come up and kill rather than bury them when you quit
 (setq help-window-select t)
 (setq quit-window-kill-buffer t)
-
-;; Setup the speedbar if loaded
-(with-eval-after-load 'speedbar
-  ;; show all files
-  (setq speedbar-show-unknown-files t)
-  ;; Don't check and show vc or compile state.
-  (setq speedbar-obj-do-check nil)
-  (setq speedbar-vc-do-check nil)
-  ;; don't use a separate frame,
-  (setq speedbar-prefer-window t)
-
-  ;; Emacs 31's `speedbar-window-mode' never runs `speedbar-mode' in its buffer
-  ;; (unlike `speedbar-frame-mode'). Fix that so it runs normally.
-  (defun my-speedbar-window-ensure-mode (&rest _)
-    (unless (buffer-live-p speedbar-buffer)
-      (with-current-buffer
-          (setq speedbar-buffer (get-buffer-create speedbar--buffer-name))
-        (speedbar-mode))))
-  (advice-add 'speedbar-window-mode :before #'my-speedbar-window-ensure-mode)
-
-  ;; Append the file's `vc-state' to the echo-area info shown for a file line.
-  (defun my-speedbar-item-info-file (&optional filename)
-    "Like `speedbar-item-info-file-helper', but also show the `vc-state'."
-    (let* ((item (or filename (speedbar-line-file)))
-           (attr (and item (file-attributes item))))
-      (when attr
-        (let ((state (and (not (file-remote-p item))
-                          (not (file-directory-p item))
-                          (ignore-errors (vc-state item)))))
-          (dframe-message "%s %-6d %s%s"
-                          (file-attribute-modes attr)
-                          (file-attribute-size attr)
-                          item
-                          (if state (format "  [vc: %s]" state) ""))))))
-  (advice-add 'speedbar-item-info-file-helper :override
-              #'my-speedbar-item-info-file)
-
-  ;; Replace the folder and file XPM images with nerd-icons glyphs
-  (defface my-speedbar-dir-icon '((t :inherit dired-directory))
-    "Face for speedbar directory glyphs."
-    :group 'speedbar)
-  (defface my-speedbar-file-icon '((t :inherit default :height 1.2))
-    "Face for speedbar file glyphs."
-    :group 'speedbar)
-
-  (defun my-speedbar-glyph (orig start length)
-    "Show a nerd-icons folder or file for its marker, else defer to ORIG."
-    (let* ((text (buffer-substring-no-properties start (+ start length)))
-           (spec (pcase text
-                   ("<+>" '(nerd-icons-mdicon "nf-md-folder" my-speedbar-dir-icon))
-                   ("<->" '(nerd-icons-mdicon "nf-md-folder_open" my-speedbar-dir-icon))
-                   ("< >" '(nerd-icons-mdicon "nf-md-folder_outline" my-speedbar-dir-icon))
-                   ((or "[ ]" "[?]") '(nerd-icons-mdicon "nf-md-file" my-speedbar-file-icon))
-                   ((or "[+]" "[-]")
-                    '(nerd-icons-mdicon "nf-md-note_plus" my-speedbar-file-icon)))))
-      (if (and spec (require 'nerd-icons nil t))
-          (add-text-properties
-           start (+ start length)
-           (list 'display (funcall (nth 0 spec) (nth 1 spec) :face (nth 2 spec))
-                 'face nil
-                 'rear-nonsticky '(display face)))
-        (funcall orig start length))))
-  (declare-function my-speedbar-glyph "init")
-  (advice-add 'speedbar-insert-image-button-maybe :around #'my-speedbar-glyph))
 
 (my-profile-mark "backup and autosave")
 ;;; backup and autosave.
@@ -1170,6 +1124,10 @@ Directories follow `nerd-icons-icon-for-dir' (remote, symlink, submodule and
 ;; Load all of my custom tab-line config.
 (require 'tab-plus)
 (tab-plus-mode 1)
+
+;;; Speedbar customization. This depends on modeline.
+(my-profile-mark "Speedbar config")
+(require 'speedbar-config)
 
 (my-profile-mark "Global key bindings")
 ;;; Global key bindings
@@ -1606,12 +1564,18 @@ block-list item (\"  - a\") under a bare \"tags:\" header line above it."
 ;; never opened. `org-agenda' is otherwise deferred until first use, so
 ;; do the first population (and the `org-agenda' load it triggers) on
 ;; Emacs's first idle moment instead of blocking startup.
+(defun my-org-agenda-to-appt ()
+  "Refresh `appt-time-msg-list' from Org, without the \"No event to add\" message."
+  (let ((inhibit-message t)
+        (message-log-max nil))
+    (org-agenda-to-appt t)))
+
 (run-with-idle-timer
  1 nil
  (lambda ()
-   (add-hook 'org-agenda-finalize-hook (lambda () (org-agenda-to-appt t)))
-   (org-agenda-to-appt t)
-   (run-with-timer 3600 3600 (lambda () (org-agenda-to-appt t)))))
+   (add-hook 'org-agenda-finalize-hook #'my-org-agenda-to-appt)
+   (my-org-agenda-to-appt)
+   (run-with-timer 3600 3600 #'my-org-agenda-to-appt)))
 
 ;; Replace the default "App't in N min." mode-line text with an alarm-clock glyph and a bare
 ;; countdown; the full title(s) go on the help-echo tooltip The glyph's color is interpolated across

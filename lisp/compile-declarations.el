@@ -71,6 +71,13 @@
 (defvar speedbar-obj-do-check)
 (defvar speedbar-vc-do-check)
 (defvar speedbar-buffer)
+(defvar speedbar-full-text-cache)
+(defvar speedbar-shown-directories)
+(defvar speedbar-initial-expansion-list-name)
+(defvar speedbar-mode-map)
+(declare-function speedbar-refresh "speedbar")
+(declare-function speedbar-set-mode-line-format "speedbar")
+(declare-function speedbar-change-initial-expansion-list "speedbar")
 (defvar speedbar--buffer-name)
 (declare-function speedbar-mode "speedbar")
 (declare-function speedbar-line-file "speedbar")
@@ -181,6 +188,8 @@
 ;; Files under lisp/
 (declare-function my-modeline-mode "modeline")
 (declare-function my-modeline--icon-safe "modeline")
+(declare-function my-modeline--pin-icon "modeline")
+(declare-function my-modeline--dedicated-help "modeline")
 (declare-function my-modeline--keyboard-icon "modeline")
 (declare-function my-play-appt-sound "macos")
 (declare-function tab-plus-register-buffer-name-function "tab-plus")
@@ -225,7 +234,5 @@
 (declare-function my-ediff-nav-button "init")
 (declare-function my-ediff-nav-string "init")
 (declare-function my-ediff-install-nav-overlay "init")
-(declare-function my-speedbar-window-ensure-mode "init")
-(declare-function my-speedbar-item-info-file "init")
 
 ;;; compile-declarations.el ends here
