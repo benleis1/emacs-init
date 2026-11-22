@@ -186,7 +186,7 @@ it can't go stale."
         (set-face-attribute 'my-modeline-file-icon-divider-face nil
                             :foreground (my-modeline--alpha-match bg))))))
 
-(defvar my-modeline-wellknown-buffers '((lisp-interaction-mode . "ELISP"))
+(defvar my-modeline-wellknown-buffers '((lisp-interaction-mode . "ELISP") (dired-mode . "DIRED"))
   "A map for translating well known buffers to a special name.")
 
 (defun my-modeline--file-type-label ()
@@ -880,7 +880,8 @@ boot, so it is skipped."
         (color-darken-name bg 8)))))
 
 (defun my-modeline-segment-cpu ()
-  "Whole-system CPU use in percent, sampled every `my-modeline-cpu-interval' seconds."
+  "Whole-system CPU use in percent.
+Sampled every `my-modeline-cpu-interval' seconds."
   (my-modeline--start-cpu-sampling-timer)
   (when my-modeline--cpu-percent
     (let* ((blocks "▁▂▃▄▅▆▇█")
@@ -918,16 +919,17 @@ boot, so it is skipped."
 
 (defun my-modeline--right-align (trailing)
   "Return a padding string that right-aligns TRAILING content.
-  Aligned against the edge of the window, via stock Emacs's own
+Aligned against the edge of the window, via stock Emacs's own
   `mode--line-format-right-align'."
   (let ((mode-line-format (list "" 'mode-line-format-right-align trailing)))
     (mode--line-format-right-align)))
 
 (defvar my-modeline-right-margin "  "
-  "Fixed padding kept between the rightmost content and the true edge of
-  the window, in both `my-modeline--render' and `my-modeline--dedicated-render'.
-  Without it, the last character renders flush against the very edge, which
-  can look clipped even when it technically isn't.")
+  "Fixed padding for the right margin.
+Kept between the rightmost content and the true edge of the window, in
+both `my-modeline--render' and `my-modeline--dedicated-render'. Without
+it, the last character renders flush against the very edge, which can
+look clipped even when it technically isn't.")
 
 ;;; Dedicated windows' reduced mode-line
 ;;
@@ -952,12 +954,13 @@ boot, so it is skipped."
   "Face for the pin icon in the dedicated-window mode-line.")
 
 (defun my-modeline--pin-icon ()
+  "The pin icon I use to represent dedicated buffers."
   (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'my-modeline-pin-face))
 
 (defvar my-modeline-dedicated-label-functions nil
   "Alist of (MODE . FUNCTION) overriding the buffer name in dedicated windows.
-  FUNCTION is called in the buffer and returns the string to show in place of
-  its name, or nil to fall back to the name.")
+FUNCTION is called in the buffer and returns the string to show in place of
+its name, or nil to fall back to the name.")
 
 (defun my-modeline--dedicated-label ()
   "The label for the current dedicated buffer: its mode's override or its name."
@@ -969,7 +972,7 @@ boot, so it is skipped."
 (defvar my-modeline-dedicated-help-functions nil
   "Alist of (MODE . FUNCTION) adding to the help text in dedicated windows.
 FUNCTION is called in the buffer and returns a string shown above the
-standard \"mouse-1: close the window\" line, or nil for nothing extra.")
+standard close the window line, or nil for nothing extra.")
 
 (defun my-modeline--dedicated-help ()
   "The help text for the current dedicated buffer's mode-line."
@@ -989,11 +992,9 @@ standard \"mouse-1: close the window\" line, or nil for nothing extra.")
   string)
 
 (defun my-modeline--dedicated-render ()
-  "The pin icon and buffer label, sharing the same click-to-close
-  binding and help text (see `my-modeline-dedicated-window-map') -- so
-  mousing over or clicking either half of this reduced mode-line behaves
-  the same standard way, rather than only the buffer name being clickable.
-  Parts of the label that bring their own `local-map' keep it."
+  "Return a full dedicated modeline string.
+This includes The pin icon and buffer label. Custom parts of the label
+that bring their own `local-map' keep it."
   (my-modeline--propertize-missing
    (concat (or (my-modeline--pin-icon) "") " " (my-modeline--dedicated-label))
    'help-echo (my-modeline--dedicated-help)
@@ -1006,8 +1007,7 @@ standard \"mouse-1: close the window\" line, or nil for nothing extra.")
   '(my-modeline-segment-buffer-info
     my-modeline-segment-remote-host
     my-modeline-segment-selection-info)
-  "Segment functions rendered left-to-right on the left side of
-  `my-modeline-format'.")
+  "Segment rendered on the left side of `my-modeline-format'.")
 
 (defvar my-modeline-right-segments
   '(my-modeline-segment-misc-info
@@ -1028,14 +1028,14 @@ standard \"mouse-1: close the window\" line, or nil for nothing extra.")
 (defvar my-modeline-anchored-right-segments
   '(tab-plus-view-segment my-modeline-segment-zoom)
   "Segment functions right-justified flush against the window's right
-  edge -- separated from `my-modeline-right-segments' by however much space
-  remains, and from each other by a couple of spaces, rather than run
-  together with everything else. E.g. the current tab-plus view, or the
-  rightmost zoom in/out icon.")
+edge -- separated from `my-modeline-right-segments' by however much space
+remains, and from each other by a couple of spaces, rather than run
+together with everything else. E.g. the current tab-plus view, or the
+rightmost zoom in/out icon.")
 
 (defun my-modeline--eval-segments (segments &optional separator)
   "Concatenate the non-nil results of calling each of SEGMENTS, joined by
-  SEPARATOR (default: none)."
+SEPARATOR (default: none)."
   (let ((results (delq nil (mapcar #'funcall segments))))
     (if separator (mapconcat #'identity results separator) (apply #'concat results))))
 
