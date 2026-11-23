@@ -1,5 +1,7 @@
 ;;; speedbar-config.el --- Speedbar customizations -*- lexical-binding: t -*-
 
+;; Author: Benjamin Leis
+
 ;;; Commentary:
 
 ;; Everything that tweaks the built in speedbar: window mode fixes, nerd-icons glyphs, the git
@@ -225,83 +227,6 @@ The optional window is ignored; `my-modeline' passes one on a mode-line click."
             (and (> (hash-table-count files) 0) (list root files dirs)))))
   my-speedbar--tracked)
 
-(defun my-speedbar-project-file-lists (orig directory)
-  "In the project view, drop untracked files and directories from ORIG's result."
-  (let ((result (funcall orig directory))
-        (tracked (and my-speedbar-project-view-p
-                      (my-speedbar--tracked my-speedbar--project-root))))
-    (if (not tracked)
-        result
-      (let ((dir (file-name-as-directory (expand-file-name directory))))
-        (cons (seq-filter (lambda (d) (gethash (concat dir d "/") (nth 2 tracked)))
-                          (car result))
-              (list (seq-filter (lambda (f) (gethash (concat dir f) (nth 1 tracked)))
-                                (cadr result))))))))
-
-(defun my-speedbar--project-switch-root ()
-  "Return the project root to draw for the current buffer, or nil to do nothing.
-Nil when the buffer is outside any project or in the project already shown."
-  (let ((root (my-speedbar--root-of default-directory)))
-    (and root
-         (not (and (equal root my-speedbar--project-root)
-                   (seq-some (lambda (d) (string-prefix-p root d))
-                             speedbar-shown-directories)))
-         root)))
-
-(defun my-speedbar-project-update-contents (orig &rest args)
-  "In the project view, always draw the root of the buffer's project."
-  (cond ((not my-speedbar-project-view-p)
-         (apply orig args))
-        ((eq (current-buffer) speedbar-buffer)
-         ;; Directory navigation (`speedbar-dir-follow', `speedbar-up-directory')
-         ;; sets our `default-directory'; honor it unless it leaves the project.
-         ;; A `setq', not a `let': speedbar resolves row paths against this buffer's
-         ;; `default-directory', so it must stay at the directory drawn.
-         (unless (string-prefix-p my-speedbar--project-root
-                                  (expand-file-name default-directory))
-           (setq default-directory my-speedbar--project-root))
-         (apply orig args))
-        ((when-let* ((root (my-speedbar--project-switch-root)))
-           (setq my-speedbar--project-root root)
-           (let ((default-directory root))
-             (apply orig args))))))
-
-(defun my-speedbar-project-update-localized (orig &rest args)
-  "In the project view, ignore buffer switches that stay in the shown project."
-  (when (or (not my-speedbar-project-view-p)
-            (eq (current-buffer) speedbar-buffer)
-            (my-speedbar--project-switch-root))
-    (apply orig args)))
-
-(defun my-speedbar--project-mode-line ()
-  "Mode-line text naming the project shown by the project view."
-  (my-modeline-dedicated-line
-   (concat (propertize "project: " 'face '(:inherit mode-line-emphasis :slant normal))
-           (propertize (file-name-nondirectory
-                        (directory-file-name my-speedbar--project-root))
-                       'face '(:inherit mode-line-buffer-id :slant normal)))))
-
-(defun my-speedbar-project-mode-line (orig &rest args)
-  "In the project view, show the project name instead of speedbar's own line."
-  (if (not my-speedbar-project-view-p)
-      (apply orig args)
-    (when (buffer-live-p speedbar-buffer)
-      (with-current-buffer speedbar-buffer
-        (setq mode-line-format '(:eval (my-speedbar--project-mode-line)))
-        (force-mode-line-update)))))
-
-(defun my-speedbar-project-view-exit (&rest _)
-  "Leave the project view before speedbar switches to another view."
-  (when my-speedbar-project-view-p
-    (setq my-speedbar-project-view-p nil
-          speedbar-full-text-cache nil
-          speedbar-shown-directories nil)))
-
-(defun my-speedbar-project-refresh (&rest _)
-  "Forget the cached list of tracked files so a refresh sees new ones."
-  (setq my-speedbar--tracked nil
-        my-speedbar--git-status nil))
-
 ;; Color file names by git state.  Overlays, so they layer over the current-file
 ;; highlight speedbar puts on the name with text properties.
 (defface my-speedbar-file-modified '((t :inherit warning))
@@ -402,6 +327,85 @@ File names are absolute."
                               (expand-file-name buffer-file-name)))
     (setq my-speedbar--git-status nil)
     (my-speedbar--colorize)))
+
+
+;;; Project view support
+(defun my-speedbar-project-file-lists (orig directory)
+  "In the project view, drop untracked files and directories from ORIG's result."
+  (let ((result (funcall orig directory))
+        (tracked (and my-speedbar-project-view-p
+                      (my-speedbar--tracked my-speedbar--project-root))))
+    (if (not tracked)
+        result
+      (let ((dir (file-name-as-directory (expand-file-name directory))))
+        (cons (seq-filter (lambda (d) (gethash (concat dir d "/") (nth 2 tracked)))
+                          (car result))
+              (list (seq-filter (lambda (f) (gethash (concat dir f) (nth 1 tracked)))
+                                (cadr result))))))))
+
+(defun my-speedbar--project-switch-root ()
+  "Return the project root to draw for the current buffer, or nil to do nothing.
+Nil when the buffer is outside any project or in the project already shown."
+  (let ((root (my-speedbar--root-of default-directory)))
+    (and root
+         (not (and (equal root my-speedbar--project-root)
+                   (seq-some (lambda (d) (string-prefix-p root d))
+                             speedbar-shown-directories)))
+         root)))
+
+(defun my-speedbar-project-update-contents (orig &rest args)
+  "In the project view, always draw the root of the buffer's project."
+  (cond ((not my-speedbar-project-view-p)
+         (apply orig args))
+        ((eq (current-buffer) speedbar-buffer)
+         ;; Directory navigation (`speedbar-dir-follow', `speedbar-up-directory')
+         ;; sets our `default-directory'; honor it unless it leaves the project.
+         ;; A `setq', not a `let': speedbar resolves row paths against this buffer's
+         ;; `default-directory', so it must stay at the directory drawn.
+         (unless (string-prefix-p my-speedbar--project-root
+                                  (expand-file-name default-directory))
+           (setq default-directory my-speedbar--project-root))
+         (apply orig args))
+        ((when-let* ((root (my-speedbar--project-switch-root)))
+           (setq my-speedbar--project-root root)
+           (let ((default-directory root))
+             (apply orig args))))))
+
+(defun my-speedbar-project-update-localized (orig &rest args)
+  "In the project view, ignore buffer switches that stay in the shown project."
+  (when (or (not my-speedbar-project-view-p)
+            (eq (current-buffer) speedbar-buffer)
+            (my-speedbar--project-switch-root))
+    (apply orig args)))
+
+(defun my-speedbar--project-mode-line ()
+  "Mode-line text naming the project shown by the project view."
+  (my-modeline-dedicated-line
+   (concat (propertize "project: " 'face '(:inherit mode-line-emphasis :slant normal))
+           (propertize (file-name-nondirectory
+                        (directory-file-name my-speedbar--project-root))
+                       'face '(:inherit mode-line-buffer-id :slant normal)))))
+
+(defun my-speedbar-project-mode-line (orig &rest args)
+  "In the project view, show the project name instead of speedbar's own line."
+  (if (not my-speedbar-project-view-p)
+      (apply orig args)
+    (when (buffer-live-p speedbar-buffer)
+      (with-current-buffer speedbar-buffer
+        (setq mode-line-format '(:eval (my-speedbar--project-mode-line)))
+        (force-mode-line-update)))))
+
+(defun my-speedbar-project-view-exit (&rest _)
+  "Leave the project view before speedbar switches to another view."
+  (when my-speedbar-project-view-p
+    (setq my-speedbar-project-view-p nil
+          speedbar-full-text-cache nil
+          speedbar-shown-directories nil)))
+
+(defun my-speedbar-project-refresh (&rest _)
+  "Forget the cached list of tracked files so a refresh sees new ones."
+  (setq my-speedbar--tracked nil
+        my-speedbar--git-status nil))
 
 (defun my-speedbar-project-view ()
   "Show only the git-tracked files of the current project in speedbar."
@@ -633,9 +637,7 @@ ORIG returns (INSERT-FN) with no entries when the imenu result was empty."
   (keymap-set speedbar-mode-map "Q" #'undefined)
   (keymap-set speedbar-mode-map "b" #'my-speedbar-show-buffers)
   (keymap-set speedbar-mode-map "f" #'my-speedbar-show-files)
-  (keymap-set speedbar-mode-map "r" #'my-speedbar-show-previous-display)
-
-  )
+  (keymap-set speedbar-mode-map "r" #'my-speedbar-show-previous-display))
 
 ;;; Main Setup
 (with-eval-after-load 'speedbar

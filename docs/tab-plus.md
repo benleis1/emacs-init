@@ -1,26 +1,60 @@
-tab
+# tab
+
+Author: Benjamin Leis
+Version: 0.1.0
+Package-Requires: ((emacs "29.1"))
+Keywords: convenience, frames
 
 ```
-| |_ __ _| |__         ___ ___  _ __  / _(_) __ _
-| __/ _` | '_ \ _____ / __/ _ \| '_ \| |_| |/ _` |
-| || (_| | |_) |_____| (_| (_) | | | |  _| | (_| |
- \__\__,_|_.__/       \___\___/|_| |_|_| |_|\__, |
-                                            |___/
+| |_ __ _| |__        _ __ | |_   _ ___
+| __/ _` | '_ \ _____| '_ \| | | | / __|
+| || (_| | |_) |_____| |_) | | |_| \__ \
+ \__\__,_|_.__/      | .__/|_|\__,_|___/
+                     |_|x
 ```
-Commentary:
 
-tab-line configuration
+# Commentary:
+
+![Screenshot](../images/tabs.png)
+
+![Filtering](../images/tabs-filter.png)
+
+## Setup
+Enable everything with `tab-plus-mode'; loading the file changes nothing by itself.
+
+## tab-line configuration
 Originally these changes were aimed at making tabs operate similarly to the tabs in the browser
 or terminal.
+1. Tabs don't auto rearrange and are added on to the right by default.
+2. You can drag the tabs around to switch the order if desired (or auto rearrange by LRU)
+3. Mostly only file based buffers are tracked. (terminals are an exception)
+4. The close button only shows for the active tab.
 
-I use tab-line rather than tab-bar because I want tabs in the "main" windows and not on the
-sidebar ones and I'm buffer oriented rather than workspace oriented
+I use tab-line rather than tab-bar because I want tabs in the "main" window and not on the
+sidebar ones and I'm buffer oriented rather than workspace oriented. I also only want the tabs to
+be visible on the active focus window.
 
+## Filtering
 I then expanded support for the grouping modes to include filtering by file backed buffers
 or project and moved to a button oriented UI.
 
+## Git Integration
+
+In addition, tabs indicate whether the underlying file is modified wrt git with a pencil icon on
+the right hand side.
+
 This allowed an extension to create views similar to tab-bar that store isolated buffer lists
 and window configurations.
+
+## Tear off tabs
+You can also drag and drop a tab outside the frame and that will tear it off as a new independent frame.
+
+## Desktop Integration
+
+Recently I've completed view support integration with desktop saves and integration for ghostel
+buffers.
+
+## Etc.
 
 Because I might want to turn this into a package I'm going to use the tab-plus prefix for all
 functions that I add on. You'll also see original tab-line vars and funcs referenced.
@@ -28,20 +62,40 @@ functions that I add on. You'll also see original tab-line vars and funcs refere
 I've borrowed and modified some code from Nicolas Rougier to gather input on the header line
 which is less of a distracting jump away from the tabs when needed.
 
-Recently I've completed view support integration with desktop saves and a first non-buffer
-integration for ghostel buffers.
+Enable everything with `tab-plus-mode'; loading the file changes nothing by itself.
 
-TODO: setup global key bindings
+Keybindings for switching tabs are set inside init.el
+
+## Demo
+
+I have several videos of this code in action. The latest one is [![Some recent changes
+I've made to tab-config](https://youtube.com)](https://youtu.be/7okzjW_fZGg)
+
 
 # Code:
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
+- [tab](#tab)
+- [Commentary:](#commentary)
+  - [Setup](#setup)
+  - [tab-line configuration](#tab-line-configuration)
+  - [Filtering](#filtering)
+  - [Git Integration](#git-integration)
+  - [Tear off tabs](#tear-off-tabs)
+  - [Desktop Integration](#desktop-integration)
+  - [Etc.](#etc)
+  - [Demo](#demo)
 - [Code:](#code)
 - [Mode exclusions](#mode-exclusions)
+  - [tab-plus--exclude-dape-modes](#tab-plus--exclude-dape-modes)
 - [UI Styling](#ui-styling)
   - [tab-plus--dark-background-p](#tab-plus--dark-background-p)
+  - [tab-plus--close-button](#tab-plus--close-button)
   - [tab-plus--update-close-button](#tab-plus--update-close-button)
+  - [tab-plus--left-button](#tab-plus--left-button)
+  - [tab-plus--right-button](#tab-plus--right-button)
+  - [tab-plus-register-buffer-name-function](#tab-plus-register-buffer-name-function)
   - [tab-plus--space-tab-name](#tab-plus--space-tab-name)
 - [View Support](#view-support)
   - [tab-plus-get-current-view](#tab-plus-get-current-view)
@@ -50,7 +104,6 @@ TODO: setup global key bindings
   - [tab-plus--get-buffer-list](#tab-plus--get-buffer-list)
   - [tab-plus--set-buffer-list](#tab-plus--set-buffer-list)
   - [tab-plus-reorder-buffers-by-usage](#tab-plus-reorder-buffers-by-usage)
-  - [tab-plus-reorder-buffers-by-name](#tab-plus-reorder-buffers-by-name)
   - [tab-plus--get-view-by-name](#tab-plus--get-view-by-name)
   - [tab-plus-new-view](#tab-plus-new-view)
   - [tab-plus-prompt-new-view](#tab-plus-prompt-new-view)
@@ -72,14 +125,17 @@ TODO: setup global key bindings
   - [tab-plus--tear-off-buffer](#tab-plus--tear-off-buffer)
   - [tab-plus--close-tear-off-view](#tab-plus--close-tear-off-view)
   - [tab-plus-tear-off-tab](#tab-plus-tear-off-tab)
-  - [tab-plus-buffer-in-multiple-viewsp](#tab-plus-buffer-in-multiple-viewsp)
+  - [tab-plus--tab-context-menu](#tab-plus--tab-context-menu)
+  - [tab-plus--buffer-in-multiple-views-p](#tab-plus--buffer-in-multiple-views-p)
   - [tab-plus--close-tab](#tab-plus--close-tab)
+  - [tab-plus--close-tab-advice](#tab-plus--close-tab-advice)
 - [Drag and drop support](#drag-and-drop-support)
   - [tab-plus--pointer-outside-frame](#tab-plus--pointer-outside-frame)
   - [tab-plus--window-at-pointer](#tab-plus--window-at-pointer)
   - [tab-plus--move-buffer-to-window](#tab-plus--move-buffer-to-window)
   - [tab-plus-mouse-move-tab](#tab-plus-mouse-move-tab)
 - [Group and Tab Selection](#group-and-tab-selection)
+  - [tab-plus--add-view-button](#tab-plus--add-view-button)
   - [tab-plus--update-tab-line-visibility](#tab-plus--update-tab-line-visibility)
   - [tab-plus--git-state](#tab-plus--git-state)
   - [tab-plus--format-tab](#tab-plus--format-tab)
@@ -89,6 +145,7 @@ TODO: setup global key bindings
   - [tab-plus--buffer-modified-file-p](#tab-plus--buffer-modified-file-p)
   - [tab-plus--normalize-root](#tab-plus--normalize-root)
   - [tab-plus--buffer-in-project-p](#tab-plus--buffer-in-project-p)
+  - [tab-plus-repin-buffer](#tab-plus-repin-buffer)
   - [tab-plus--filter-buffers-by-group](#tab-plus--filter-buffers-by-group)
   - [tab-plus--find-first](#tab-plus--find-first)
   - [tab-plus--get-tabs](#tab-plus--get-tabs)
@@ -101,7 +158,7 @@ TODO: setup global key bindings
   - [tab-plus--deserialize-views](#tab-plus--deserialize-views)
   - [tab-plus--save-to-frame](#tab-plus--save-to-frame)
   - [tab-plus--rebuild-buffer-list-from-frame-params](#tab-plus--rebuild-buffer-list-from-frame-params)
-  - [tab-plus-adopt-restored-buffer](#tab-plus-adopt-restored-buffer)
+  - [tab-plus--desktop-save-buffer-p](#tab-plus--desktop-save-buffer-p)
   - [tab-plus--add-on-filter-button](#tab-plus--add-on-filter-button)
   - [tab-plus--force-update](#tab-plus--force-update)
   - [tab-plus-select-filter-button](#tab-plus-select-filter-button)
@@ -112,6 +169,11 @@ TODO: setup global key bindings
   - [tab-plus--buffer-groups](#tab-plus--buffer-groups)
   - [tab-plus--window-mode](#tab-plus--window-mode)
   - [tab-plus-dump-state](#tab-plus-dump-state)
+- [Minor mode](#minor-mode)
+  - [tab-plus--settings](#tab-plus--settings)
+  - [tab-plus--enable](#tab-plus--enable)
+  - [tab-plus--disable](#tab-plus--disable)
+- [tab-plus.el ends here](#tab-plusel-ends-here)
 
 <!-- markdown-toc end -->
 
@@ -120,17 +182,30 @@ TODO: setup global key bindings
   "Overrides and extensions to `tab-line'."
   :group 'tab-line)
 
+(require 'cl-lib)
+(require 'seq)
+(require 'tab-line)
+
 (declare-function vc-git-state "vc-git")
 (declare-function project-root "project")
+(declare-function modus-themes-get-color-value "modus-themes")
+(defvar tab-plus-mode)
 ```
-
 
 # Mode exclusions
 
 Set tab-line always on except for the exclude modes list
 ```
-(setq tab-line-exclude-modes '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode ))
+(defcustom tab-plus-exclude-modes
+  '(completion-list-mode treemacs-mode doc-view-mode imenu-list-major-mode ilist-plus-major-mode ediff-meta-mode ediff-mode flymake-diagnostics-buffer-mode wikimode-mode clutch-result-mode clutch-describe-mode help-mode special-mode debugger-mode compilation-mode org-agenda-mode)
+  "Major modes whose buffers never show a tab line.
+Installed as `tab-line-exclude-modes' while `tab-plus-mode' is enabled."
+  :type '(repeat symbol)
+  :group 'tab-plus)
 ```
+
+## tab-plus--exclude-dape-modes
+>Add every `dape-...-mode' major mode to `tab-line-exclude-modes'.
 
 dape defines a handful of auxiliary major modes for its info/repl/memory
 buffers (dape-repl-mode, dape-info-stack-mode, etc). Rather than hand
@@ -138,24 +213,17 @@ maintaining the list above as dape adds new ones, enumerate every
 `dape-...-mode' major mode once dape is loaded and add any that are
 missing.
 ```
-(with-eval-after-load 'dape
-  (dolist (mode (apropos-internal "\\`dape-.*-mode\\'"
-                                   (lambda (s) (get s 'derived-mode-parent))))
-    (unless (memq mode tab-line-exclude-modes)
-      (push mode tab-line-exclude-modes)))
-  (tab-line-force-update t))
+(defun tab-plus--exclude-dape-modes ()
+  "Add every `dape-...-mode' major mode to `tab-line-exclude-modes'."
+  (when tab-plus-mode
+    (dolist (mode (apropos-internal "\\`dape-.*-mode\\'"
+                                    (lambda (s) (get s 'derived-mode-parent))))
+      (unless (memq mode tab-line-exclude-modes)
+        (push mode tab-line-exclude-modes)))
+    (tab-line-force-update t)))
 ```
 
 # UI Styling
-
-```
-(global-tab-line-mode t)
-```
-
-Always suppress the tab line separator in both windows and term mode
-```
-(setq tab-line-separator " ")
-```
 
 Unused: Some simple but readable close icons - use all-the-icons-insert to add a new one
 ```
@@ -181,49 +249,67 @@ fixed in version 30
     (< (/ (apply #'+ rgb) 3.0) (/ 65535 2.0))))
 ```
 
+## tab-plus--close-button
+>Return the close button string using the icon matching the current theme.
+
+```
+(defun tab-plus--close-button ()
+  "Return the close button string using the icon matching the current theme."
+  (propertize " x "
+	      'display `(image :type png
+			       :file ,(expand-file-name
+				       (if (tab-plus--dark-background-p 'tab-line-tab-current) "close-dark.png" "close.png")
+				       tab-plus-directory)
+			       :height (0.9 . em)
+			       :face shadow
+			       :margin (2 . 0)
+			       :ascent center)
+	      'keymap tab-line-tab-close-map
+	      'mouse-face 'tab-line-close-highlight
+	      'help-echo "Click to close tab"))
+```
+
 ## tab-plus--update-close-button
 >Set `tab-line-close-button' using the icon matching the current theme.
 
 ```
 (defun tab-plus--update-close-button ()
   "Set `tab-line-close-button' using the icon matching the current theme."
-  (setq tab-line-close-button
-	(propertize " x "
-		    'display `(image :type png
-				     :file ,(expand-file-name
-					     (if (tab-plus--dark-background-p 'tab-line-tab-current) "close-dark.png" "close.png")
-					     tab-plus-directory)
-				     :height (0.9 . em)
-				     :face shadow
-				     :margin (2 . 0)
-				     :ascent center)
-		    'keymap tab-line-tab-close-map
-		    'mouse-face 'tab-line-close-highlight
-		    'help-echo "Click to close tab")))
+  (setq tab-line-close-button (tab-plus--close-button)))
+```
 
-(tab-plus--update-close-button)
+## tab-plus--left-button
+>Return the `scroll-left' button string.
 
-(setq tab-line-left-button
+```
+(defun tab-plus--left-button ()
+  "Return the `scroll-left' button string."
   (propertize " <"
-              'display '(image :type xpm
-                               :file "tabs/left-arrow.xpm" ;; builtin image
+	      'display '(image :type xpm
+			       :file "tabs/left-arrow.xpm" ;; builtin image
 			       :height (0.8 . em)
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-line-left-map
-              'mouse-face 'tab-line-highlight
-              'help-echo "Click to scroll left"))
+			       :margin (2 . 0)
+			       :ascent center)
+	      'keymap tab-line-left-map
+	      'mouse-face 'tab-line-highlight
+	      'help-echo "Click to scroll left"))
+```
 
-(setq tab-line-right-button
+## tab-plus--right-button
+>Return the `scroll-right' button string.
+
+```
+(defun tab-plus--right-button ()
+  "Return the `scroll-right' button string."
   (propertize "> "
-              'display '(image :type xpm
-                               :file "tabs/right-arrow.xpm" ;; builtin image
+	      'display '(image :type xpm
+			       :file "tabs/right-arrow.xpm" ;; builtin image
 			       :height (0.8 . em)
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-line-right-map
-              'mouse-face 'tab-line-highlight
-              'help-echo "Click to scroll right"))
+			       :margin (2 . 0)
+			       :ascent center)
+	      'keymap tab-line-right-map
+	      'mouse-face 'tab-line-highlight
+	      'help-echo "Click to scroll right"))
 ```
 
 simple unicode button for the modified marker
@@ -234,42 +320,44 @@ simple unicode button for the modified marker
 
 git modified markers - I'm still looking for a better one to display in terminal mode
 ```
-(defvar tab-plus-git-modified-marker (if window-system "" "◨"))
+(defvar tab-plus-git-modified-marker (if window-system "" "◨"))
+```
+
+general support for project overrides which can be used by non project based buffers
+```
+(defvar tab-plus-pinned-project)
 ```
 
 Space the tabs out a bit
 ```
-(defvar ghostel--command-running)
-(defvar my-ghostel-input-needed)
-(defvar tab-plus-pinned-project)
+(defvar tab-plus-buffer-name-functions nil
+  "Alist of (MAJOR-MODE . FUNCTION) used to transform tab names.
+FUNCTION is called with the buffer name and the buffer, and returns the
+full text to display for the tab (icons and status included, without the
+surrounding padding).  Use `tab-plus-register-buffer-name-function' to add
+entries.")
+```
+
+## tab-plus-register-buffer-name-function
+>Register FUNCTION as the tab name transform for buffers in MODE.
+
+```
+(defun tab-plus-register-buffer-name-function (mode function)
+  "Register FUNCTION as the tab name transform for buffers in MODE."
+  (setf (alist-get mode tab-plus-buffer-name-functions) function))
 ```
 
 ## tab-plus--space-tab-name
+>Add display spaces around the tab name for BUFFER.
+
 ```
 (defun tab-plus--space-tab-name (buffer &optional _buffers)
+  "Add display spaces around the tab name for BUFFER."
   (let ((name (buffer-name buffer)))
-    (when (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
-               (string-match "\\`\\*ghostel: \\(.*\\)\\*\\(<[0-9]+>\\)?\\'" name))
-      (setq name (concat (match-string 1 name) (match-string 2 name))))
-    ;; The shell title starts with an em space; `nobreak-char-display' would underline it.
-    (setq name (string-replace " " " " name))
-    (format " %s%s " (or (and (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)
-                              (when-let* ((icon (my-modeline--icon-safe
-                                                 #'nerd-icons-octicon "nf-oct-terminal")))
-                                (concat icon "  ")))
-                         "")
-            (cond
-             ((not (eq (buffer-local-value 'major-mode buffer) 'ghostel-mode)) name)
-             ((buffer-local-value 'my-ghostel-input-needed buffer) (concat (my-modeline--keyboard-icon) " " name))
-             ((buffer-local-value 'ghostel--command-running buffer) (concat "⏳ " name))
-             (t name)))))
-
-(setq tab-line-tab-name-function #'tab-plus--space-tab-name)
-```
-
-only put a close button on selected tabs - set to nil if totally unwanted
-```
-(setq tab-line-close-button-show `selected)
+    (when-let* ((fn (alist-get (buffer-local-value 'major-mode buffer)
+                               tab-plus-buffer-name-functions)))
+      (setq name (funcall fn name buffer)))
+    (format " %s " name)))
 ```
 
 # View Support
@@ -288,88 +376,95 @@ defvar/unless so reloading this file doesn't discard the live views.
 (defvar tab-plus-views (list (make-tab-plus-view :name "default" :wc (current-window-configuration))))
 ```
 (setq tab-plus-current-view 0)
-```
-(unless (frame-parameter nil 'tab-line-sel-view)
-  (set-frame-parameter nil 'tab-line-sel-view 0))
-```
 
 ## tab-plus-get-current-view
-Return the current view
+>Return the current view.
+
 ```
 (defun tab-plus-get-current-view ()
+  "Return the current view."
   ;; Use the frame of the window being rendered, not the selected frame:
   ;; tab lines of unselected frames are redisplayed too.
   (let ((pos (frame-parameter (window-frame) 'tab-line-sel-view)))
-    (nth (or pos 0) tab-plus-views)))
+    ;; During desktop-read the frame is restored with its saved index before
+    ;; `tab-plus-views' is rebuilt, so the index can briefly be out of range.
+    (or (nth (or pos 0) tab-plus-views) (car tab-plus-views))))
 ```
 
 ## tab-plus--default-view-p
-Return if the current view is the default view
+>Return if the current view is the default one.
+
 ```
 (defun tab-plus--default-view-p ()
+  "Return if the current view is the default one."
   (equal (frame-parameter (window-frame) 'tab-line-sel-view)  0))
 ```
 
 ## tab-plus--save-view-state
+>Save the current view state in memory.
+
 Save any state - currently just the window configuration but I expect to add more.
 ```
 (defun tab-plus--save-view-state ()
+  "Save the current view state in memory."
   (let ((view (tab-plus-get-current-view)))
     (setf (tab-plus-view-wc view) (current-window-configuration)
           (tab-plus-view-wstate view) (window-state-get (frame-root-window) t))))
 ```
 
 ## tab-plus--get-buffer-list
+>Return the list of all buffers in the current view.
+
 Simple low-level accessor. Most callers should use tab-plus--get-filtered-buffer-list
 ```
 (defun tab-plus--get-buffer-list ()
+  "Return the list of all buffers in the current view."
   (tab-plus-view-buffers (tab-plus-get-current-view)))
 ```
 
 ## tab-plus--set-buffer-list
+>Set the buffer list for the current view with FORM.
+
 Simple setter
 ```
 (defun tab-plus--set-buffer-list (form)
+  "Set the buffer list for the current view with FORM."
   (setf (tab-plus-view-buffers (tab-plus-get-current-view)) form))
 ```
 
 ## tab-plus-reorder-buffers-by-usage
+>Reorder the current view's buffers to match the most-recently-used order.
+
 Reorder the current views buffer list to match the LRU order
 in the native buffer-list
 ```
 (defun tab-plus-reorder-buffers-by-usage ()
+  "Reorder the current view's buffers to match the most-recently-used order."
   (interactive)
   (let* ((current-bufs (seq-filter 'tab-plus--buffer-filter (buffer-list)))
 	 (intersect-tabs (seq-filter (lambda (it) (member it (tab-plus--get-buffer-list)))
 				     current-bufs)))
 
-      (tab-plus--set-buffer-list intersect-tabs)))
+    (tab-plus--set-buffer-list intersect-tabs)))
 ```
-
-## tab-plus-reorder-buffers-by-name
-Reorder the current views buffer list alphabetically
-```
-(defun tab-plus-reorder-buffers-by-name ()
-  (interactive)
-  (let* ((current-tabs (tab-plus--get-buffer-list))
-	 (sorted-tabs (sort current-tabs (lambda (tab1 tab-plus)
-					   (string< (buffer-name (tab-plus--get-buffer-from-tab tab1))
-					      (buffer-name (tab-plus--get-buffer-from-tab tab-plus)))))))
-      (tab-plus--set-buffer-list sorted-tabs)))
-```
-
 
 ## tab-plus--get-view-by-name
+>Retrieve the view by NAME.
+
 Return the view with the given name
 ```
 (defun tab-plus--get-view-by-name (name)
-    (seq-find (lambda (it) (equal (tab-plus-view-name it) name))   tab-plus-views))
+  "Retrieve the view by NAME."
+  (seq-find (lambda (it) (equal (tab-plus-view-name it) name))   tab-plus-views))
 ```
 
 ## tab-plus-new-view
+>Create a new view called NAME.
+
 Create a new view and switch to it.
 ```
 (defun tab-plus-new-view (name)
+  "Create a new view called NAME."
   (interactive "sNew View name: ")
   (message "Creating view: %s" name)
   (when (tab-plus--get-view-by-name name)
@@ -379,7 +474,7 @@ Create a new view and switch to it.
   (tab-plus--save-view-state)
   ;; Switch over
   (set-frame-parameter nil 'tab-line-sel-view (- (length tab-plus-views) 1))
-;;  (setq tab-plus-current-view (- (length tab-plus-views) 1))
+  ;;  (setq tab-plus-current-view (- (length tab-plus-views) 1))
   ;; Switch to an initial scratch buffer
   (switch-to-buffer "*scratch*")
   (delete-other-windows)
@@ -387,8 +482,11 @@ Create a new view and switch to it.
 ```
 
 ## tab-plus-prompt-new-view
+>Prompt the user for a new view name.
+
 ```
 (defun tab-plus-prompt-new-view ()
+  "Prompt the user for a new view name."
   (interactive)
   (let ((name (tab-plus-quick-command "New view name:")))
     (when name (tab-plus-new-view name))))
@@ -397,41 +495,50 @@ Create a new view and switch to it.
   "<tab-line> <mouse-1>" 'tab-plus-prompt-new-view
   "RET" #'tab-plus-new-view)
 
-(setq tab-plus-new-view-button
+(defvar tab-plus-new-view-button
   (propertize " + "
-              'display '(image :type xpm
-                               :file "tabs/new.xpm"
-                               :height (0.8 . em)
-                               :margin (2 . 0)
-                               :ascent center)
-              'keymap tab-plus-new-view-keymap
-              'mouse-face 'tab-line-highlight
-              'help-echo "Click to add a view"))
+	      'display '(image :type xpm
+			       :file "tabs/new.xpm"
+			       :height (0.8 . em)
+			       :margin (2 . 0)
+			       :ascent center)
+	      'keymap tab-plus-new-view-keymap
+	      'mouse-face 'tab-line-highlight
+	      'help-echo "Click to add a view")
+  "Propertized \"+\" button appended to the tab line to create a new view.")
 ```
 
 ## tab-plus-list-views
-View enumeration by name.
+>Return a list of all the view names.
+
 ```
 (defun tab-plus-list-views ()
+  "Return a list of all the view names."
   (interactive)
   (mapcar 'tab-plus-view-name tab-plus-views))
 ```
 
 ## tab-plus-num-views
+>Return the number of current views.
+
 Number of views currently tracked
 ```
 (defun tab-plus-num-views ()
+  "Return the number of current views."
   (length tab-plus-views))
 ```
 
 ## tab-plus-switch-view-by-name
+>Switch to a given view named NAME.
+
 Switch between views
 ```
 (defun tab-plus-switch-view-by-name (name)
+  "Switch to a given view named NAME."
   (interactive (list (completing-read "Switch to view: " (tab-plus-list-views))))
   (let* ((new-view (tab-plus--get-view-by-name name))
-	(new-view-pos (cl-position new-view tab-plus-views))
-	(old-view (tab-plus-get-current-view)))
+	 (new-view-pos (cl-position new-view tab-plus-views))
+	 (old-view (tab-plus-get-current-view)))
 
     (when (not new-view)
       (error "No view was found named %s" name))
@@ -448,9 +555,12 @@ Switch between views
 ```
 
 ## tab-plus-close-view-by-name
+>Close the view named NAME.
+
 Close a view and revert back to default
 ```
 (defun tab-plus-close-view-by-name (name)
+  "Close the view named NAME."
   (interactive (list (completing-read "Close view: " (tab-plus-list-views))))
   (let* ((closing-view (tab-plus--get-view-by-name name))
 	 (current-view (tab-plus-get-current-view)))
@@ -471,69 +581,77 @@ Close a view and revert back to default
 
     ;; Finally remove the closing-view from the view list
     (setq tab-plus-views (remove closing-view tab-plus-views))
-  ))
+    ))
 ```
 
 ## tab-plus-next-view
-Switch to the next view in the list
+>Switch to the new view in the list.
+
 ```
 (defun tab-plus-next-view()
+  "Switch to the new view in the list."
   (interactive)
   (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (+ 1 oldpos) (length tab-plus-views)))
 	 (new-view-name (tab-plus-view-name (nth newpos tab-plus-views))))
 
-;;    (message "next %s to %s:%s" oldpos newpos  new-view-name)
+    ;;    (message "next %s to %s:%s" oldpos newpos  new-view-name)
     (tab-plus-switch-view-by-name  new-view-name)))
 ```
 
 ## tab-plus-prev-view
-Switch to the prev view in the list
+>Switch to the previous view in the list.
+
 ```
 (defun tab-plus-prev-view()
+  "Switch to the previous view in the list."
   (interactive)
   (let* ((oldpos (or (frame-parameter nil 'tab-line-sel-view) 0))
 	 (newpos (mod (- oldpos 1) (length tab-plus-views)))
 	 (new-view-name (tab-plus-view-name (nth newpos tab-plus-views))))
 
-;;    (message "prev %s to %s:%s" oldpos newpos new-view-name)
+    ;;    (message "prev %s to %s:%s" oldpos newpos new-view-name)
     (tab-plus-switch-view-by-name  new-view-name)))
 ```
 
 ## tab-plus--buffer-mode
->Returns the major mode associated with a buffer.
+>Returns the major mode associated with a BUFFER-OR-STRING.
 
 categorize a buffer's mode
 ```
 (defun tab-plus--buffer-mode (buffer-or-string)
-  "Returns the major mode associated with a buffer."
+  "Returns the major mode associated with a BUFFER-OR-STRING."
   (with-current-buffer buffer-or-string
     major-mode))
 
 (defvar tab-plus-white-list-modes
-  '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode)
-  "List of modes that will be tracked even if the buffer is not a file")
+  '(text-mode lisp-interaction-mode messages-buffer-mode ghostel-mode eshell-mode)
+  "List of modes that will be tracked even if the buffer is not a file.")
 
 (defvar tab-plus-white-list-buffer-names
   '()
-  "List of buffer names that will be tracked even if the buffer is not a file")
+  "List of buffer names that will be tracked even if the buffer is not a file.")
 ```
 
 ## tab-plus--buffer-filter
-Filter which buffers we'll track in the tabs
+>Filter whether the given BUFFER is tracked.
+
 ```
 (defun tab-plus--buffer-filter (buffer)
+  "Filter whether the given BUFFER is tracked."
   (or (buffer-file-name buffer)
       (member (tab-plus--buffer-mode buffer) tab-plus-white-list-modes)
       (member (buffer-name buffer) tab-plus-white-list-buffer-names)))
 ```
 
 ## tab-plus--get-filtered-buffer-list
-Function that returns the current buffer-list.
+>Return the current filtered buffer list.
+
 This filters out all special buffers and leaves only files and whitelisted buffers by mode
-Adds on the current buffer its filters and isn't in the list
+Also adds on the current buffer if it filters and isn't in the list
 ```
 (defun tab-plus--get-filtered-buffer-list ()
+  "Return the current filtered buffer list."
   (let* ((current-bufs (seq-filter 'tab-plus--buffer-filter (buffer-list)))
 	 (intersect-tabs (seq-filter (lambda (it) (member it current-bufs)) (tab-plus--get-buffer-list)))
 	 (new-tab (when (and (not (member (current-buffer) (tab-plus--get-buffer-list)))
@@ -545,95 +663,100 @@ Adds on the current buffer its filters and isn't in the list
 ```
 
 ## tab-plus--skip-foreign-buffer
->Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view.
+>Handle switching away from a  WINDOW and BUFFER.
+Prefer a buffer in the same view and group.
 
 Window history (prev/next buffers, also restored from a saved window state) is shared by
 every view, so killing/burying/cycling away from a buffer could land on one that belongs to
 another view, and `tab-plus--get-filtered-buffer-list' would then adopt it into this one.
+Likewise, prefer buffers in WINDOW's selected tab group so closing a tab stays in that group.
 ```
 (defun tab-plus--skip-foreign-buffer (window buffer _bury-or-kill)
-  "Skip tracked BUFFER when switching away in WINDOW unless it is in WINDOW's view."
-  (and (tab-plus--buffer-filter buffer)
-       (with-selected-window window
-         (not (memq buffer (tab-plus--get-buffer-list))))))
-
-(setq switch-to-prev-buffer-skip #'tab-plus--skip-foreign-buffer)
-```
-
-Filter special buffers from tab-line maintaining current order
-```
-(setq tab-line-tabs-function 'tab-plus--get-filtered-buffer-list)
+  "Handle switching away from a  WINDOW and BUFFER.
+Prefer a buffer in the same view and group."
+  (with-selected-window window
+    (let ((group (window-parameter window 'tab-line-group)))
+      (if (tab-plus--buffer-filter buffer)
+          (or (not (memq buffer (tab-plus--get-buffer-list)))
+              (not (tab-plus--filter-buffers-by-group (list buffer) group)))
+        ;; Untracked buffers have no tab, so they never belong to a selected group.
+        (and group (not (equal group "All")))))))
 ```
 
 ## tab-plus--get-buffer-from-tab
+>Get the buffer behind a TAB.
+
 tabs may just be a buffer or an alist depending on the mode.
 ```
 (defun tab-plus--get-buffer-from-tab (tab)
+  "Get the buffer behind a TAB."
   (if (bufferp tab) tab (alist-get 'buffer tab)))
 ```
 
 ## tab-plus-shift-tab-right
->Shift current buffer or selected tab right
+>Shift current buffer or selected tab right after the EVENT.
 
 Custom shift tab right tab-plus-shift-tab-right (&optional event)
 ```
 (defun tab-plus-shift-tab-right (&optional event)
-"Shift current buffer or selected tab right"
+  "Shift current buffer or selected tab right after the EVENT."
   (interactive (list last-nonmenu-event))
-;;  (when (tab-line-track-tap event)
-    (let* ((posnp (and (listp event)
-                       (event-start event)))
-           (window (and posnp (posn-window posnp)))
-           (tab (tab-line--get-tab-property 'tab (car (posn-string posnp))))
-           (buffer (tab-plus--get-buffer-from-tab tab))
-	   (n (seq-position (tab-plus--get-buffer-list) buffer)))
-      (with-selected-window (or window (selected-window))
+  ;;  (when (tab-line-track-tap event)
+  (let* ((posnp (and (listp event)
+                     (event-start event)))
+         (window (and posnp (posn-window posnp)))
+         (tab (tab-line--get-tab-property 'tab (car (posn-string posnp))))
+         (buffer (tab-plus--get-buffer-from-tab tab))
+	 (n (seq-position (tab-plus--get-buffer-list) buffer)))
+    (with-selected-window (or window (selected-window))
 
-	(when (and n (< n (1- (length (tab-plus--get-buffer-list)))))
-          (tab-plus--set-buffer-list
-              (append
-               (seq-take (tab-plus--get-buffer-list) n)
-               (list (elt (tab-plus--get-buffer-list) (+ n 1)))
-               (list (elt (tab-plus--get-buffer-list) n))
-               (seq-drop (tab-plus--get-buffer-list) (+ n 2)))))))
-    (force-mode-line-update))
+      (when (and n (< n (1- (length (tab-plus--get-buffer-list)))))
+        (tab-plus--set-buffer-list
+         (append
+          (seq-take (tab-plus--get-buffer-list) n)
+          (list (elt (tab-plus--get-buffer-list) (+ n 1)))
+          (list (elt (tab-plus--get-buffer-list) n))
+          (seq-drop (tab-plus--get-buffer-list) (+ n 2)))))))
+  (force-mode-line-update))
 ```
 
 ## tab-plus-shift-tab-left
->Shift current buffer or selected tab left
+>Shift current buffer or selected tab left after the EVENT.
 
 Custom tab shift left
 ```
 (defun tab-plus-shift-tab-left (&optional event)
-  "Shift current buffer or selected tab left"
+  "Shift current buffer or selected tab left after the EVENT."
   (interactive (list last-nonmenu-event))
-;;  (when (tab-line-track-tap event)
-    (let* ((posnp (and (listp event)
-                       (event-start event)))
-           (window (and posnp (posn-window posnp)))
-           (tab (tab-line--get-tab-property 'tab (car (posn-string posnp))))
-	   (buffer (tab-plus--get-buffer-from-tab tab))
-	   (n (seq-position (tab-plus--get-buffer-list) buffer)))
-      (with-selected-window (or window (selected-window))
+  ;;  (when (tab-line-track-tap event)
+  (let* ((posnp (and (listp event)
+                     (event-start event)))
+         (window (and posnp (posn-window posnp)))
+         (tab (tab-line--get-tab-property 'tab (car (posn-string posnp))))
+	 (buffer (tab-plus--get-buffer-from-tab tab))
+	 (n (seq-position (tab-plus--get-buffer-list) buffer)))
+    (with-selected-window (or window (selected-window))
 
-    (when
-        (and n (> n 0))
-      (progn
-        (tab-plus--set-buffer-list
-              (append
-               (seq-take (tab-plus--get-buffer-list) (- n 1))
-               (list (elt (tab-plus--get-buffer-list) n))
-               (list (elt (tab-plus--get-buffer-list) (- n 1)))
-               (seq-drop (tab-plus--get-buffer-list) (+ n 1)))))))
+      (when
+          (and n (> n 0))
+	(progn
+          (tab-plus--set-buffer-list
+           (append
+            (seq-take (tab-plus--get-buffer-list) (- n 1))
+            (list (elt (tab-plus--get-buffer-list) n))
+            (list (elt (tab-plus--get-buffer-list) (- n 1)))
+            (seq-drop (tab-plus--get-buffer-list) (+ n 1)))))))
     (force-mode-line-update)))
 ```
 
 ## tab-plus-copy-current-filename-to-clipboard
-copy current buffer name to kill ring
+>Copy the current buffer name to the kill ring after EVENT.
+
 ```
-(defun tab-plus-copy-current-filename-to-clipboard (&optional e)
-  (interactive "e" )
-  (let* ((posnp (event-start e))
+(defun tab-plus-copy-current-filename-to-clipboard (&optional event)
+  "Copy the current buffer name to the kill ring after EVENT."
+  (interactive "e")
+  (let* ((posnp (event-start event))
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab-plus--get-buffer-from-tab tab))
 	 (filename (and buffer (buffer-file-name buffer))))
@@ -688,8 +811,8 @@ shows it, and delete WINDOW if that was its only tab."
       (setq n (1+ n)
             name (format "tear off[%d]" n)))
     (setq tab-plus-views (append tab-plus-views
-                             (list (make-tab-plus-view :name name
-                                                   :buffers (list buffer)))))
+				 (list (make-tab-plus-view :name name
+							   :buffers (list buffer)))))
     (with-selected-frame frame
       (set-frame-parameter nil 'tab-line-sel-view (1- (length tab-plus-views)))
       (set-frame-parameter nil 'tab-plus-tear-off-view name)
@@ -721,9 +844,8 @@ desktop file, which can't hold a view's buffers.
           (cond ((not (integerp sel)))
                 ((= sel pos) (set-frame-parameter f 'tab-line-sel-view 0))
                 ((> sel pos) (set-frame-parameter f 'tab-line-sel-view (1- sel)))))))))
-
-(add-hook 'delete-frame-functions #'tab-plus--close-tear-off-view)
 ```
+
 
 ## tab-plus-tear-off-tab
 >Move the buffer of the tab clicked in event E into a new frame.
@@ -740,10 +862,13 @@ desktop file, which can't hold a view's buffers.
       (tab-plus--tear-off-buffer buffer window))))
 ```
 
+## tab-plus--tab-context-menu
+>Pop up the context menu for a tab-line tab.
+
 Override original definition of tab-line-tab-context-menu
 Bind custom actions into the context menu if we are not in group mode
 ```
-(define-advice tab-line-tab-context-menu (:override (&optional _event))
+(defun tab-plus--tab-context-menu (&optional _event)
   "Pop up the context menu for a tab-line tab."
   (interactive "e")
 
@@ -766,9 +891,12 @@ Bind custom actions into the context menu if we are not in group mode
       (popup-menu menu))))
 ```
 
-## tab-plus-buffer-in-multiple-viewsp
+## tab-plus--buffer-in-multiple-views-p
+>Predicate that tests if a BUFFER belongs to multiple views.
+
 ```
-(defun tab-plus-buffer-in-multiple-viewsp (buffer)
+(defun tab-plus--buffer-in-multiple-views-p (buffer)
+  "Predicate that tests if a BUFFER belongs to multiple views."
   (let ((count 0))
     (dolist (view tab-plus-views)
       (when (member buffer (tab-plus-view-buffers view)) (setq count (+ 1 count))))
@@ -778,19 +906,22 @@ Bind custom actions into the context menu if we are not in group mode
 
 
 ## tab-plus--close-tab
+>Close a tab after an EVENT.
+
 Logic to carefully close a tab. buffer is only killed if its the last one.
 ```
-(defun tab-plus--close-tab (&optional e)
-  (let* ((posnp (event-start e))
+(defun tab-plus--close-tab (&optional event)
+  "Close a tab after an EVENT."
+  (let* ((posnp (event-start event))
          (window (posn-window posnp))
          (tab (get-pos-property 1 'tab (car (posn-string posnp))))
 	 (buffer (tab-plus--get-buffer-from-tab tab)))
 
-    (if (tab-plus-buffer-in-multiple-viewsp buffer)
+    (if (tab-plus--buffer-in-multiple-views-p buffer)
 	;; The buffer is in other views so only:
 	;; remove this buffer from the buffer list for this view and switch
 	(let* ((view (tab-plus-get-current-view))
-	      (new-buffers (remove buffer (tab-plus-view-buffers view))))
+	       (new-buffers (remove buffer (tab-plus-view-buffers view))))
 
 	  (setf (tab-plus-view-buffers view) new-buffers)
 
@@ -817,15 +948,25 @@ Logic to carefully close a tab. buffer is only killed if its the last one.
                   (ignore-errors (delete-window window))))
 	    (progn
               (and (kill-buffer buffer)
-		   (unless (cdr tab-list)
+                   (unless (cdr tab-list)
                      (ignore-errors (delete-window window))))))))
-)))
+      )))
+```
 
-(define-advice tab-line-close-tab (:override (&optional e))
+## tab-plus--close-tab-advice
+>Close the selected tab.
+If the tab is presented in another window, close it by using `bury-buffer'.
+If the tab is unique to all existing windows, kill the buffer with
+`kill-buffer'.  Lastly, if no tabs are left in the window, it is deleted with
+`delete-window'. E supplies the trigger event.
+
+```
+(defun tab-plus--close-tab-advice (&optional e)
   "Close the selected tab.
-If the tab is presented in another window, close the tab by using the `bury-buffer` function.
-If the tab is unique to all existing windows, kill the buffer with the `kill-buffer` function.
-Lastly, if no tabs are left in the window, it is deleted with the `delete-window` function."
+If the tab is presented in another window, close it by using `bury-buffer'.
+If the tab is unique to all existing windows, kill the buffer with
+`kill-buffer'.  Lastly, if no tabs are left in the window, it is deleted with
+`delete-window'. E supplies the trigger event."
   (interactive "e")
 
   (let* ((posnp (event-start e))
@@ -905,14 +1046,14 @@ A tear-off frame left without tabs is deleted."
 ```
 
 ## tab-plus-mouse-move-tab
->Move a tab to a different position on the tab line.
+>Move a tab to a different position on the tab line after an EVENT.
 This command should be bound to a drag event.  It moves the tab
 at the mouse-down event to the position at mouse-up event.
 
 todo may need to force update more expansively for multiple windows when split
 ```
 (defun tab-plus-mouse-move-tab (event)
-  "Move a tab to a different position on the tab line.
+  "Move a tab to a different position on the tab line after an EVENT.
 This command should be bound to a drag event.  It moves the tab
 at the mouse-down event to the position at mouse-up event."
   (interactive "e")
@@ -928,7 +1069,7 @@ at the mouse-down event to the position at mouse-up event."
          (outside-pos (and from-buffer (window-live-p window)
                            (tab-plus--pointer-outside-frame (window-frame window)))))
 
-;;    (message "move %s p:%s to %s p:%s" from-str (car from-rowcol) to-str (car to-rowcol))
+    ;;    (message "move %s p:%s to %s p:%s" from-str (car from-rowcol) to-str (car to-rowcol))
 
     (cond
      ;; Released outside the frame: tear the tab off into a frame at the pointer.
@@ -973,16 +1114,15 @@ at the mouse-down event to the position at mouse-up event."
       (force-mode-line-update)))))
 ```
 
-Add on our extra key map for the drag event
-```
-(keymap-set tab-line-tab-map   "<tab-line> <drag-mouse-1>"      #'tab-plus-mouse-move-tab)
-```
-
 # Group and Tab Selection
+
+## tab-plus--add-view-button
+>Append the new-view button to the tab-line FORMAT in the views view.
 
 Advice to add on add-new view button in the view view
 ```
-(define-advice tab-line-format (:filter-return (format))
+(defun tab-plus--add-view-button (format)
+  "Append the new-view button to the tab-line FORMAT in the views view."
   (if (window-parameter nil 'tab-line-views)
       (append format (list tab-plus-new-view-button))
     format))
@@ -1002,9 +1142,6 @@ parameter overrides the buffer-local value; `none' removes the line entirely.
                    (frame-selected-window frame))))
     (dolist (win (window-list frame 'never))
       (set-window-parameter win 'tab-line-format (if (eq win active) nil 'none)))))
-
-(add-hook 'window-selection-change-functions #'tab-plus--update-tab-line-visibility)
-(add-hook 'window-configuration-change-hook #'tab-plus--update-tab-line-visibility)
 ```
 
 Convenience wrapper for getting the git state which needs to be done in buffer
@@ -1019,26 +1156,36 @@ called from every tab-line render and `vc-git-state' shells out to git.
 ```
 
 ## tab-plus--git-state
+>Find the git state for BUFFER.
+
 ```
 (defun tab-plus--git-state (buffer)
+  "Find the git state for BUFFER."
   (with-current-buffer buffer
     (let ((now (float-time)))
       (unless (and tab-plus-git-state-cache
 		   (< (- now (cdr tab-plus-git-state-cache)) tab-plus-git-state-cache-ttl))
 	(setq tab-plus-git-state-cache
-	      (cons (vc-git-state (buffer-file-name buffer)) now)))
+	      ;; A deleted directory makes git's process spawn signal; that must not abort the whole tab-line.
+	      (cons (and (file-directory-p default-directory)
+			 (ignore-errors (vc-git-state (buffer-file-name buffer))))
+		    now)))
       (car tab-plus-git-state-cache))))
 ```
 
 ## tab-plus--format-tab
->Override for  `tab-line-tab-name-format-function' that adds on a modified buffer face and indicator
+>Override for `tab-line-tab-name-format-function' for TAB.
+Adds a modified-buffer face and indicator to TAB.
+TABS contains the whole set of tabs.
 
 Custom tab-line-name-format function to add on a face for the modified signifier
 so it can be colored or not depending on being selected
 and filter icon to the first tab
 ```
 (defun tab-plus--format-tab (tab tabs)
-  "Override for  `tab-line-tab-name-format-function' that adds on a modified buffer face and indicator"
+  "Override for `tab-line-tab-name-format-function' for TAB.
+Adds a modified-buffer face and indicator to TAB.
+TABS contains the whole set of tabs."
   (let* ((buffer (tab-plus--get-buffer-from-tab tab))
          (selected-p (if buffer
                          (eq buffer (window-buffer))
@@ -1064,10 +1211,10 @@ and filter icon to the first tab
 	      (add-face-text-property 0 (length str) face t str)
 	      (add-text-properties 0 (length str)
 	                           `(keymap ,tab-line-tab-map
-	                             help-echo ,(if selected-p "Current tab"
-	                                          "Click to select tab")
-	                             ;; Don't turn mouse-1 into mouse-2 (bug#49247)
-	                             follow-link ignore)
+					    help-echo ,(if selected-p "Current tab"
+							 "Click to select tab")
+					    ;; Don't turn mouse-1 into mouse-2 (bug#49247)
+					    follow-link ignore)
 	                           str)
 	      str)
 
@@ -1080,18 +1227,18 @@ and filter icon to the first tab
 		  ((and buffer (buffer-file-name buffer)
 			(string= (tab-plus--git-state buffer) "edited"))
 		   (progn
-;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
-		    (if selected-p
-			(propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
-		      (propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))))
+		     ;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
+		     (if selected-p
+			 (propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
+		       (propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))))
 
             (let* ((close (or (and (or buffer (assq 'close tab))
-                                  tab-line-close-button-show
-                                  (not (eq tab-line-close-button-show
-                                           (if selected-p 'non-selected
-                                             'selected)))
-                                  tab-line-close-button)
-                             ""))
+                                   tab-line-close-button-show
+                                   (not (eq tab-line-close-button-show
+                                            (if selected-p 'non-selected
+                                              'selected)))
+                                   tab-line-close-button)
+                              ""))
                    (close2 (copy-sequence close)))
 
               ;; Don't overwrite the icon face
@@ -1107,9 +1254,15 @@ and filter icon to the first tab
 
 
 ## tab-plus--make-group-tab
+>Setup a tabgroup named GROUPNAME for SELECTED-GROUP.
+This formats the built tab structure for a group.
+
 Group of tab constructors
 ```
 (defun tab-plus--make-group-tab (selected-group groupname)
+  "Setup a tabgroup named GROUPNAME for SELECTED-GROUP.
+This formats the built tab structure for a group."
+
   (let ((formatted-name   (format " %s " groupname)))
     `(tab
       (name . ,formatted-name)
@@ -1121,8 +1274,11 @@ Group of tab constructors
 ```
 
 ## tab-plus--make-view-category-tab
+>Make a view tab named VIEWNAME for the SELECTED-VIEW.
+
 ```
 (defun tab-plus--make-view-category-tab (selected-view viewname)
+  "Make a view tab named VIEWNAME for the SELECTED-VIEW."
   (let ((formatted-name   (format " %s " viewname)))
     `(tab
       (name . ,formatted-name)
@@ -1133,8 +1289,11 @@ Group of tab constructors
 ```
 
 ## tab-plus--make-view-tab
+>Make a tab for VIEWNAME for the SELECTED-VIEW.
+
 ```
 (defun tab-plus--make-view-tab (selected-view viewname)
+  "Make a tab for VIEWNAME for the SELECTED-VIEW."
   (let* ((formatted-name (format " %s " viewname))
 	 (new-view (tab-plus--get-view-by-name viewname))
 	 (new-view-pos (cl-position new-view tab-plus-views)))
@@ -1148,22 +1307,25 @@ Group of tab constructors
 		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
                        (set-window-parameter nil 'tab-line-hscroll nil))))
 
-	`(tab
-	  (name . ,formatted-name)
-	  (selected . ,(equal selected-view viewname))
-	  (close . ,(lambda (&optional _buffer)
-		      (tab-plus-close-view-by-name viewname)))
-	  (select . ,(lambda ()
-		       (tab-plus-switch-view-by-name viewname)
-		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
-                       (set-window-parameter nil 'tab-line-hscroll nil)))))))
+      `(tab
+	(name . ,formatted-name)
+	(selected . ,(equal selected-view viewname))
+	(close . ,(lambda (&optional _buffer)
+		    (tab-plus-close-view-by-name viewname)))
+	(select . ,(lambda ()
+		     (tab-plus-switch-view-by-name viewname)
+		     (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
+                     (set-window-parameter nil 'tab-line-hscroll nil)))))))
 ```
 
 
 ## tab-plus--buffer-modified-file-p
+>Predicate for whether a tab is for a modified BUFFER.
+
 predicate to determine if a buffer is modified and backed by a file
 ```
 (defun tab-plus--buffer-modified-file-p (buffer)
+  "Predicate for whether a tab is for a modified BUFFER."
   (and (buffer-file-name buffer) (buffer-modified-p buffer)))
 ```
 
@@ -1206,19 +1368,35 @@ ROOT must already be normalized with `tab-plus--normalize-root'."
             member))))))
 ```
 
+## tab-plus-repin-buffer
+>Repin a buffer to a specific project.
+ROOT should be a project root.
+
+```
+(defun tab-plus-repin-buffer (root)
+  "Repin a buffer to a specific project.
+ROOT should be a project root."
+  (interactive
+   (list
+    (read-directory-name "Project Path: ")))
+  (setq-local tab-plus-pinned-project root))
+```
+
 ## tab-plus--filter-buffers-by-group
+>Filter the list of BUFFERS for ones in the CURGROUP.
+
 Filter the list of buffers based on the selected group
 if Files then return all of the file based buffers.
 if Project then return all buffers in the curent project.
 ```
 (defun  tab-plus--filter-buffers-by-group (buffers curgroup)
+  "Filter the list of BUFFERS for ones in the CURGROUP."
   (cond ((or (not curgroup) (equal curgroup "All")) buffers)
         ((equal curgroup "Files")
          (seq-filter (lambda (b) (buffer-file-name b)) buffers))
 
         ((equal curgroup "Project")
-         (let ((root (when-let* ((pr (project-current nil)))
-                       (tab-plus--normalize-root (project-root pr)))))
+         (let ((root (tab-plus--buffer-project-root (current-buffer))))
            (seq-filter (lambda (b) (tab-plus--buffer-in-project-p b root)) buffers)))
 
         ((equal curgroup "Modified")
@@ -1226,21 +1404,24 @@ if Project then return all buffers in the curent project.
 
         (t (seq-filter (lambda (b)
                          (equal (tab-line-tabs-buffer-group-name b) curgroup))
-                       buffers))))
+		       buffers))))
 ```
 
 ## tab-plus--find-first
+>Find the first match from FILTER on the LIST.
+
 ```
-(defun tab-plus--find-first (fn ls)
-  (cond ((null ls) nil)
-        ((funcall fn (car ls)) (car ls))
-        (t (tab-plus--find-first fn (cdr ls)))))
+(defun tab-plus--find-first (filter list)
+  "Find the first match from FILTER on the LIST."
+  (cond ((null list) nil)
+        ((funcall filter (car list)) (car list))
+        (t (tab-plus--find-first filter (cdr list)))))
 ```
 
 ## tab-plus--get-tabs
 >Return a list of tabs that should be displayed in the tab line.
- This version is based on tab-line-tabs-buffers-groups but
- changes first group to an icon and adds on all files
+This version is based on tab-line-tabs-buffers-groups but changes first
+group to an icon and adds on all files
 
 Setup the list of tabs to be displayed.
 Note: these will returned in the tab list format
@@ -1248,8 +1429,8 @@ tab-plus--format-tab is then responsible for formatting each one i.e faces / clo
 ```
 (defun tab-plus--get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
-  This version is based on tab-line-tabs-buffers-groups but
-  changes first group to an icon and adds on all files"
+This version is based on tab-line-tabs-buffers-groups but changes first
+group to an icon and adds on all files"
 
   (cond
    ;; views view
@@ -1265,15 +1446,15 @@ tab-plus--format-tab is then responsible for formatting each one i.e faces / clo
     (let* ((buffers (funcall tab-line-tabs-buffer-list-function))
 	   (groups (delq nil (mapcar #'car (seq-group-by
 					    (lambda (buffer)
-                                              (tab-line-tabs-buffer-group-name
-                                               buffer))
+					      (tab-line-tabs-buffer-group-name
+					       buffer))
                                             buffers))))
 	   (selected-group (window-parameter nil 'tab-line-group))
 	   (tabs (mapcar (apply-partially 'tab-plus--make-group-tab selected-group) groups)))
 
       ;;insert a Files and Project group
       (append
-       (when (project-current nil)
+       (when (tab-plus--buffer-project-root (current-buffer))
 	 (list (tab-plus--make-group-tab selected-group "Project")))
        (list (tab-plus--make-group-tab selected-group "Files"))
        (list (tab-plus--make-group-tab selected-group "All"))
@@ -1302,22 +1483,25 @@ tab-plus--format-tab is then responsible for formatting each one i.e faces / clo
 			       (close . tab-plus--close-tab)))
 			   sorted-buffers)))
 
-;;	(message "chk g:%s b:%s" selected-group buffers)
+	;;	(message "chk g:%s b:%s" selected-group buffers)
 	tabs))))
 ```
 
 ## tab-plus--auto-track-selected-window
+>Switch the tab group to match the current window.
+
 If the current window is in a valid group that is not currently
 set - switch the selected group to match it.
 TODO: make configurable?
 ```
 (defun tab-plus--auto-track-selected-window (&optional _frame)
+  "Switch the tab group to match the current window."
   (let ((bufgroup (tab-line-tabs-buffer-group-name (current-buffer)))
 	(filep (buffer-file-name (current-buffer)))
 	(valid (tab-plus--buffer-filter (current-buffer)))
 	(selected-group (window-parameter nil 'tab-line-group)))
 
-;;    (message "autotrack: %s %s %s %s" bufgroup filep valid selected-group)
+    ;;    (message "autotrack: %s %s %s %s" bufgroup filep valid selected-group)
 
     (when (or (and (not selected-group) valid)
 	      (and selected-group
@@ -1334,52 +1518,27 @@ TODO: make configurable?
 ```
 
 
-Setup the window buffer changes functions to monitor when a window is selected
-Hook that up to the auto-track function
-```
-(add-hook 'window-buffer-change-functions 'tab-plus--auto-track-selected-window)
-```
-
-
-Set the override tab name format function to the one I've defined
-```
-(setopt tab-line-tab-name-format-function 'tab-plus--format-tab)
-```
-
-Use custom tab grouping function.
-```
-(setq tab-line-tabs-function 'tab-plus--get-tabs)
-```
-
-Preserve manual tab ordering (drag-and-drop, shift left/right via the
-context menu). Stock tab-line defaults this to an alphabetical sort,
-which silently re-sorted the buffer list back into place on every
-redisplay -- right after a reorder took effect -- making drag-and-drop
-and the context-menu shift commands look like they did nothing.
-```
-(setq tab-line-tabs-buffer-group-sort-function nil)
-```
-
-Set the list-function to use the same one I'm overriding in basic mode
-```
-(setq tab-line-tabs-buffer-list-function 'tab-plus--get-filtered-buffer-list)
-```
-
 # Serialization
 ```
 (cl-defstruct tab-plus-persist-view name buffernames wstate)
 ```
 
 ## tab-plus--tear-off-view-names
+>Return all the tear off window view names.
+
 ```
 (defun tab-plus--tear-off-view-names ()
+  "Return all the tear off window view names."
   (delq nil (mapcar (lambda (f) (frame-parameter f 'tab-plus-tear-off-view)) (frame-list))))
 ```
 
 ## tab-plus--convert-to-persist-format
+>Serialize VIEW for persistence to the desktop.
+
 serialize a view
 ```
 (defun tab-plus--convert-to-persist-format (view)
+  "Serialize VIEW for persistence to the desktop."
   (make-tab-plus-persist-view
    :name (tab-plus-view-name view)
    :buffernames (mapcar #'buffer-name (seq-filter #'buffer-live-p (tab-plus-view-buffers view)))
@@ -1387,44 +1546,57 @@ serialize a view
 ```
 
 ## tab-plus--serialize-views
+>Serialize all of the views.
+
 serialize all views except tear-off ones, which belong to frames that aren't restored
 ```
 (defun tab-plus--serialize-views ()
+  "Serialize all of the views."
   (let ((skip (tab-plus--tear-off-view-names)))
     (mapcar #'tab-plus--convert-to-persist-format
             (seq-remove (lambda (v) (member (tab-plus-view-name v) skip)) tab-plus-views))))
 ```
 
 ## tab-plus--convert-from-persist-format
+>Desieralize the desktop and create a new tab for VIEW.
+
 Deserialize a view, dropping buffers that desktop didn't recreate
 ```
 (defun tab-plus--convert-from-persist-format (view)
+  "Desieralize the desktop and create a new tab for VIEW."
   (make-tab-plus-view :name (tab-plus-persist-view-name view)
-                  :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
-                  :wstate (tab-plus-persist-view-wstate view)))
+                      :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
+                      :wstate (tab-plus-persist-view-wstate view)))
 ```
 
 ## tab-plus--deserialize-views
+>Deserialize all the VIEWS from the desktop file.
+
 ```
 (defun tab-plus--deserialize-views (views)
+  "Deserialize all the VIEWS from the desktop file."
   (mapcar #'tab-plus--convert-from-persist-format views))
 ```
 
 ## tab-plus--save-to-frame
-persist views and the selected view's name to the frame for reload
+>Save all view data in the current frame prior to desktop save.
+
 ```
 (defun tab-plus--save-to-frame ()
+  "Save all view data in the current frame prior to desktop save."
   (tab-plus--save-view-state)
   (set-frame-parameter nil 'tab-plus-views (tab-plus--serialize-views))
   (set-frame-parameter nil 'tab-plus-sel-view-name
-                       (let ((name (tab-plus-view-name (tab-plus-get-current-view))))
+		       (let ((name (tab-plus-view-name (tab-plus-get-current-view))))
                          (unless (member name (tab-plus--tear-off-view-names)) name))))
 ```
 
 ## tab-plus--rebuild-buffer-list-from-frame-params
-process the saved views in the frame parameters and set up to match
+>Process the saved views in the frame parameters and set up live frame to match.
+
 ```
 (defun tab-plus--rebuild-buffer-list-from-frame-params ()
+  "Process the saved views in the frame parameters and set up live frame to match."
   (let* ((views (tab-plus--deserialize-views (frame-parameter nil 'tab-plus-views)))
          (sel (frame-parameter nil 'tab-plus-sel-view-name)))
     (when views
@@ -1432,20 +1604,6 @@ process the saved views in the frame parameters and set up to match
       (set-frame-parameter nil 'tab-line-sel-view
                            (or (cl-position sel views :key #'tab-plus-view-name :test #'equal) 0)))
     (force-mode-line-update)))
-```
-
-## tab-plus-adopt-restored-buffer
-A buffer desktop restored under a transient name (ghostel renames itself once
-its shell reports a title) misses the by-name lookup above.  Once it has its
-final name, re-add it to the views the saved frame params list it in.
-```
-(defun tab-plus-adopt-restored-buffer (buffer)
-  (dolist (pv (frame-parameter nil 'tab-plus-views))
-    (when (member (buffer-name buffer) (tab-plus-persist-view-buffernames pv))
-      (when-let* ((view (tab-plus--get-view-by-name (tab-plus-persist-view-name pv))))
-        (unless (memq buffer (tab-plus-view-buffers view))
-          (setf (tab-plus-view-buffers view)
-                (append (tab-plus-view-buffers view) (list buffer))))))))
 
 (defcustom tab-plus-desktop-save-views-only t
   "When non-nil, only save tab-tracked buffers that are in a saved view.
@@ -1455,9 +1613,17 @@ views) are then left out of the desktop file."
   :group 'tab-plus)
 ```
 
+## tab-plus--desktop-save-buffer-p
+>Around advice for `desktop-save-buffer-p' honoring views-only saving.
+ORIG is the original function, FILENAME is the file being saved,
+BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments.
+
 This runs after `desktop-save-hook', so the view lists are already current.
 ```
-(define-advice desktop-save-buffer-p (:around (orig filename bufname mode &rest rest) tab-plus-views-only)
+(defun tab-plus--desktop-save-buffer-p (orig filename bufname mode &rest rest)
+  "Around advice for `desktop-save-buffer-p' honoring views-only saving.
+ORIG is the original function, FILENAME is the file being saved,
+BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments."
   (let ((buffer (get-buffer bufname))
         (skip (tab-plus--tear-off-view-names)))
     (and (apply orig filename bufname mode rest)
@@ -1466,27 +1632,28 @@ This runs after `desktop-save-hook', so the view lists are already current.
              (not (tab-plus--buffer-filter buffer))
              (seq-some (lambda (v)
                          (and (not (member (tab-plus-view-name v) skip))
-                              (memq buffer (tab-plus-view-buffers v))))
-                       tab-plus-views)))))
-```
-
-hook the rebuild function to run after read desktop
-```
-(add-hook 'desktop-after-read-hook 'tab-plus--rebuild-buffer-list-from-frame-params)
-(add-hook 'desktop-save-hook 'tab-plus--save-to-frame)
+			      (memq buffer (tab-plus-view-buffers v))))
+		       tab-plus-views)))))
 ```
 
 Preserve the directory where the script was loaded from for
 use in doing relative open of resource files
 ```
-(setq tab-plus-load-dir (file-name-directory load-file-name))
+(defvar tab-plus-load-dir (file-name-directory load-file-name)
+  "Directory `tab-plus' was loaded from, used to locate icon resources.")
+
+(defvar-keymap tab-plus-filter-button-map
+  :doc "Local keymap for `tab-line-mode' filter button."
+  "<tab-line> <mouse-1>" #'tab-plus-select-filter-button
+  "RET" #'tab-plus-select-filter-button)
 ```
 
 ## tab-plus--add-on-filter-button
-Add on filter button at the front of the tab list via advice to
-tab-line-format-template
+>Add on filter button at the front of the TABS list via advice.
+
 ```
 (defun tab-plus--add-on-filter-button (tabs)
+  "Add on filter button at the front of the TABS list via advice."
   (let* ((group-view (window-parameter nil 'tab-line-groups))
 	 (viewp (window-parameter nil 'tab-line-views))
 	 (icon-file (cond (viewp "desktop2.png")
@@ -1500,7 +1667,7 @@ tab-line-format-template
 	(cons
 	 (propertize "▼"
 		     'face `(:box (:line-width (0 . 4) :color ,icon-color ))
-		     'keymap tab-line-button-map
+		     'keymap tab-plus-filter-button-map
 		     'help-echo "Click to change tab filtering"
 		     'follow-link 'ignore
 		     'display `(image :type png
@@ -1515,23 +1682,24 @@ tab-line-format-template
 ```
 
 ## tab-plus--force-update
-Update the current tabline. Used during theme load.
+>Update the current tabline.
+
+Update the current tabline. Used as a theme load hook.
 ```
 (defun tab-plus--force-update (_theme)
+  "Update the current tabline."
   (tab-plus--update-close-button)
   (tab-line-force-update nil))
 ```
 
-Add a hook to enable themes that will force an update so we pickup the icon background color
-```
-(add-hook 'enable-theme-functions 'tab-plus--force-update)
-```
-
 ## tab-plus-select-filter-button
+>Handle an EVENT for the tab filter button.
+
 keymap action for when the filter button is selected
 Swaps between group and file mode
 ```
 (defun tab-plus-select-filter-button (&optional _event)
+  "Handle an EVENT for the tab filter button."
   (interactive "e")
   (let ((group-view (window-parameter nil 'tab-line-groups)))
     (if group-view
@@ -1546,58 +1714,49 @@ Swaps between group and file mode
         (set-window-parameter nil 'tab-line-hscroll nil))))
 
   (force-mode-line-update))
-
-(defvar-keymap tab-line-button-map
-  :doc "Local keymap for `tab-line-mode' filter button."
-  "<tab-line> <mouse-1>" #'tab-plus-select-filter-button
-  "RET" #'tab-plus-select-filter-button)
-```
-
-Via advice add on the filter button
-```
-(advice-add 'tab-line-format-template :filter-return 'tab-plus--add-on-filter-button)
 ```
 
 Note: the tab-plus-aware modeline segments themselves (the eglot/flymake
 counter and the current tab-plus view) are defined in modeline.el, alongside
 the rest of the modeline segment code, and included there unconditionally.
 
-bunch of code from nicolas rougier adapted to use the header-line
+A bunch of code from nicolas rougier adapted to use the header-line
+The command-buffer is the transient one used for input.
 ```
 (defface quick-command-face
   `((t :foreground ,(face-foreground 'default)
        :background ,(face-background 'highlight nil t)
        :height ,(face-attribute 'default :height)
        :box (:line-width (1 . 1)
-              :color ,(face-foreground 'default))
+			 :color ,(face-foreground 'default))
        ))
-  "Face for quick command")
+  "Face for quick command.")
 
 (defface quick-command-prompt-face
   `((t :foreground ,(face-background 'default)
        :background ,(face-foreground 'default)
        :weight ,(face-attribute 'bold :weight nil 'default)
        :box (:line-width (1 . 1)
-             :color ,(face-foreground 'default))
+			 :color ,(face-foreground 'default))
        ))
-  "Face for prompt")
+  "Face for prompt.")
 
 (defface quick-command-cursor-face
   `((t :foreground ,(face-background 'default)
        ;; :background "#d0d0d0"
        :background ,(face-foreground 'default)
        :box (:line-width (1 . 1)
-             :color ,(face-foreground 'default))
+			 :color ,(face-foreground 'default))
        ))
-  "Face for cursor")
+  "Face for cursor.")
 ```
 
 ## tab-plus-quick-command--update
->Update header-line with current command
+>Update header-line for the CURRENT-BUFFER and COMMAND-BUFFER.
 
 ```
 (defun tab-plus-quick-command--update (current-buffer command-buffer)
-  "Update header-line with current command"
+  "Update header-line for the CURRENT-BUFFER and COMMAND-BUFFER."
 
   (with-current-buffer command-buffer
     (let* ((text (concat (buffer-substring (point-min) (point-max)) " "))
@@ -1635,27 +1794,27 @@ bunch of code from nicolas rougier adapted to use the header-line
 
             ;; Clear previous buffer content
             (let ((inhibit-read-only t))
-              (erase-buffer))
+	      (erase-buffer))
 
             ;; Insert prompt
             (insert (concat (propertize prompt 'intangible t
-                                               'cursor-intangible t
-                                               'read-only t
-                                               'front-sticky nil
-                                               'rear-nonsticky t)))
+                                        'cursor-intangible t
+                                        'read-only t
+                                        'front-sticky nil
+                                        'rear-nonsticky t)))
             (tab-plus-quick-command--update current-buffer command-buffer)
             (cursor-intangible-mode t)
 
             ;; Main loop where we read key sequences until RET or ESC is pressed
             (while t
-              (let* ((message "")
+	      (let* ((message "")
                      (key (key-description (read-key-sequence message))))
 
                 ;; Command enter
                 (when (string= key "RET")
                   (setq command (buffer-substring (+ (length prompt) 1) (point-max)))
                   (if (> (length command) 0)
-                      (throw 'break command)
+		      (throw 'break command)
                     (throw 'break nil)))
 
                 ;; Command abort
@@ -1711,7 +1870,7 @@ ROOT is the project root used for the virtual "Project" group.
   "Return the list of tab group names BUFFER is assigned to.
 ROOT is the project root used for the virtual \"Project\" group."
   (seq-filter (lambda (g) (and g (not (equal g ""))))
-              (list (when (buffer-file-name buffer) "Files")
+	      (list (when (buffer-file-name buffer) "Files")
                     (when (and root (tab-plus--buffer-in-project-p buffer root)) "Project")
                     (when (tab-plus--buffer-modified-file-p buffer) "Modified")
                     (tab-line-tabs-buffer-group-name buffer))))
@@ -1759,7 +1918,7 @@ assigned to and its project root."
                             (if-let* ((tear (frame-parameter f 'tab-plus-tear-off-view)))
                                 (format " [tear-off %S]" tear) "")))
             (dolist (w (window-list f 'no-minibuf))
-              (let* ((wbuf (window-buffer w))
+	      (let* ((wbuf (window-buffer w))
                      (group (window-parameter w 'tab-line-group))
                      (root (tab-plus--buffer-project-root wbuf)))
                 (insert (format "    %s%s  buffer=%s  mode=%s  group=%s  project=%s\n"
@@ -1771,8 +1930,8 @@ assigned to and its project root."
                   (insert (format "      shown tabs: %s\n"
                                   (mapconcat #'buffer-name
                                              (tab-plus--filter-buffers-by-group
-                                              (seq-filter #'buffer-live-p (tab-plus-view-buffers view))
-                                              group)
+					      (seq-filter #'buffer-live-p (tab-plus-view-buffers view))
+					      group)
                                              ", "))))))))
         (insert (format "\n== Views (%d) ==\n" (length views)))
         (dolist (view views)
@@ -1781,7 +1940,7 @@ assigned to and its project root."
                             (tab-plus-view-name view) (length bufs)
                             (if (tab-plus-view-wstate view) "  (window state saved)" "")))
             (dolist (b bufs)
-              (if (not (buffer-live-p b))
+	      (if (not (buffer-live-p b))
                   (insert "  <dead buffer>\n")
                 (let ((root (tab-plus--buffer-project-root b)))
                   (insert (format "  %-32s groups=%s  tracked=%s\n"
@@ -1804,5 +1963,141 @@ assigned to and its project root."
         (goto-char (point-min))))
     (pop-to-buffer buf)))
 ```
+
+# Minor mode
+
+```
+(defconst tab-plus--drag-key "<tab-line> <drag-mouse-1>"
+  "Key in `tab-line-tab-map' bound to `tab-plus-mouse-move-tab'.")
+
+(defconst tab-plus--hooks
+  '((delete-frame-functions . tab-plus--close-tear-off-view)
+    (window-selection-change-functions . tab-plus--update-tab-line-visibility)
+    (window-configuration-change-hook . tab-plus--update-tab-line-visibility)
+    (window-buffer-change-functions . tab-plus--auto-track-selected-window)
+    (desktop-after-read-hook . tab-plus--rebuild-buffer-list-from-frame-params)
+    (desktop-save-hook . tab-plus--save-to-frame)
+    (enable-theme-functions . tab-plus--force-update))
+  "Alist of (HOOK . FUNCTION) installed by `tab-plus-mode'.")
+
+(defconst tab-plus--advice
+  '((tab-line-tab-context-menu :override tab-plus--tab-context-menu)
+    (tab-line-close-tab :override tab-plus--close-tab-advice)
+    (tab-line-format :filter-return tab-plus--add-view-button)
+    (tab-line-format-template :filter-return tab-plus--add-on-filter-button)
+    (desktop-save-buffer-p :around tab-plus--desktop-save-buffer-p))
+  "List of (SYMBOL HOW FUNCTION) advice installed by `tab-plus-mode'.")
+
+(defvar tab-plus--saved-settings nil
+  "Alist of (VARIABLE . VALUE) replaced by `tab-plus-mode', restored on disable.")
+
+(defvar tab-plus--saved-drag-binding nil
+  "One-element list holding the prior binding of `tab-plus--drag-key', if saved.")
+
+(defvar tab-plus--saved-global-tab-line-mode nil
+  "One-element list holding the prior state of `global-tab-line-mode', if saved.")
+```
+
+## tab-plus--settings
+>Return the alist of (VARIABLE . VALUE) that `tab-plus-mode' installs.
+
+```
+(defun tab-plus--settings ()
+  "Return the alist of (VARIABLE . VALUE) that `tab-plus-mode' installs."
+  `((tab-line-exclude-modes . ,(copy-sequence tab-plus-exclude-modes))
+    ;; Always suppress the tab line separator in both windows and term mode
+    (tab-line-separator . " ")
+    (tab-line-close-button . ,(tab-plus--close-button))
+    (tab-line-left-button . ,(tab-plus--left-button))
+    (tab-line-right-button . ,(tab-plus--right-button))
+    (tab-line-tab-name-function . tab-plus--space-tab-name)
+    ;; only put a close button on selected tabs - set to nil if totally unwanted
+    (tab-line-close-button-show . selected)
+    (switch-to-prev-buffer-skip . tab-plus--skip-foreign-buffer)
+    (tab-line-tab-name-format-function . tab-plus--format-tab)
+    ;; Use custom tab grouping function.
+    (tab-line-tabs-function . tab-plus--get-tabs)
+    ;; Preserve manual tab ordering (drag-and-drop, shift left/right via the
+    ;; context menu). Stock tab-line defaults this to an alphabetical sort,
+    ;; which silently re-sorted the buffer list back into place on every
+    ;; redisplay -- right after a reorder took effect -- making drag-and-drop
+    ;; and the context-menu shift commands look like they did nothing.
+    (tab-line-tabs-buffer-group-sort-function . nil)
+    ;; Same list function as the one overridden in basic mode
+    (tab-line-tabs-buffer-list-function . tab-plus--get-filtered-buffer-list)))
+```
+
+## tab-plus--enable
+>Install the `tab-plus-mode' settings, hooks, advice and key binding.
+
+```
+(defun tab-plus--enable ()
+  "Install the `tab-plus-mode' settings, hooks, advice and key binding."
+  (unless tab-plus--saved-global-tab-line-mode
+    (setq tab-plus--saved-global-tab-line-mode (list global-tab-line-mode)))
+  (pcase-dolist (`(,var . ,value) (tab-plus--settings))
+    (unless (assq var tab-plus--saved-settings)
+      (push (cons var (symbol-value var)) tab-plus--saved-settings))
+    (set var value))
+  (unless tab-plus--saved-drag-binding
+    (setq tab-plus--saved-drag-binding
+          (list (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t))))
+  (keymap-set tab-line-tab-map tab-plus--drag-key #'tab-plus-mouse-move-tab)
+  (pcase-dolist (`(,hook . ,fn) tab-plus--hooks)
+    (add-hook hook fn))
+  (pcase-dolist (`(,symbol ,how ,fn) tab-plus--advice)
+    (advice-add symbol how fn))
+  (unless (frame-parameter nil 'tab-line-sel-view)
+    (set-frame-parameter nil 'tab-line-sel-view 0))
+  (global-tab-line-mode 1)
+  (if (featurep 'dape)
+      (tab-plus--exclude-dape-modes)
+    (eval-after-load 'dape #'tab-plus--exclude-dape-modes))
+  (tab-plus--update-tab-line-visibility))
+```
+
+## tab-plus--disable
+>Undo everything `tab-plus--enable' installed.
+
+```
+(defun tab-plus--disable ()
+  "Undo everything `tab-plus--enable' installed."
+  (pcase-dolist (`(,symbol ,_how ,fn) tab-plus--advice)
+    (advice-remove symbol fn))
+  (pcase-dolist (`(,hook . ,fn) tab-plus--hooks)
+    (remove-hook hook fn))
+  (when tab-plus--saved-drag-binding
+    (if-let* ((old (car tab-plus--saved-drag-binding)))
+        (keymap-set tab-line-tab-map tab-plus--drag-key old)
+      (keymap-unset tab-line-tab-map tab-plus--drag-key t))
+    (setq tab-plus--saved-drag-binding nil))
+  (pcase-dolist (`(,var . ,value) tab-plus--saved-settings)
+    (set var value))
+  (setq tab-plus--saved-settings nil)
+  (dolist (frame (frame-list))
+    (dolist (win (window-list frame 'never))
+      (when (eq (window-parameter win 'tab-line-format) 'none)
+        (set-window-parameter win 'tab-line-format nil))))
+  (when (and tab-plus--saved-global-tab-line-mode
+             (not (car tab-plus--saved-global-tab-line-mode)))
+    (global-tab-line-mode -1))
+  (setq tab-plus--saved-global-tab-line-mode nil)
+  (tab-line-force-update t))
+```
+
+####autoload
+```
+(define-minor-mode tab-plus-mode
+  "Toggle browser-style tabs and views built on `tab-line'.
+When enabled, install the tab-plus tab line settings, hooks, advice and
+mouse binding, and turn on `global-tab-line-mode'.  Disabling restores the
+previous values."
+  :global t
+  :group 'tab-plus
+  (if tab-plus-mode (tab-plus--enable) (tab-plus--disable)))
+
+(provide 'tab-plus)
+```
+# tab-plus.el ends here
 
 > This file was auto-generated by elispdoc.el

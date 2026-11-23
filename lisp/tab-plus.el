@@ -15,18 +15,46 @@
 
 ;;; Commentary:
 ;;
-;; tab-line configuration
+;; ![Screenshot](../images/tabs.png)
+;;
+;; ![Filtering](../images/tabs-filter.png)
+;;
+;; ## Setup
+;; Enable everything with `tab-plus-mode'; loading the file changes nothing by itself.
+;;
+;; ## tab-line configuration
 ;; Originally these changes were aimed at making tabs operate similarly to the tabs in the browser
 ;; or terminal.
+;; 1. Tabs don't auto rearrange and are added on to the right by default.
+;; 2. You can drag the tabs around to switch the order if desired (or auto rearrange by LRU)
+;; 3. Mostly only file based buffers are tracked. (terminals are an exception)
+;; 4. The close button only shows for the active tab.
 ;;
-;; I use tab-line rather than tab-bar because I want tabs in the "main" windows and not on the
-;; sidebar ones and I'm buffer oriented rather than workspace oriented
+;; I use tab-line rather than tab-bar because I want tabs in the "main" window and not on the
+;; sidebar ones and I'm buffer oriented rather than workspace oriented. I also only want the tabs to
+;; be visible on the active focus window.
 ;;
+;; ## Filtering
 ;; I then expanded support for the grouping modes to include filtering by file backed buffers
 ;; or project and moved to a button oriented UI.
 ;;
+;; ## Git Integration
+
+;; In addition, tabs indicate whether the underlying file is modified wrt git with a pencil icon on
+;; the right hand side.
+;;
 ;; This allowed an extension to create views similar to tab-bar that store isolated buffer lists
 ;; and window configurations.
+
+;; ## Tear off tabs
+;; You can also drag and drop a tab outside the frame and that will tear it off as a new independent frame.
+;;
+;; ## Desktop Integration
+
+;;Recently I've completed view support integration with desktop saves and integration for ghostel
+;; buffers.
+
+;; ## Etc.
 ;;
 ;; Because I might want to turn this into a package I'm going to use the tab-plus prefix for all
 ;; functions that I add on. You'll also see original tab-line vars and funcs referenced.
@@ -34,12 +62,15 @@
 ;; I've borrowed and modified some code from Nicolas Rougier to gather input on the header line
 ;; which is less of a distracting jump away from the tabs when needed.
 ;;
-;; Recently I've completed view support integration with desktop saves and a first non-buffer
-;; integration for ghostel buffers.
-;;
 ;; Enable everything with `tab-plus-mode'; loading the file changes nothing by itself.
 ;;
-;; TODO: setup global key bindings
+;; Keybindings for switching tabs are set inside init.el
+;;
+;; ## Demo
+;;
+;; I have several videos of this code in action. The latest one is [![Some recent changes
+;; I've made to tab-config](https://youtube.com)](https://youtu.be/7okzjW_fZGg)
+
 ;;
 ;;; Code:
 
