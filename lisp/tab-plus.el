@@ -29,29 +29,33 @@
 ;; 2. You can drag the tabs around to switch the order if desired (or auto rearrange by LRU)
 ;; 3. Mostly only file based buffers are tracked. (terminals are an exception)
 ;; 4. The close button only shows for the active tab.
+;; 5. Only the active tab is colorized.
 ;;
 ;; I use tab-line rather than tab-bar because I want tabs in the "main" window and not on the
 ;; sidebar ones and I'm buffer oriented rather than workspace oriented. I also only want the tabs to
 ;; be visible on the active focus window.
 ;;
 ;; ## Filtering
-;; I then expanded support for the grouping modes to include filtering by file backed buffers
-;; or project and moved to a button oriented UI.
-;;
-;; ## Git Integration
 
-;; In addition, tabs indicate whether the underlying file is modified wrt git with a pencil icon on
-;; the right hand side.
+;;I then expanded support for the grouping modes to include filtering by file backed
+;; buffers or project and moved to a button oriented UI. Click the leftmost funnel to switch in and
+;; out of this view.
 ;;
-;; This allowed an extension to create views similar to tab-bar that store isolated buffer lists
-;; and window configurations.
+;; ## Git and modified file Integration
+
+;; In addition,tabs indicate whether the underlying file is modified wrt git with a pencil icon on
+;; the right hand side and if the file is modified via an orange dot.
+;;
+;; ## Views
+;; You can also create views similar to tab-bar that store isolated buffer lists
+;; and window configurations from the filtering mode.
 
 ;; ## Tear off tabs
 ;; You can also drag and drop a tab outside the frame and that will tear it off as a new independent frame.
 ;;
 ;; ## Desktop Integration
 
-;;Recently I've completed view support integration with desktop saves and integration for ghostel
+;; Recently I've completed view support integration with desktop saves and integration for ghostel
 ;; buffers.
 
 ;; ## Etc.
