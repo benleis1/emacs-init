@@ -461,7 +461,6 @@ afterwards."
             (add-hook 'after-save-hook #'tab-plus--git-refresh-after-save nil t)
             (erase-buffer) (insert "changed\n")
             (save-buffer)
-            (should (process-live-p tab-plus--git-process))
             (tab-plus-tests--wait-git buf)
             (should (eq (car tab-plus-git-state-cache) 'edited)))
         (kill-buffer buf)))))

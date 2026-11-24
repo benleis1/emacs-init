@@ -1463,6 +1463,17 @@ BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments."
   "<tab-line> <mouse-1>" #'tab-plus-select-filter-button
   "RET" #'tab-plus-select-filter-button)
 
+(defun tab-plus--filter-help-echo ()
+  "Return help text for the filter button, naming the project in Project mode."
+  (let* ((group (window-parameter nil 'tab-line-group))
+         (root (and (equal group "Project")
+                    (tab-plus--buffer-project-root (current-buffer))))
+         (name (and root (file-name-nondirectory (directory-file-name root)))))
+    (format "Click to change tab filtering\nCurrent filter: %s"
+            (cond (name (format "Project (%s)" name))
+                  (group group)
+                  (t "All")))))
+
 (defun tab-plus--add-on-filter-button (tabs)
   "Add on filter button at the front of the TABS list via advice."
   (let* ((group-view (window-parameter nil 'tab-line-groups))
@@ -1479,8 +1490,7 @@ BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments."
 	 (propertize "▼"
 		     'face `(:box (:line-width (0 . 4) :color ,icon-color ))
 		     'keymap tab-plus-filter-button-map
-		     'help-echo (format "Click to change tab filtering\nCurrent filter: %s"
-					(or (window-parameter nil 'tab-line-group) "All"))
+		     'help-echo (tab-plus--filter-help-echo)
 		     'follow-link 'ignore
 		     'display `(image :type png
 				      :file ,icon-name
