@@ -337,50 +337,176 @@ afterwards."
           (should (eq (keymap-lookup tab-line-tab-map tab-plus--drag-key nil t) old-drag)))
       (tab-plus-mode (if was-on 1 -1)))))
 
-;; `tab-plus--git-state' runs from every tab-line render, so an error out of
-;; `vc-git-state' (e.g. git's process spawn signalling because the
-;; buffer's `default-directory' was deleted) must degrade to nil rather
-;; than abort the whole tab line. `vc-git-state' is stubbed throughout.
-(defmacro tab-plus-tests--with-git-state-buffer (stub &rest body)
-  "Run BODY in a temp buffer with `vc-git-state' replaced by STUB."
-  (declare (indent 1))
-  `(with-temp-buffer
-     (setq tab-plus-git-state-cache nil)
-     (cl-letf (((symbol-function 'vc-git-state) ,stub))
-       ,@body)))
+;; `tab-plus--git-state' runs from every tab-line render, so it must only read a
+;; cache and start an asynchronous `git status'; the sentinel fills the cache in.
+(defun tab-plus-tests--wait-git (buffer)
+  "Wait for the git process of BUFFER to finish."
+  (let ((deadline (+ (float-time) 10)))
+    (while (and (buffer-local-value 'tab-plus--git-process buffer)
+                (process-live-p (buffer-local-value 'tab-plus--git-process buffer))
+                (< (float-time) deadline))
+      (accept-process-output nil 0.05))
+    ;; let the sentinel run
+    (accept-process-output nil 0.05)))
 
-(ert-deftest tab-plus-test/git-state-returns-vc-git-state ()
-  (tab-plus-tests--with-git-state-buffer (lambda (_file) 'edited)
-					   (should (eq (tab-plus--git-state (current-buffer)) 'edited))))
+(defmacro tab-plus-tests--with-git-repo (&rest body)
+  "Run BODY with `repo' bound to a fresh git repository with one committed file."
+  (declare (indent 0))
+  `(let* ((repo (file-name-as-directory (make-temp-file "tab-plus-git-" t)))
+          (default-directory repo))
+     (unwind-protect
+         (progn
+           (dolist (cmd '(("init" "-q") ("config" "user.email" "t@example.com")
+                          ("config" "user.name" "t") ("config" "commit.gpgsign" "false")))
+             (apply #'call-process "git" nil nil nil cmd))
+           (with-temp-file (expand-file-name "a.txt" repo) (insert "one\n"))
+           (call-process "git" nil nil nil "add" "a.txt")
+           (call-process "git" nil nil nil "commit" "-q" "-m" "init")
+           ,@body)
+       (delete-directory repo t))))
 
-(ert-deftest tab-plus-test/git-state-nil-when-vc-git-state-signals ()
-  (tab-plus-tests--with-git-state-buffer
-   (lambda (_file) (error "Spawning child process: No such file or directory"))
-   (should (null (tab-plus--git-state (current-buffer))))))
-
-(ert-deftest tab-plus-test/git-state-nil-when-file-error-signalled ()
-  (tab-plus-tests--with-git-state-buffer
-   (lambda (_file) (signal 'file-missing '("Setting current directory" "No such file")))
-   (should (null (tab-plus--git-state (current-buffer))))))
-
-(ert-deftest tab-plus-test/git-state-skips-vc-when-directory-deleted ()
-  (let ((dir (make-temp-file "tab-plus-tests-" t))
-        (called nil))
+(defun tab-plus-tests--git-state-of (file)
+  "Visit FILE, wait for the async check, and return its git state."
+  (let ((buf (find-file-noselect file)))
     (unwind-protect
-        (tab-plus-tests--with-git-state-buffer
-         (lambda (_file) (setq called t) 'edited)
-         (setq default-directory (file-name-as-directory dir))
-         (delete-directory dir t)
-         (should (null (tab-plus--git-state (current-buffer))))
-         (should-not called))
+        (with-current-buffer buf
+          (setq tab-plus-git-state-cache nil)
+          (should (null (tab-plus--git-state buf)))
+          (tab-plus-tests--wait-git buf)
+          (tab-plus--git-state buf))
+      (kill-buffer buf))))
+
+(ert-deftest tab-plus-test/parse-git-status ()
+  (should (eq (tab-plus--parse-git-status "") 'up-to-date))
+  (should (eq (tab-plus--parse-git-status " M a.txt\n") 'edited))
+  (should (eq (tab-plus--parse-git-status "M  a.txt\n") 'edited))
+  (should (eq (tab-plus--parse-git-status "A  a.txt\n") 'edited))
+  (should (eq (tab-plus--parse-git-status "UU a.txt\n") 'needs-merge))
+  (should (eq (tab-plus--parse-git-status "AA a.txt\n") 'needs-merge))
+  (should (eq (tab-plus--parse-git-status "DU a.txt\n") 'needs-merge))
+  (should (null (tab-plus--parse-git-status "?? a.txt\n")))
+  (should (null (tab-plus--parse-git-status "!! a.txt\n"))))
+
+(ert-deftest tab-plus-test/git-state-up-to-date-and-edited ()
+  (tab-plus-tests--with-git-repo
+    (let ((file (expand-file-name "a.txt" repo)))
+      (should (eq (tab-plus-tests--git-state-of file) 'up-to-date))
+      (with-temp-file file (insert "two\n"))
+      (should (eq (tab-plus-tests--git-state-of file) 'edited)))))
+
+(ert-deftest tab-plus-test/git-state-untracked-is-nil ()
+  (tab-plus-tests--with-git-repo
+    (let ((file (expand-file-name "new.txt" repo)))
+      (with-temp-file file (insert "x\n"))
+      (should (null (tab-plus-tests--git-state-of file))))))
+
+(ert-deftest tab-plus-test/git-state-needs-merge-on-conflict ()
+  (tab-plus-tests--with-git-repo
+    (let ((file (expand-file-name "a.txt" repo))
+          (base (string-trim (shell-command-to-string "git rev-parse --abbrev-ref HEAD"))))
+      (call-process "git" nil nil nil "checkout" "-q" "-b" "other")
+      (with-temp-file file (insert "other\n"))
+      (call-process "git" nil nil nil "commit" "-q" "-am" "other")
+      (call-process "git" nil nil nil "checkout" "-q" base)
+      (with-temp-file file (insert "base\n"))
+      (call-process "git" nil nil nil "commit" "-q" "-am" "base")
+      (call-process "git" nil nil nil "merge" "-q" "other")
+      (should (eq (tab-plus-tests--git-state-of file) 'needs-merge)))))
+
+(ert-deftest tab-plus-test/git-state-nil-outside-repo ()
+  (let* ((dir (file-name-as-directory (make-temp-file "tab-plus-norepo-" t)))
+         (file (expand-file-name "a.txt" dir))
+         (process-environment (cons "GIT_CEILING_DIRECTORIES=/" process-environment)))
+    (unwind-protect
+        (progn (with-temp-file file (insert "x\n"))
+               (should (null (tab-plus-tests--git-state-of file))))
+      (delete-directory dir t))))
+
+(ert-deftest tab-plus-test/git-state-nil-when-directory-deleted ()
+  (let ((dir (make-temp-file "tab-plus-tests-" t)))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name (expand-file-name "a.txt" dir))
+          (setq default-directory (file-name-as-directory dir))
+          (delete-directory dir t)
+          (should (null (tab-plus--git-state (current-buffer))))
+          (should (null tab-plus--git-process)))
       (when (file-exists-p dir) (delete-directory dir t)))))
 
-(ert-deftest tab-plus-test/git-state-failure-is-cached ()
-  (let ((calls 0))
-    (tab-plus-tests--with-git-state-buffer
-     (lambda (_file) (cl-incf calls) (error "boom"))
-     (tab-plus--git-state (current-buffer))
-     (tab-plus--git-state (current-buffer))
-     (should (= calls 1)))))
+(ert-deftest tab-plus-test/git-state-cached-for-ttl ()
+  (let ((starts 0))
+    (with-temp-buffer
+      (setq buffer-file-name (expand-file-name "a.txt" temporary-file-directory))
+      (setq tab-plus-git-state-cache (cons 'edited (float-time)))
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest _) (cl-incf starts) nil)))
+        (should (eq (tab-plus--git-state (current-buffer)) 'edited))
+        (should (= starts 0))
+        ;; Stale entries are still returned while a refresh starts.
+        (setq tab-plus-git-state-cache
+              (cons 'edited (- (float-time) tab-plus-git-state-cache-ttl 1)))
+        (should (eq (tab-plus--git-state (current-buffer)) 'edited))
+        (should (= starts 1))))))
+
+(ert-deftest tab-plus-test/git-refresh-after-save-updates-state ()
+  (tab-plus-tests--with-git-repo
+    (let* ((file (expand-file-name "a.txt" repo))
+           (buf (find-file-noselect file)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq tab-plus-git-state-cache nil)
+            (tab-plus--git-state buf)
+            (tab-plus-tests--wait-git buf)
+            (should (eq (car tab-plus-git-state-cache) 'up-to-date))
+            (add-hook 'after-save-hook #'tab-plus--git-refresh-after-save nil t)
+            (erase-buffer) (insert "changed\n")
+            (save-buffer)
+            (should (process-live-p tab-plus--git-process))
+            (tab-plus-tests--wait-git buf)
+            (should (eq (car tab-plus-git-state-cache) 'edited)))
+        (kill-buffer buf)))))
+
+(ert-deftest tab-plus-test/git-sentinel-ignores-superseded-process ()
+  (with-temp-buffer
+    (let ((buf (current-buffer))
+          (old (make-pipe-process :name "tab-plus-test-old" :noquery t))
+          (new (make-pipe-process :name "tab-plus-test-new" :noquery t)))
+      (unwind-protect
+          (progn
+            (setq tab-plus-git-state-cache (cons 'edited 0)
+                  tab-plus--git-process new)
+            (cl-letf (((symbol-function 'process-live-p) (lambda (_) nil))
+                      ((symbol-function 'process-buffer) (lambda (_) nil)))
+              (tab-plus--git-sentinel old buf))
+            (should (eq (car tab-plus-git-state-cache) 'edited))
+            (should (eq tab-plus--git-process new)))
+        (delete-process old) (delete-process new)))))
+
+(ert-deftest tab-plus-test/git-sentinel-redraws-only-on-change ()
+  (let ((redraws 0))
+    (with-temp-buffer
+      (let ((buf (current-buffer))
+            (proc (make-pipe-process :name "tab-plus-test-dummy" :noquery t)))
+        (unwind-protect
+            (cl-letf (((symbol-function 'force-mode-line-update)
+                       (lambda (&rest _) (cl-incf redraws)))
+                      ((symbol-function 'process-live-p) (lambda (_) nil))
+                      ((symbol-function 'process-status) (lambda (_) 'exit))
+                      ((symbol-function 'process-exit-status) (lambda (_) 0)))
+              (setq tab-plus-git-state-cache nil
+                    tab-plus--git-process proc)
+              (let ((pbuf (generate-new-buffer " *t*" t)))
+                (with-current-buffer pbuf (insert " M a.txt\n"))
+                (cl-letf (((symbol-function 'process-buffer) (lambda (_) pbuf)))
+                  (tab-plus--git-sentinel proc buf)))
+              (should (eq (car tab-plus-git-state-cache) 'edited))
+              (should (= redraws 1))
+              (setq tab-plus--git-process proc)
+              (let ((pbuf (generate-new-buffer " *t*" t)))
+                (with-current-buffer pbuf (insert " M a.txt\n"))
+                (cl-letf (((symbol-function 'process-buffer) (lambda (_) pbuf)))
+                  (tab-plus--git-sentinel proc buf)))
+              (should (= redraws 1)))
+          (delete-process proc))))))
 
 (provide 'tab-plus-tests)
