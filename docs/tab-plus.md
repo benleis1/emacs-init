@@ -17,8 +17,6 @@ Keywords: convenience, frames
 
 ![Screenshot](../images/tabs.png)
 
-![Filtering](../images/tabs-filter.png)
-
 Browser-style tabs for buffers, plus lightweight "views" (named buffer lists with their own
 window layout), built on the stock `tab-line'.
 
@@ -47,25 +45,6 @@ Requirements:
 (global-set-key (kbd "s-[")       #'tab-plus-prev-view)
 ```
 
-## What enabling the mode does
-
-`tab-plus-mode' is global.  Enabling it:
-- turns on `global-tab-line-mode';
-- sets `tab-line-exclude-modes', `tab-line-separator', `tab-line-close-button',
-  `tab-line-left-button', `tab-line-right-button', `tab-line-tab-name-function',
-  `tab-line-close-button-show', `tab-line-tab-name-format-function', `tab-line-tabs-function',
-  `tab-line-tabs-buffer-group-sort-function', `tab-line-tabs-buffer-list-function' and
-  `switch-to-prev-buffer-skip';
-- overrides `tab-line-tab-context-menu' and `tab-line-close-tab', and adds filter advice to
-  `tab-line-format' and `tab-line-format-template' and around advice to
-  `desktop-save-buffer-p';
-- binds `<tab-line> <drag-mouse-1>' in `tab-line-tab-map' to `tab-plus-mouse-move-tab';
-- hides the tab line on every window except the selected one;
-- adds hooks for desktop save/restore, theme changes, window changes and frame deletion.
-
-Disabling the mode restores the previous values, removes the advice and hooks, and turns
-`global-tab-line-mode' back off if it was off before.
-
 ## Behavior
 
 Most behaviors are modelled after tabs in the browser or in a terminal.
@@ -82,6 +61,8 @@ and not on the sidebar ones and I'm buffer oriented rather than workspace orient
 want the tabs to be visible on the active focus window.
 
 ## Filtering and groups
+
+![Filtering](../images/tabs-filter.png)
 
 Click the funnel at the left of the tab line to swap the tabs for a row of filter buttons.
 Picking one returns to the tabs, now limited to that group:
@@ -303,7 +284,6 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
 - [tab](#tab)
 - [Commentary:](#commentary)
   - [Quick start](#quick-start)
-  - [What enabling the mode does](#what-enabling-the-mode-does)
   - [Behavior](#behavior)
   - [Filtering and groups](#filtering-and-groups)
   - [Git and modified file integration](#git-and-modified-file-integration)
