@@ -999,25 +999,7 @@ at the mouse-down event to the position at mouse-up event."
                (list from-buffer)))
       (force-mode-line-update)))))
 
-;;; Group and Tab Selection
-
-;; Advice to add on add-new view button in the view view
-(defun tab-plus--add-view-button (format)
-  "Append the new-view button to the tab-line FORMAT in the views view."
-  (if (window-parameter nil 'tab-line-views)
-      (append format (list tab-plus-new-view-button))
-    format))
-
-;; Only show the tab-line on the active window. The `tab-line-format' window
-;; parameter overrides the buffer-local value; `none' removes the line entirely.
-(defun tab-plus--update-tab-line-visibility (&optional frame)
-  "Hide the tab-line on every window of FRAME except the active one."
-  (let* ((frame (or frame (selected-frame)))
-         (active (if (minibuffer-window-active-p (minibuffer-window frame))
-                     (minibuffer-selected-window)
-                   (frame-selected-window frame))))
-    (dolist (win (window-list frame 'never))
-      (set-window-parameter win 'tab-line-format (if (eq win active) nil 'none)))))
+;;; Git State Management
 
 ;; Git state is gathered by an asynchronous `git status' per buffer.  The tab-line
 ;; render only reads the cache (and starts a refresh when it is stale), so it never
@@ -1113,6 +1095,26 @@ A stale cache is refreshed in the background."
   (propertize (format "%s " marker) 'face
 	      `(:inherit ,face :foreground ,(if selected-p color "gray50") :height .9 :slant normal)))
 
+;;; Group and Tab Selection
+
+;; Advice to add on add-new view button in the view view
+(defun tab-plus--add-view-button (format)
+  "Append the new-view button to the tab-line FORMAT in the views view."
+  (if (window-parameter nil 'tab-line-views)
+      (append format (list tab-plus-new-view-button))
+    format))
+
+;; Only show the tab-line on the active window. The `tab-line-format' window
+;; parameter overrides the buffer-local value; `none' removes the line entirely.
+(defun tab-plus--update-tab-line-visibility (&optional frame)
+  "Hide the tab-line on every window of FRAME except the active one."
+  (let* ((frame (or frame (selected-frame)))
+         (active (if (minibuffer-window-active-p (minibuffer-window frame))
+                     (minibuffer-selected-window)
+                   (frame-selected-window frame))))
+    (dolist (win (window-list frame 'never))
+      (set-window-parameter win 'tab-line-format (if (eq win active) nil 'none)))))
+
 ;; Custom tab-line-name-format function to add on a face for the modified signifier
 ;; so it can be colored or not depending on being selected
 ;; and filter icon to the first tab
@@ -1158,10 +1160,10 @@ TABS contains the whole set of tabs."
 		       (propertize (format "%s " tab-plus-modified-marker) 'face `(:inherit ,face :foreground "red2" :height .9 :slant normal ))
 		     (propertize (format "%s " tab-plus-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))
 
-			  ((and buffer (buffer-file-name buffer)
-				(pcase (tab-plus--git-state buffer)
-				  ('edited (tab-plus--git-marker tab-plus-git-modified-marker face selected-p "dark cyan"))
-				  ('needs-merge (tab-plus--git-marker tab-plus-git-needs-merge-marker face selected-p "dark orange"))))))
+		  ((and buffer (buffer-file-name buffer)
+			(pcase (tab-plus--git-state buffer)
+			  ('edited (tab-plus--git-marker tab-plus-git-modified-marker face selected-p "dark cyan"))
+			  ('needs-merge (tab-plus--git-marker tab-plus-git-needs-merge-marker face selected-p "dark orange"))))))
 
             (let* ((close (or (and (or buffer (assq 'close tab))
                                    tab-line-close-button-show
