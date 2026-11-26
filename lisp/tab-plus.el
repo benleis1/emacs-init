@@ -1185,6 +1185,35 @@ TABS contains the whole set of tabs."
     ))
 
 
+(defun tab-plus-select-group (group)
+  "Select the current GROUP to filter by."
+  (interactive
+   (let* ((buffers (funcall tab-line-tabs-buffer-list-function))
+	  (groups (delq nil (mapcar #'car (seq-group-by #'tab-line-tabs-buffer-group-name
+							buffers)))))
+     (list
+      (completing-read
+       "Filter: "
+       (append
+	(when (tab-plus--buffer-project-root (current-buffer)) '("Project"))
+	'("Files" "All")
+	(when (tab-plus--find-first #'tab-plus--buffer-modified-file-p buffers) '("Modified"))
+	groups)
+       nil nil nil))))
+
+  (let ((name (substring-no-properties group)))
+    (set-window-parameter nil 'tab-line-groups nil)
+    (set-window-parameter nil 'tab-line-group name)
+    (set-window-parameter nil 'tab-line-hscroll nil)
+    ;; We have to switch buffers if the selected group doesn't match
+    ;; Otherwise `tab-plus--auto-track-selected-window' snaps the group back
+    ;; to the current buffer's group.
+    (let ((candidates (tab-plus--filter-buffers-by-group
+		       (funcall tab-line-tabs-buffer-list-function) name)))
+      (when (and candidates (not (memq (current-buffer) candidates)))
+	(let ((switch-to-buffer-obey-display-actions nil))
+	  (switch-to-buffer (car candidates)))))))
+
 ;; Group of tab constructors
 (defun tab-plus--make-group-tab (selected-group groupname)
   "Setup a tabgroup named GROUPNAME for SELECTED-GROUP.
@@ -1195,9 +1224,7 @@ This formats the built tab structure for a group."
       (name . ,formatted-name)
       (selected . ,(equal selected-group groupname))
       (select . ,(lambda ()
-                   (set-window-parameter nil 'tab-line-groups nil)
-                   (set-window-parameter nil 'tab-line-group groupname)
-                   (set-window-parameter nil 'tab-line-hscroll nil))))))
+		   (tab-plus-select-group groupname))))))
 
 (defun tab-plus--make-view-category-tab (selected-view viewname)
   "Make a view tab named VIEWNAME for the SELECTED-VIEW."
@@ -1222,7 +1249,7 @@ This formats the built tab structure for a group."
 	  (select . ,(lambda ()
 		       (tab-plus-switch-view-by-name viewname)
 		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
-                       (set-window-parameter nil 'tab-line-hscroll nil))))
+		       (set-window-parameter nil 'tab-line-hscroll nil))))
 
       `(tab
 	(name . ,formatted-name)
@@ -1257,13 +1284,13 @@ ROOT must already be normalized with `tab-plus--normalize-root'."
     (if-let* ((pinned (buffer-local-value 'tab-plus-pinned-project buffer)))
         (equal (tab-plus--normalize-root pinned) root)
       (let ((path (or (buffer-file-name buffer)
-                      (buffer-local-value 'default-directory buffer)))
+		      (buffer-local-value 'default-directory buffer)))
             (cache (buffer-local-value 'tab-plus-project-membership-cache buffer)))
         (if (and cache (equal (car cache) path) (equal (cadr cache) root))
             (cddr cache)
           (let ((member (and path (file-in-directory-p path root) t)))
             (with-current-buffer buffer
-              (setq tab-plus-project-membership-cache (cons path (cons root member))))
+	      (setq tab-plus-project-membership-cache (cons path (cons root member))))
             member))))))
 
 (defun tab-plus-repin-buffer (root)
@@ -1271,8 +1298,9 @@ ROOT must already be normalized with `tab-plus--normalize-root'."
 ROOT should be a project root."
   (interactive
    (list
-    (read-directory-name "Project Path: ")))
-  (setq-local tab-plus-pinned-project root))
+    (completing-read "Project: " (project-known-project-roots) nil nil
+                     nil 'file-name-history)))
+  (setq-local tab-plus-pinned-project (expand-file-name root)))
 
 ;; Filter the list of buffers based on the selected group
 ;; if Files then return all of the file based buffers.
@@ -1414,8 +1442,8 @@ group to an icon and adds on all files"
 (defun tab-plus--convert-from-persist-format (view)
   "Deserialize the desktop and create a new tab for VIEW."
   (make-tab-plus-view :name (tab-plus-persist-view-name view)
-                      :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
-                      :wstate (tab-plus-persist-view-wstate view)))
+		      :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
+		      :wstate (tab-plus-persist-view-wstate view)))
 
 (defun tab-plus--deserialize-views (views)
   "Deserialize all the VIEWS from the desktop file."
