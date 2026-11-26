@@ -104,6 +104,10 @@
 ;;
 ;; ## Tear off tabs
 ;;
+;; In the views list, right-click a view and choose *Tear Off View* (offered when there is more
+;; than one view) to show it in a new frame named after the view, in the filter group the window
+;; was using.  A frame that was showing that view switches to the previous one.
+;;
 ;; Drag a tab out of the frame to tear it off into a new frame, which gets its own view named
 ;; "tear off[N]" (removed when that frame closes).  Drop it on a window of another frame to move it
 ;; there instead.  Dropping on blank space in the tab line moves a tab to the end.
@@ -797,11 +801,61 @@ shows it, and delete WINDOW if that was its only tab."
     (when buffer
       (tab-plus--tear-off-buffer buffer window))))
 
+;; Unlike a tear-off tab, the view is not removed when the new frame closes.
+(defun tab-plus-tear-off-view (name &optional window)
+  "Show the view NAME in a new frame, in the filter group of WINDOW.
+The new frame is named NAME.  If the selected frame was showing that view it
+switches to the previous view (or the next one, for the first view)."
+  (interactive (list (completing-read "Tear off view: " (tab-plus-list-views) nil t)))
+  (let* ((view (or (tab-plus--get-view-by-name name)
+                   (error "No view was found named %s" name)))
+         (pos (cl-position view tab-plus-views))
+         (window (if (window-live-p window) window (selected-window)))
+         (orig-frame (window-frame window))
+         (group (window-parameter window 'tab-line-group)))
+    (when (< (length tab-plus-views) 2)
+      (user-error "Cannot tear off the only view"))
+    (with-selected-frame orig-frame
+      (when (eq view (tab-plus-get-current-view))
+        (tab-plus-switch-view-by-name
+         (tab-plus-view-name (nth (if (> pos 0) (1- pos) 1) tab-plus-views)))))
+    (let ((frame (make-frame `((name . ,name)))))
+      (with-selected-frame frame
+        (set-frame-parameter nil 'tab-line-sel-view pos)
+        (cond ((tab-plus-view-wstate view)
+               (window-state-put (tab-plus-view-wstate view) (frame-root-window) 'safe))
+              ((tab-plus-view-buffers view)
+               (switch-to-buffer (car (tab-plus-view-buffers view)))))
+        (dolist (w (window-list frame 'no-minibuf))
+          (set-window-parameter w 'tab-line-group group)
+          (set-window-parameter w 'tab-line-hscroll nil)))
+      (force-mode-line-update t)
+      (tab-line-force-update t)
+      (select-frame-set-input-focus frame)
+      (redisplay t)
+      frame)))
+
 ;; Override original definition of tab-line-tab-context-menu
 ;; Bind custom actions into the context menu if we are not in group mode
-(defun tab-plus--tab-context-menu (&optional _event)
+(defun tab-plus--tab-context-menu (&optional event)
   "Pop up the context menu for a tab-line tab."
   (interactive "e")
+
+  ;; The views row is entered from the groups row, so `tab-line-groups' is still set here;
+  ;; `tab-plus--get-tabs' gives views precedence and so do we.
+  (when (and (window-parameter nil 'tab-line-views)
+             (> (tab-plus-num-views) 1))
+    (let* ((posnp (event-start event))
+           (window (posn-window posnp))
+           (tab (get-pos-property 1 'tab (car (posn-string posnp))))
+           (name (alist-get 'view tab))
+           (menu (make-sparse-keymap (propertize "Context Menu" 'hide t))))
+      (when name
+        (define-key-after menu [tearoffview]
+          (list 'menu-item "Tear Off View"
+                (lambda () (interactive) (tab-plus-tear-off-view name window))
+                :help "Show this view in a new frame"))
+        (popup-menu menu))))
 
   (unless (or (window-parameter nil 'tab-line-groups)
 	      (window-parameter nil 'tab-line-views))
@@ -1245,6 +1299,7 @@ This formats the built tab structure for a group."
     (if (equal viewname "default")
 	`(tab
 	  (name . ,formatted-name)
+	  (view . ,viewname)
 	  (selected . ,(equal selected-view viewname))
 	  (select . ,(lambda ()
 		       (tab-plus-switch-view-by-name viewname)
@@ -1253,6 +1308,7 @@ This formats the built tab structure for a group."
 
       `(tab
 	(name . ,formatted-name)
+	(view . ,viewname)
 	(selected . ,(equal selected-view viewname))
 	(close . ,(lambda (&optional _buffer)
 		    (tab-plus-close-view-by-name viewname)))

@@ -509,3 +509,20 @@ afterwards."
           (delete-process proc))))))
 
 (provide 'tab-plus-tests)
+
+;;; Tear off view
+
+(ert-deftest tab-plus-test/tear-off-view-errors-with-single-view ()
+  (tab-plus-tests--with-view-list (list (make-tab-plus-view :name "default")) 0
+    (should-error (tab-plus-tear-off-view "default") :type 'user-error)))
+
+(ert-deftest tab-plus-test/tear-off-view-errors-on-unknown-view ()
+  (tab-plus-tests--with-view-list
+      (list (make-tab-plus-view :name "default") (make-tab-plus-view :name "a")) 0
+    (should-error (tab-plus-tear-off-view "nope"))))
+
+(ert-deftest tab-plus-test/view-tab-carries-view-name ()
+  (tab-plus-tests--with-view-list
+      (list (make-tab-plus-view :name "default") (make-tab-plus-view :name "a")) 0
+    (should (equal "default" (alist-get 'view (tab-plus--make-view-tab "default" "default"))))
+    (should (equal "a" (alist-get 'view (tab-plus--make-view-tab "default" "a"))))))
