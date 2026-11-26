@@ -155,6 +155,7 @@
 (declare-function flymake--severity "flymake")
 (declare-function flymake-start "flymake")
 (declare-function flymake-switch-to-log-buffer "flymake")
+(declare-function flymake-diagnostic-text "flymake")
 (declare-function warning-numeric-level "warnings")
 
 ;; Other third-party packages
@@ -187,10 +188,8 @@
 
 ;; Files under lisp/
 (declare-function my-modeline-mode "modeline")
-(declare-function my-modeline--icon-safe "modeline")
-(declare-function my-modeline--pin-icon "modeline")
-(declare-function my-modeline--dedicated-help "modeline")
-(declare-function my-modeline--keyboard-icon "modeline")
+(declare-function my-modeline-icon-safe "modeline")
+(declare-function my-modeline-keyboard-icon "modeline")
 (declare-function my-play-appt-sound "macos")
 (declare-function tab-plus-register-buffer-name-function "tab-plus")
 (declare-function my-modeline-mouse-map "modeline")

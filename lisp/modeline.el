@@ -122,7 +122,7 @@ This lets me set the `my-modeline-icon-font-family' around the call."
   (let ((nerd-icons-font-family (or my-modeline-icon-font-family nerd-icons-font-family)))
     (apply fn args)))
 
-(defun my-modeline--icon-safe (fn &rest args)
+(defun my-modeline-icon-safe (fn &rest args)
   "Wrap `my-modeline--icon' for FN and ARGS and swallow errors.
 Like `my-modeline--icon', but nil instead of an error when FN isn't a
 bound function (e.g. its icon set's package isn't installed) or the
@@ -204,19 +204,19 @@ Its file extension when visiting a file, or the first few letters of
 (defun my-modeline--file-type-icon ()
   "Plain file/mode icon glyph, recolored to `my-modeline-file-icon-face'."
   (if buffer-file-name
-      (my-modeline--icon-safe #'nerd-icons-icon-for-file
-                              (file-name-nondirectory buffer-file-name)
-                              :face 'my-modeline-file-icon-face)
-    (my-modeline--icon-safe #'nerd-icons-icon-for-mode major-mode
-                            :face 'my-modeline-file-icon-face
-			    )))
+      (my-modeline-icon-safe #'nerd-icons-icon-for-file
+                             (file-name-nondirectory buffer-file-name)
+                             :face 'my-modeline-file-icon-face)
+    (my-modeline-icon-safe #'nerd-icons-icon-for-mode major-mode
+                           :face 'my-modeline-file-icon-face
+			   )))
 
 (defun my-modeline--file-type-divider ()
   "Return a solid right-pointing divider glyph.
 Uses `my-modeline-file-icon-divider-face' and caps off the
 powerline-style file-type badge as it fades into the plain mode-line."
-  (my-modeline--icon-safe #'nerd-icons-powerline "nf-pl-left_hard_divider"
-                          :face 'my-modeline-file-icon-divider-face))
+  (my-modeline-icon-safe #'nerd-icons-powerline "nf-pl-left_hard_divider"
+                         :face 'my-modeline-file-icon-divider-face))
 
 (defun my-modeline--buffer-icon ()
   "Powerline-style file-type badge: an icon and a short, up cased extension label.
@@ -247,10 +247,10 @@ Based on warning bold.")
   "Small icon noting whether the buffer is read-only or modified."
   (when my-modeline-icon
     (cond (buffer-read-only
-           (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-lock" :face 'nerd-icons-red))
+           (my-modeline-icon-safe #'nerd-icons-octicon "nf-oct-lock" :face 'nerd-icons-red))
           ((and buffer-file-name (buffer-modified-p))
-           (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-content_save_edit"
-                                   :face 'my-modeline-buffer-modified-face)))))
+           (my-modeline-icon-safe #'nerd-icons-mdicon "nf-md-content_save_edit"
+                                  :face 'my-modeline-buffer-modified-face)))))
 
 ;;; Mode-line / header-line dual-prefix mouse bindings
 ;; This was done to allow experimenting with putting the modeline on the header.
@@ -517,7 +517,7 @@ A rocket icon standing in for eglot's own bracketed text mode-line
                        ((and pending (> pending 0)) 'my-modeline-lsp-warning)
                        (nick 'my-modeline-lsp-success)
                        (t 'my-modeline-lsp-warning)))
-           (icon (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-rocket" :face face)))
+           (icon (my-modeline-icon-safe #'nerd-icons-octicon "nf-oct-rocket" :face face)))
       (when icon
         (propertize icon
                     'help-echo (format "Eglot connected [%s]\nmouse-1: Display minor mode menu\nmouse-3: LSP server control menu"
@@ -534,14 +534,14 @@ A rocket icon standing in for eglot's own bracketed text mode-line
 (defvar ghostel-command-finish-functions)
 (defvar my-ghostel-input-needed)
 
-(defun my-modeline--keyboard-icon ()
+(defun my-modeline-keyboard-icon ()
   "Keyboard glyph for terminals waiting on input; plain ⌨ without nerd-icons."
-  (or (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-keyboard_outline" :height 1.2)
+  (or (my-modeline-icon-safe #'nerd-icons-mdicon "nf-md-keyboard_outline" :height 1.2)
       "⌨"))
 
 (defun my-modeline-busy-icon ()
   "Spinner glyph for busy terminals; plain ⟳ without nerd-icons."
-  (or (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-spinner")
+  (or (my-modeline-icon-safe #'nerd-icons-faicon "nf-fa-spinner")
       "⟳"))
 
 (defvar my-modeline--busy-frame 0
@@ -558,7 +558,7 @@ A rocket icon standing in for eglot's own bracketed text mode-line
   "Current frame of the animated busy spinner."
   (let ((frame (nth (mod my-modeline--busy-frame (length my-modeline--busy-frames))
                     my-modeline--busy-frames)))
-    (or (my-modeline--icon-safe #'nerd-icons-mdicon (car frame))
+    (or (my-modeline-icon-safe #'nerd-icons-mdicon (car frame))
         (cdr frame))))
 
 (defun my-modeline--busy-advance ()
@@ -602,7 +602,7 @@ integration). The tooltip lists the matching buffers."
   (let ((waiting (my-modeline--ghostel-buffers-where 'my-ghostel-input-needed))
         (busy (my-modeline--ghostel-buffers-where 'ghostel--command-running)))
     (when (or waiting busy)
-      (propertize (if waiting (my-modeline--keyboard-icon) (my-modeline--busy-frame-icon))
+      (propertize (if waiting (my-modeline-keyboard-icon) (my-modeline--busy-frame-icon))
                   'local-map my-modeline-ghostel-waiting-map
                   'help-echo (mapconcat
                               #'identity
@@ -726,8 +726,8 @@ attention (removed, conflict, unregistered)."
 A compare/merge/pull-request/branch glyph depending on STATE. An alert
 triangle instead, for a state that needs attention."
   (if (memq state '(removed conflict unregistered))
-      (my-modeline--icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
-    (my-modeline--icon-safe
+      (my-modeline-icon-safe #'nerd-icons-octicon "nf-oct-alert" :face face)
+    (my-modeline-icon-safe
      #'nerd-icons-devicon
      (cond ((eq state 'needs-update) "nf-dev-git_pull_request")
            ((eq state 'needs-merge) "nf-dev-git_merge")
@@ -955,7 +955,7 @@ look clipped even when it technically isn't.")
 
 (defun my-modeline--pin-icon ()
   "The pin icon I use to represent dedicated buffers."
-  (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'my-modeline-pin-face))
+  (my-modeline-icon-safe #'nerd-icons-mdicon "nf-md-pin" :face 'my-modeline-pin-face))
 
 (defvar my-modeline-dedicated-label-functions nil
   "Alist of (MODE . FUNCTION) overriding the buffer name in dedicated windows.
@@ -1020,8 +1020,8 @@ LABEL that bring their own `local-map' keep it."
     my-flymake-segment
     my-modeline-segment-position
     my-modeline-segment-ghostel-busy
-    my-modeline-segment-vcs
-    my-modeline-segment-cpu)
+    my-modeline-segment-cpu
+    my-modeline-segment-vcs)
   "All the segment functions rendered on the RHS of the modeline.
 
   Each is separated by a space (see
@@ -1032,11 +1032,10 @@ LABEL that bring their own `local-map' keep it."
 
 (defvar my-modeline-anchored-right-segments
   '(tab-plus-view-segment my-modeline-segment-zoom)
-  "Segment functions right-justified flush against the window's right
-edge -- separated from `my-modeline-right-segments' by however much space
+  "Segment definitions for the right-justified sections.
+These are separated from `my-modeline-right-segments' by however much space
 remains, and from each other by a couple of spaces, rather than run
-together with everything else. E.g. the current tab-plus view, or the
-rightmost zoom in/out icon.")
+together with everything else.")
 
 (defun my-modeline--eval-segments (segments &optional separator)
   "Concatenate the non-nil results of calling each of SEGMENTS, joined by
@@ -1046,21 +1045,21 @@ SEPARATOR (default: none)."
 
 (defvar my-modeline-right-gap " "
   "Fixed spacing kept between `my-modeline-right-segments' and
-  `my-modeline-anchored-right-segments' in `my-modeline--render', on top of
+`my-modeline-anchored-right-segments' in `my-modeline--render', on top of
   whatever space `my-modeline--right-align' leaves -- so e.g. the major
   mode name and the tab-plus view never end up touching just because the rest
   of the line happened to fill the window exactly.")
 
 (defcustom my-modeline-box-line-width 4
   "`:line-width' used by `my-modeline--sync-frame-box' to pad out the
-  whole mode-line. The box is always drawn in its own background color, so
+whole mode-line. The box is always drawn in its own background color, so
   this only ever adds height/seamless padding, never a visible border."
   :type 'integer
   :group 'my-modeline)
 
 (defun my-modeline--sync-frame-box ()
   "Give `mode-line' (and `mode-line-active', where it exists) and
-  `mode-line-inactive' a box `my-modeline-box-line-width' wide, each in its
+`mode-line-inactive' a box `my-modeline-box-line-width' wide, each in its
   own `:background' -- so the box is invisible as a border and just adds
   padding/height, seamlessly, to both the active and inactive mode-line.
   Recomputed on every render, like every other theme-dependent bit in this
@@ -1077,16 +1076,12 @@ SEPARATOR (default: none)."
 
 (defun my-modeline--render ()
   "The full mode-line, or, in a dedicated window (see
-						  `my-modeline-dedicated-window-modes'), the reduced one from
+`my-modeline-dedicated-window-modes'), the reduced one from
   `my-modeline--dedicated-render'.
 
-  The right side has two zones: `my-modeline-right-segments' is positioned
-  (via `my-modeline--right-align') to end exactly `my-modeline-right-gap'
-  before `my-modeline-anchored-right-segments' begins, and that second zone
-  gets its own, independent `my-modeline--right-align' call measuring only
-  itself, so it always lands flush against the window edge regardless of
-  how wide the first zone renders -- the git branch and tab-plus view, say,
-  don't just run together with everything else, or with the rest of the line.
+  The right side has two zones, `my-modeline-right-segments' followed by
+  `my-modeline-right-gap' and `my-modeline-anchored-right-segments', all
+  right-aligned as a single run via `my-modeline--right-align'.
   `my-modeline-right-margin' keeps the very last character from rendering
   flush against the true edge."
   (my-modeline--sync-frame-box)
@@ -1100,14 +1095,13 @@ SEPARATOR (default: none)."
                (concat general my-modeline-right-gap anchored my-modeline-right-margin))
               general
               my-modeline-right-gap
-              (my-modeline--right-align (concat anchored my-modeline-right-margin))
               anchored
               my-modeline-right-margin))))
 
 (defvar my-modeline-format
   '("%e" (:eval (my-modeline--render)))
   "Full mode-line spec.
-  Assign this to `mode-line-format' (see `my-modeline-mode') or
+Assign this to `mode-line-format' (see `my-modeline-mode') or
   `header-line-format'.")
 
 (defvar my-modeline--default-format (default-value 'mode-line-format)
@@ -1122,23 +1116,38 @@ SEPARATOR (default: none)."
 
 
 ;; The tab-plus view segment. See tab-plus.el
-(defvar tab-plus-mode-line-view-map
+(defvar tab-plus-mode-line-view-collapsed nil
+  "When non-nil, `tab-plus-view-segment' shows only its icon.
+The view name stays in the help-echo tooltip. Toggled by right clicking on
+the segment.")
+
+(defun tab-plus-mode-line-view-toggle-collapsed ()
+  "Toggle whether `tab-plus-view-segment' shows the view name inline."
+  (interactive)
+  (setq tab-plus-mode-line-view-collapsed (not tab-plus-mode-line-view-collapsed))
+  (force-mode-line-update t))
+
+(defconst tab-plus-mode-line-view-map
   (my-modeline-mouse-map '((mouse-1 . tab-plus-next-view)
-                           (mouse-3 . tab-plus-prev-view))))
+                           (mouse-3 . tab-plus-mode-line-view-toggle-collapsed))))
 
 (defun tab-plus-view-segment ()
-  "Show the current tab-plus view, marked with a desktop icon."
+  "Show the current tab-plus view, marked with a desktop icon.
+Right click toggles `tab-plus-mode-line-view-collapsed'."
   (when (> (tab-plus-num-views) 1)
-    (let ((icon (my-modeline--icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
-					:face 'mode-line-emphasis)))
-      (propertize (concat (or icon "") " " (tab-plus-view-name (tab-plus-get-current-view)))
-                  'help-echo "Current tab view - click to switch to the next one"
+    (let ((icon (my-modeline-icon-safe #'nerd-icons-mdicon "nf-md-desktop_classic"
+				       :face 'mode-line-emphasis))
+          (name (tab-plus-view-name (tab-plus-get-current-view))))
+      (propertize (concat (or icon "")
+                          (and (not tab-plus-mode-line-view-collapsed) (concat " " name)))
+                  'help-echo (format "Tab view: %s\nmouse-1: next view\nmouse-3: toggle collapsed view"
+                                     name)
                   'mouse-face 'mode-line-highlight
                   'local-map tab-plus-mode-line-view-map))))
 
 (defun my-flymake-toggle-buffer-diagnostics (event)
   "Toggle the flymake diagnostics list for the buffer clicked in EVENT.
-  Close the list if it is already visible, otherwise show it with
+Close the list if it is already visible, otherwise show it with
   `flymake-show-buffer-diagnostics'."
   (interactive "e")
   (with-selected-window (posn-window (event-start event))
@@ -1165,7 +1174,7 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--refresh-pill-faces (&rest _)
   "Pull the flymake pill faces' colors from the active modus palette's
-  `err'/`warning'/`info' slots as backgrounds, with text in `bg-main' for
+`err'/`warning'/`info' slots as backgrounds, with text in `bg-main' for
   contrast. A no-op when modus-themes isn't loaded."
   (when (fboundp 'modus-themes-get-color-value)
     (let ((fg (modus-themes-get-color-value 'bg-main t)))
@@ -1181,7 +1190,7 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--pill-svg-source (text bg fg family h)
   "SVG source for a pill of height H showing TEXT in FG on BG using FAMILY.
-  Every interpolated string is XML-escaped."
+Every interpolated string is XML-escaped."
   (let* ((fsize (* h 0.78))
          (w (round (+ (* fsize 0.62 (string-width text)) (* h 0.6)))))
     (format "<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d'>\
@@ -1194,11 +1203,11 @@ SEPARATOR (default: none)."
 
 (defvar my-flymake--pill-svg-cache (make-hash-table :test #'equal)
   "Pill images keyed by (TEXT BG FG FAMILY HEIGHT), so redisplay reuses them.
-  Reusing the same image object also lets Emacs's image cache hit.")
+Reusing the same image object also lets Emacs's image cache hit.")
 
 (defun my-flymake--pill-svg (text face)
   "An SVG image of TEXT in a fully rounded pill colored from FACE, or nil
-  when this Emacs can't display SVG. Images are cached per text, colors,
+when this Emacs can't display SVG. Images are cached per text, colors,
   font and height."
   (when (and (display-graphic-p) (image-type-available-p 'svg))
     (let* ((h (frame-char-height))
@@ -1215,7 +1224,7 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--pill (text face counter)
   "A pill for the flymake COUNTER string (plain TEXT) in FACE.
-  Drawn as a rounded SVG when possible, keeping COUNTER's text properties
+Drawn as a rounded SVG when possible, keeping COUNTER's text properties
   (help-echo, keymap, ...) so clicking and scrolling still work; otherwise a
   padded block of FACE."
   (let ((img (my-flymake--pill-svg text face)))
@@ -1229,7 +1238,7 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--icon-chunk (type chunk)
   "CHUNK, a flymake count of TYPE, prefixed with an emoji for that level.
-  The emoji carries CHUNK's mouse properties (keymap, help-echo, ...), so
+The emoji carries CHUNK's mouse properties (keymap, help-echo, ...), so
   clicking and scrolling work over it too."
   (let ((icon (copy-sequence (pcase type
                                (:error "⛔")
@@ -1242,7 +1251,7 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--pillify (counters)
   "Return COUNTERS with each flymake count drawn as a colored pill.
-  Runs tagged with a `flymake--diagnostic-type' property (see
+Runs tagged with a `flymake--diagnostic-type' property (see
 							  `flymake--mode-line-counter-1') get a pill face by type -- red for
   errors, yellow for warnings, green for notes -- drawn by `my-flymake--pill'.
   Flymake's surrounding "[" and "]" are dropped, and a space is added at
@@ -1284,13 +1293,13 @@ SEPARATOR (default: none)."
 
 (defun my-flymake--add-background (s)
   "Return S with the position segment's face added behind everything in it,
-  without overriding any face S already carries."
+without overriding any face S already carries."
   (add-face-text-property 0 (length s) (my-modeline--position-face) t s)
   s)
 
 (defun my-flymake-segment ()
   "Flymake's error/warning/note counter, shown when `flymake-mode' is on.
-  When `my-modeline-flymake-pills' is non-nil, each count is drawn as a
+When `my-modeline-flymake-pills' is non-nil, each count is drawn as a
   colored pill (see `my-flymake--pillify') on the position segment's
   background.
   Click (mouse-1) anywhere in the segment to toggle flymake's diagnostics
@@ -1330,7 +1339,7 @@ SEPARATOR (default: none)."
 
 (defvar-local my-modeline-zoom-slider-active nil
   "Track the zoom slider state.
-  Non-nil when `my-modeline-segment-zoom' should show the draggable
+Non-nil when `my-modeline-segment-zoom' should show the draggable
   slider (`my-modeline--zoom-bar') instead of its default
   magnifying-glass icon, in this buffer. Toggled by
   `my-modeline-zoom-show-slider' (mouse-1 on the icon) and
@@ -1338,7 +1347,7 @@ SEPARATOR (default: none)."
 
 (defun my-modeline-zoom-show-slider ()
   "Switch `my-modeline-segment-zoom' to its draggable-slider display.
-  Bound to `mouse-1' on the magnifying-glass icon via
+Bound to `mouse-1' on the magnifying-glass icon via
   `my-modeline-zoom-icon-map'."
   (interactive)
   (setq my-modeline-zoom-slider-active t)
@@ -1346,7 +1355,7 @@ SEPARATOR (default: none)."
 
 (defun my-modeline-zoom-show-icon ()
   "Switch `my-modeline-segment-zoom' back to its magnifying-glass-icon
-  display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
+display. Bound to `mouse-3' on the slider via `my-modeline-zoom-map'."
   (interactive)
   (setq my-modeline-zoom-slider-active nil)
   (force-mode-line-update))
@@ -1361,7 +1370,7 @@ SEPARATOR (default: none)."
 
 (defconst my-modeline-zoom-min -6
   "Lower bound of the zoom slider in `my-modeline-segment-zoom', in
-  `text-scale-mode-amount' units. Purely a UI limit on the slider's own
+`text-scale-mode-amount' units. Purely a UI limit on the slider's own
   range -- `text-scale-mode-amount' itself has no hard bound in stock
   Emacs, so a value set by other means (e.g. `text-scale-increase' well
 					     past this) still displays, just clamped to the near end of the track
@@ -1438,7 +1447,7 @@ stale."
 
 (defun my-modeline--zoom-amount-at-x (x)
   "Map X, a pixel offset into the slider's track span (0 at its left
-							 edge, `my-modeline-zoom-track-width' at its right), to the
+edge, `my-modeline-zoom-track-width' at its right), to the
 `text-scale-mode-amount' integer it represents, clamped to
 `my-modeline-zoom-min'/`-max'."
   (let ((frac (max 0.0 (min 1.0 (/ (float x) my-modeline-zoom-track-width)))))
@@ -1549,8 +1558,8 @@ positive to negative or between one and two digits.")
   "The magnifying-glass icon portion of `my-modeline-segment-zoom',
 shown instead of the draggable slider (`my-modeline--zoom-bar') until
 `mouse-1' switches to it (see `my-modeline-zoom-show-slider')."
-  (or (my-modeline--icon-safe #'nerd-icons-faicon "nf-fa-magnifying_glass"
-                              :face 'mode-line-emphasis)
+  (or (my-modeline-icon-safe #'nerd-icons-faicon "nf-fa-magnifying_glass"
+                             :face 'mode-line-emphasis)
       "?"))
 
 (defun my-modeline-segment-zoom ()

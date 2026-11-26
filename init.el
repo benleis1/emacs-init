@@ -1143,6 +1143,7 @@ Directories follow `nerd-icons-icon-for-dir' (remote, symlink, submodule and
 (global-set-key (kbd "C-S-<tab>") 'tab-line-switch-to-prev-tab)
 (global-set-key (kbd "s-]") 'tab-plus-next-view)
 (global-set-key (kbd "s-[") 'tab-plus-prev-view)
+(global-set-key (kbd "C-c g") 'tab-plus-select-group)
 (global-set-key (kbd "C-c t") 'ghostel)
 
 ;; I hit cmd-x too often expecting M-x which is dangerous so just bind it to that
@@ -2305,11 +2306,11 @@ running, otherwise a terminal icon."
   (setq name (string-replace "\u2003" " " name))
   (cond
    ((buffer-local-value 'my-ghostel-input-needed buffer)
-    (concat (my-modeline--keyboard-icon) "  " name))
+    (concat (my-modeline-keyboard-icon) "  " name))
    ((buffer-local-value 'ghostel--command-running buffer)
     (concat (my-modeline-busy-icon) "  " name))
    (t
-    (concat (when-let* ((icon (my-modeline--icon-safe
+    (concat (when-let* ((icon (my-modeline-icon-safe
                                #'nerd-icons-octicon "nf-oct-terminal")))
               (concat icon "  "))
             name))))
@@ -3321,6 +3322,72 @@ The only action we do is close on click."
           (lambda ()
             (setq-local mode-line-buffer-identification-keymap
                         my-flymake-buffer-id-keymap)))
+
+;; Right-click quick fixes in the diagnostics window for checkdoc's
+;; "Second line should not have indentation" note.
+(defun my-flymake--second-line-p (diag)
+  "Return non-nil if DIAG is the second-line-indentation note."
+  (and diag
+       (string-match-p "Second line should not have indentation"
+                       (flymake-diagnostic-text diag))))
+
+(defun my-flymake--strip-indentation (diag)
+  "Delete the leading whitespace of the line DIAG points at.
+Return non-nil if anything was deleted."
+  (with-current-buffer (flymake-diagnostic-buffer diag)
+    (save-excursion
+      (goto-char (flymake-diagnostic-beg diag))
+      (forward-line 0)
+      (let ((start (point)))
+        (skip-chars-forward " \t")
+        (when (> (point) start)
+          (delete-region start (point))
+          t)))))
+
+(defun my-flymake--second-line-diags (buffer)
+  "Return BUFFER's second-line diagnostics, last in the buffer first."
+  (with-current-buffer buffer
+    (sort (seq-filter #'my-flymake--second-line-p (flymake-diagnostics))
+          (lambda (a b) (> (flymake-diagnostic-beg a) (flymake-diagnostic-beg b))))))
+
+(defun my-flymake-fix-all-second-line (buffer)
+  "Remove the docstring indentation on every flagged line of BUFFER."
+  (let ((fixed 0))
+    (with-current-buffer buffer
+      (undo-boundary)
+      (dolist (diag (my-flymake--second-line-diags buffer))
+        (when (my-flymake--strip-indentation diag)
+          (cl-incf fixed)))
+      (undo-boundary))
+    (message "Fixed %d docstring line%s" fixed (if (= fixed 1) "" "s"))))
+
+(defun my-flymake-context-menu (menu click)
+  "Add the docstring quick fixes to MENU for a CLICK in a diagnostics buffer."
+  (when-let* ((window (posn-window (event-start click)))
+              ((window-live-p window)))
+    (with-current-buffer (window-buffer window)
+      (when (and (derived-mode-p 'flymake-diagnostics-buffer-mode)
+                 (buffer-live-p flymake--diagnostics-buffer-source))
+        (let* ((source flymake--diagnostics-buffer-source)
+               (pos (posn-point (event-start click)))
+               (id (and pos (tabulated-list-get-id pos)))
+               (diag (and id (plist-get id :diagnostic)))
+               (count (length (my-flymake--second-line-diags source))))
+          (when (or (my-flymake--second-line-p diag) (> count 0))
+            (define-key-after menu [my-flymake-separator] '(menu-item "--"))
+            (when (my-flymake--second-line-p diag)
+              (define-key-after menu [my-flymake-fix-one]
+                `(menu-item "Fix: remove docstring indentation"
+                            ,(lambda () (interactive) (my-flymake--strip-indentation diag))
+                            :help "Strip the indentation from this docstring line")))
+            (when (> count 0)
+              (define-key-after menu [my-flymake-fix-all]
+                `(menu-item ,(format "Fix all %d in buffer" count)
+                            ,(lambda () (interactive) (my-flymake-fix-all-second-line source))
+                            :help "Strip the indentation from every flagged docstring line"))))))))
+  menu)
+
+(add-hook 'context-menu-functions #'my-flymake-context-menu 60)
 
 ;; Save space by not showing zero warn/error counter in the mode line
 (setq flymake-suppress-zero-counters t)
