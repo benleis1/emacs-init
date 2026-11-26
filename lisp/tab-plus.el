@@ -838,7 +838,8 @@ switches to the previous view (or the next one, for the first view)."
 ;; Override original definition of tab-line-tab-context-menu
 ;; Bind custom actions into the context menu if we are not in group mode
 (defun tab-plus--tab-context-menu (&optional event)
-  "Pop up the context menu for a tab-line tab."
+  "Pop up the context menu for a tab-line tab.
+EVENT is the click event that triggers this menu."
   (interactive "e")
 
   ;; The views row is entered from the groups row, so `tab-line-groups' is still set here;
@@ -1062,7 +1063,7 @@ at the mouse-down event to the position at mouse-up event."
 (defvar-local tab-plus-git-state-cache nil
   "Cons of (STATE . TIMESTAMP) from the last `tab-plus--git-state' check.
 STATE is `edited', `needs-merge', `up-to-date' or nil (untracked, ignored,
-not in a repository, or git failed).")
+								    not in a repository, or git failed).")
 
 (defvar-local tab-plus--git-process nil
   "The in-flight `git status' process for this buffer, if any.")
@@ -1175,7 +1176,7 @@ A stale cache is refreshed in the background."
 (defun tab-plus--format-tab (tab tabs)
   "Override for `tab-line-tab-name-format-function' for TAB.
 Adds a modified-buffer face and indicator to TAB.
-TABS contains the whole set of tabs."
+  TABS contains the whole set of tabs."
   (let* ((buffer (tab-plus--get-buffer-from-tab tab))
          (selected-p (if buffer
                          (eq buffer (window-buffer))
@@ -1390,7 +1391,7 @@ ROOT should be a project root."
 (defun tab-plus--get-tabs ()
   "Return a list of tabs that should be displayed in the tab line.
 This version is based on tab-line-tabs-buffers-groups but changes first
-group to an icon and adds on all files"
+  group to an icon and adds on all files"
 
   (cond
    ;; views view
@@ -1527,7 +1528,7 @@ group to an icon and adds on all files"
 (defun tab-plus--desktop-save-buffer-p (orig filename bufname mode &rest rest)
   "Around advice for `desktop-save-buffer-p' honoring views-only saving.
 ORIG is the original function, FILENAME is the file being saved,
-BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments."
+  BUFNAME is the buffer, MODE is the mode, REST is all remaining arguments."
   (let ((buffer (get-buffer bufname))
         (skip (tab-plus--tear-off-view-names)))
     (and (apply orig filename bufname mode rest)
@@ -1758,7 +1759,7 @@ ROOT is the project root used for the virtual \"Project\" group."
 (defun tab-plus-dump-state ()
   "Show all tab-plus state in the *tab-plus-state* buffer.
 Lists frames, windows, views and every tracked buffer with the groups it is
-assigned to and its project root."
+  assigned to and its project root."
   (interactive)
   (let ((buf (get-buffer-create "*tab-plus-state*"))
         (frames (frame-list))
@@ -1882,7 +1883,7 @@ assigned to and its project root."
     ;; Same list function as the one overridden in basic mode
     (tab-line-tabs-buffer-list-function . tab-plus--get-filtered-buffer-list)))
 
-(defun tab-plus--enable ()
+(defun -enable ()
   "Install the `tab-plus-mode' settings, hooks, advice and key binding."
   (unless tab-plus--saved-global-tab-line-mode
     (setq tab-plus--saved-global-tab-line-mode (list global-tab-line-mode)))
@@ -1906,7 +1907,7 @@ assigned to and its project root."
     (eval-after-load 'dape #'tab-plus--exclude-dape-modes))
   (tab-plus--update-tab-line-visibility))
 
-(defun tab-plus--disable ()
+(defun -disable ()
   "Undo everything `tab-plus--enable' installed."
   (pcase-dolist (`(,symbol ,_how ,fn) tab-plus--advice)
     (advice-remove symbol fn))
@@ -1934,11 +1935,13 @@ assigned to and its project root."
 (define-minor-mode tab-plus-mode
   "Toggle browser-style tabs and views built on `tab-line'.
 When enabled, install the tab-plus tab line settings, hooks, advice and
-mouse binding, and turn on `global-tab-line-mode'.  Disabling restores the
-previous values."
+  mouse binding, and turn on `global-tab-line-mode'.  Disabling restores the
+  previous values."
   :global t
   :group 'tab-plus
-  (if tab-plus-mode (tab-plus--enable) (tab-plus--disable)))
+  (if tab-plus-mode (-enable) (-disable)))
 
 (provide 'tab-plus)
+
+;; read-symbol-shorthands: (("-" . "tab-plus--"))
 ;;; tab-plus.el ends here
