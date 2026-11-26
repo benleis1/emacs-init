@@ -25,13 +25,13 @@ window layout), built on the stock `tab-line'.
 Requirements:
 - Emacs 29.1 or later, preferably a graphical one. The buttons are images; a terminal gets
   plain text fallbacks.
-- The icon PNGs (`close.png', `close-dark.png', `funnel4.png', `funnel4-dark.png',
-  `desktop2.png') in the same directory as `tab-plus.el'.  In this repo they live in `icons/'
+- The icon PNGs (`close.png`, `close-dark.png`, `funnel4.png`, `funnel4-dark.png`,
+  `desktop2.png`) in the same directory as tab-plus.el.  In this repo they live in icons/
   and install.sh copies them next to the library.
-- `modus-themes' loaded (built in since Emacs 30).  The filter button takes its color from it.
+- modus-themes loaded (built in since Emacs 30).  The filter button takes its color from it.
 - A Nerd Font symbols font for the git-modified marker (U+F448), or set
-  `tab-plus-git-modified-marker' to something else.
-- Optional: `ghostel'
+  `tab-plus-git-modified-marker` to something else.
+- Optional: ghostel
 
 ```elisp
 (add-to-list 'load-path "/path/to/lisp")   ; tab-plus.el and the icon PNGs
@@ -51,7 +51,7 @@ Most behaviors are modelled after tabs in the browser or in a terminal.
 1. Tabs are the primary source of truth - when closed the buffer is killed unless its in another view.
 2. Tabs don't auto rearrange and new ones are added on the right.
 3. You can drag tabs to reorder them (or reorder by most recent use).
-4. Only file buffers are tracked, plus the modes in `tab-plus-white-list-modes'
+4. Only file buffers are tracked, plus the modes in `tab-plus-white-list-modes`
    (terminals and scratch-like buffers by default).
 5. The close button only shows on the active tab.
 6. Only the active tab is colorized.
@@ -70,7 +70,7 @@ Picking one returns to the tabs, now limited to that group:
 - *Files*: buffers visiting a file.
 - *All*: every tracked buffer.
 - *Modified*: modified file buffers (only offered when there are any).
-- One button per major-mode category, from `tab-line-tabs-buffer-group-name'.
+- One button per major-mode category, from `tab-line-tabs-buffer-group-name`.
 - *Views*: switches the row to the list of views (below).
 
 The selected group generally follows you as you switch buffers.
@@ -79,26 +79,34 @@ The selected group generally follows you as you switch buffers.
 
 A tab for a file with unsaved changes shows a dot after its name (red on the active tab, gray
 otherwise).  A tab for a file that differs from git shows a pencil glyph (cyan on the active tab,
-gray otherwise).  Git state is cached for two seconds per buffer.
+gray otherwise).  A file with unresolved merge conflicts shows a merge glyph (orange on the active
+tab, gray otherwise).  Git state is cached for two minutes per buffer.
 
 Details worth knowing:
 - Only one marker shows.  Unsaved changes win over the git marker, so a file that is both
   edited in the buffer and modified in git shows the dot.
-- The git marker appears only for file buffers whose `vc-git-state' is `edited', that is
-  tracked files with uncommitted changes.  New, untracked, ignored and conflicted files get no
-  marker, nor do files outside a git repository or in a deleted directory.
-- The check runs `git' through `vc-git-state' (at most once per two seconds per buffer), so a
-  slow repository or a remote file can make redisplay sluggish.
-- Both markers are user options (`tab-plus-modified-marker', `tab-plus-git-modified-marker').
+- The pencil appears only for file buffers with uncommitted changes to tracked files (staged or
+  not).  Untracked and ignored files get no marker, nor do files outside a git repository or in
+  a deleted directory.
+- The check is an asynchronous `git status` per buffer.  Redisplay only reads the cache and
+  starts a refresh when it is older than two minutes (and after every save), so a slow repository never blocks the tab
+  line; the tabs redraw when a refresh finishes with a changed state.  Until the first result
+  arrives, or after a change made outside Emacs (a commit, say), a tab can show stale state.
+- The markers are user options (`tab-plus-modified-marker`, `tab-plus-git-modified-marker`,
+  `tab-plus-git-needs-merge-marker`).
 
 ## Views
 
 A view is a buffer list plus a window layout, similar to a tab-bar tab.  The list of views is
 global, and each frame selects one of them.  The "default" view always exists and can't be
-closed.  A new view starts with just `*scratch*'.  Click *Views* in the filter row to see the
+closed.  A new view starts with just `*scratch*`.  Click *Views* in the filter row to see the
 views, click one to switch to it, or click `+' to create another.
 
 ## Tear off tabs
+
+In the views list, right-click a view and choose *Tear Off View* (offered when there is more
+than one view) to show it in a new frame named after the view, in the filter group the window
+was using.  A frame that was showing that view switches to the previous one.
 
 Drag a tab out of the frame to tear it off into a new frame, which gets its own view named
 "tear off[N]" (removed when that frame closes).  Drop it on a window of another frame to move it
@@ -106,49 +114,50 @@ there instead.  Dropping on blank space in the tab line moves a tab to the end.
 
 ## Desktop integration
 
-Views, their window layouts and the frame's selected view are saved with `desktop-save' and
-rebuilt by `desktop-read'.  With `tab-plus-desktop-save-views-only' (the default) buffers that
-never joined a view are left out of the desktop file.  `ghostel' terminals are restored too;
-run `M-x tab-plus-repin-buffer' in a terminal (or set `tab-plus-pinned-project' from code) to
+Views, their window layouts and the frame's selected view are saved with `desktop-save` and
+rebuilt by `desktop-read`.  With `tab-plus-desktop-save-views-only` (the default) buffers that
+never joined a view are left out of the desktop file.  ghostel terminals are restored too;
+run `M-x tab-plus-repin-buffer' in a terminal (or set `tab-plus-pinned-project` from code) to
 keep it in its project group after you `cd'; see "Pinning a buffer to a project" below.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `tab-plus-mode' | Enable or disable everything. |
-| `tab-plus-next-view', `tab-plus-prev-view' | Cycle through views. |
-| `tab-plus-switch-view-by-name' | Pick a view with completion. |
-| `tab-plus-new-view', `tab-plus-prompt-new-view' | Create a view; the second prompts in the header line. |
-| `tab-plus-close-view-by-name' | Close a view (the buffers stay open). |
-| `tab-plus-list-views' | Return the view names. |
-| `tab-plus-reorder-buffers-by-usage' | Sort the view's tabs by most recent use. |
-| `tab-plus-select-filter-button' | What the funnel does; toggles the filter row. |
-| `tab-plus-repin-buffer' | Pin the current buffer to a project root you choose. |
-| `tab-plus-dump-state' | Debug: show frames, views and group membership in `*tab-plus-state*'. |
+| tab-plus-mode | Enable or disable everything. |
+| tab-plus-next-view, tab-plus-prev-view | Cycle through views. |
+| tab-plus-switch-view-by-name | Pick a view with completion. |
+| tab-plus-new-view, tab-plus-prompt-new-view | Create a view; the second prompts in the header line. |
+| tab-plus-close-view-by-name | Close a view (the buffers stay open). |
+| tab-plus-list-views | Return the view names. |
+| tab-plus-reorder-buffers-by-usage | Sort the view's tabs by most recent use. |
+| tab-plus-select-filter-button | What the funnel does; toggles the filter row. |
+| tab-plus-repin-buffer | Pin the current buffer to a project root you choose. |
+| tab-plus-dump-state | Debug: show frames, views and group membership in `*tab-plus-state*`. |
 
 Right-clicking a tab (when the filter row isn't showing) offers Close, Shift Left, Shift Right,
 Tear Off Window, Copy Path and Reorder tabs by usage.  Those commands read the clicked tab from
 the mouse event, so use the menu rather than `M-x'.
 
-Use the stock `tab-line-switch-to-next-tab' and `tab-line-switch-to-prev-tab' to move between
+Use the stock `tab-line-switch-to-next-tab` and `tab-line-switch-to-prev-tab` to move between
 tabs from the keyboard.
 
 ## Pinning a buffer to a project
 
 The *Project* filter group shows the buffers whose file (or, for non-file buffers,
-`default-directory') lies under the project root of the current buffer.  A terminal therefore
-drops out of its project as soon as you `cd' elsewhere.  `M-x tab-plus-repin-buffer' prompts for
-a directory and sets the buffer-local `tab-plus-pinned-project' to it.  A pinned buffer belongs
-to exactly the pinned project, wherever its `default-directory' is now (and to no other).
+default-directory) lies under the project root of the current buffer.  A terminal therefore
+drops out of its project as soon as you `cd` elsewhere.  `M-x tab-plus-repin-buffer' prompts for
+a directory and sets the buffer-local `tab-plus-pinned-project` to it.  A pinned buffer belongs
+to exactly the pinned project, wherever its default-directory is now (and to no other).
 The pin lasts for the life of the buffer; tab-plus does not save it in the desktop file, so
 restore it yourself if you need it back.  Pinned buffers are marked "(pinned)" in
-`tab-plus-dump-state'.  To clear a pin, evaluate `(setq tab-plus-pinned-project nil)' in the
+`tab-plus-dump-state`.  To clear a pin, evaluate `(setq tab-plus-pinned-project nil)' in the
 buffer.
 
 ## Mouse and keyboard
 
-tab-plus defines no key bindings of its own, so most tab actions are on the mouse.
+tab-plus defines no default key bindings of its own because it runs in all modes, so most tab
+actions are on the mouse driven.
 
 | Where | Gesture | Result |
 |---|---|---|
@@ -165,26 +174,25 @@ tab-plus defines no key bindings of its own, so most tab actions are on the mous
 | `+' in the views list | Click | Create a view; prompts in the header line. |
 | A view in the views list | Click | Switch to it. |
 
-Keyboard use is limited to `tab-line-switch-to-next-tab' and `tab-line-switch-to-prev-tab'
-(bind them yourself, see Quick start) and the view commands in the table above.  There is no
-keyboard command for Shift Left, Shift Right, Tear Off or Copy Path: they need the clicked tab
-from a mouse event.  To reorder without the mouse use `tab-plus-reorder-buffers-by-usage'.
+Keyboard use is limited to `tab-line-switch-to-next-tab` and `tab-line-switch-to-prev-tab` (bind
+them yourself, see Quick start) and the view commands in the table above. To reorder without the
+mouse use `tab-plus-reorder-buffers-by-usage`.
 
 ## Customization
 
-All options are in the `tab-plus' customization group (`M-x customize-group RET tab-plus RET'),
-or set them from your init file with `setopt' (or `setq' before `tab-plus-mode' is enabled).
+All options are in the `tab-plus` customization group (`M-x customize-group RET tab-plus RET'),
 
 | Option | Default | Purpose |
 |---|---|---|
-| `tab-plus-exclude-modes' | help, compilation, ediff, treemacs, ... | Major modes that never show a tab line.  `dape-*-mode' modes are added automatically. |
-| `tab-plus-white-list-modes' | `text-mode', `lisp-interaction-mode', `messages-buffer-mode', `ghostel-mode', `eshell-mode' | Non-file modes that still get a tab. |
-| `tab-plus-white-list-buffer-names' | nil | Non-file buffers, by name, that still get a tab. |
-| `tab-plus-modified-marker' | a filled circle | Marker for unsaved changes. |
-| `tab-plus-git-modified-marker' | U+F448 (a text fallback in terminals) | Marker for files modified in git. |
-| `tab-plus-desktop-save-views-only' | t | Only save buffers that are in a view. |
-| `tab-plus-buffer-name-functions' | nil | Per-major-mode tab name functions; add with `tab-plus-register-buffer-name-function'. |
-| `tab-plus-pinned-project' | nil | Buffer-local project root override for non-file buffers; normally set with `tab-plus-repin-buffer'. |
+| `tab-plus-exclude-modes | help, compilation, ediff, treemacs, ... | Major modes that never show a tab line.  dape-*-mode modes are added automatically. |
+| `tab-plus-white-list-modes | text-mode, lisp-interaction-mode, messages-buffer-mode, ghostel-mode, eshell-mode | Non-file modes that still get a tab. |
+| tab-plus-white-list-buffer-names | nil | Non-file buffers, by name, that still get a tab. |
+| tab-plus-modified-marker | a filled circle | Marker for unsaved changes. |
+| tab-plus-git-modified-marker | U+F448 (a text fallback in terminals) | Marker for files modified in git. |
+| tab-plus-git-needs-merge-marker | U+F419 (a text fallback in terminals) | Marker for files with merge conflicts. |
+| tab-plus-desktop-save-views-only | t | Only save buffers that are in a view. |
+| tab-plus-buffer-name-functions | nil | Per-major-mode tab name functions; add with `tab-plus-register-buffer-name-function'. |
+| tab-plus-pinned-project | nil | Buffer-local project root override for non-file buffers; normally set with `tab-plus-repin-buffer'. |
 
 For example, a custom tab name for terminals:
 
@@ -193,16 +201,16 @@ For example, a custom tab name for terminals:
  'eshell-mode (lambda (name _buffer) (concat "$ " name)))
 ```
 
-## Debugging with `tab-plus-dump-state'
+## Debugging with `tab-plus-dump-state`
 
-`M-x tab-plus-dump-state' opens `*tab-plus-state*', a read-only report of everything tab-plus
+`M-x tab-plus-dump-state' opens `*tab-plus-state*`, a read-only report of everything tab-plus
 knows.  Include it in bug reports.  It has three parts:
 - *Frames*: each frame, its selected view, and per window the buffer, whether it shows
-  `tabs', `groups' (filter row) or `views', the selected group, the project root, and the tabs
+  tabs, groups (filter row) or views, the selected group, the project root, and the tabs
   currently shown.  `*' marks the selected frame and window.
 - *Views*: each view with its buffers.  Per buffer: the groups it is in, whether it is
-  `tracked' (gets a tab at all), its major mode, file and project root, and "(pinned)" if
-  `tab-plus-pinned-project' is set.  `<dead buffer>' means the buffer was killed but is still
+  tracked (gets a tab at all), its major mode, file and project root, and "(pinned)" if
+  `tab-plus-pinned-project` is set.  `<dead buffer>' means the buffer was killed but is still
   listed.
 - *Trackable buffers in no view*: buffers that qualify for a tab but belong to no view.
 
@@ -244,31 +252,31 @@ Here README.md is in the *Modified* group because it has unsaved changes.  A vie
 ## Troubleshooting
 
 **A buffer has no tab.**  A buffer gets a tab only if it visits a file, its major mode is in
-`tab-plus-white-list-modes', or its name is in `tab-plus-white-list-buffer-names'.  To track,
+`tab-plus-white-list-modes`, or its name is in `tab-plus-white-list-buffer-names`.  To track,
 say, Dired buffers: `(add-to-list 'tab-plus-white-list-modes 'dired-mode)'.  Otherwise check
 whether the buffer is in another view or hidden by the selected filter group (switch to *All*),
-and run `tab-plus-dump-state': `tracked=no' means the rules above exclude it.
+and run `tab-plus-dump-state`: `tracked=no` means the rules above exclude it.
 
 **There is no tab line in a window.**  Only the selected window shows its tab line, and windows
-in a mode listed in `tab-plus-exclude-modes' never do.  That list is copied into
-`tab-line-exclude-modes' when the mode is enabled, so after changing it run
+in a mode listed in `tab-plus-exclude-modes` never do.  That list is copied into
+`tab-line-exclude-modes` when the mode is enabled, so after changing it run
 `M-x tab-plus-mode' twice (off, then on).
 
 **The close button or filter funnel is missing or garbled.**  Their icon PNGs must sit in the
-same directory as the loaded `tab-plus.el'; copy them there (install.sh does this) and restart.
+same directory as the loaded tab-plus.el; copy them there (install.sh does this) and restart.
 A terminal Emacs can't show images at all, so it relies on text fallbacks.
 
 **The git marker shows as an empty box or nothing.**  The default glyph (U+F448) needs a Nerd
 Font symbols font.  Install one, or choose another marker:
 `(setopt tab-plus-git-modified-marker "*")'.  No marker at all usually means the file isn't
-`edited' according to `vc-git-state' (see "Git and modified file integration").
+`edited` according to `git status` (see "Git and modified file integration").
 
-**A terminal's tab is in the wrong project group.**  Its `default-directory' changed; pin it
+**A terminal's tab is in the wrong project group.**  Its default-directory changed; pin it
 with `M-x tab-plus-repin-buffer'.
 
 **Buffers are missing after restarting with desktop restore.**  With
-`tab-plus-desktop-save-views-only' non-nil (the default), buffers that never joined a view are
-not saved.  Set it to nil to fall back to `desktop's normal rules.
+`tab-plus-desktop-save-views-only` non-nil (the default), buffers that never joined a view are
+not saved.  Set it to nil to fall back to desktop's normal rules.
 
 ## Credits and demo
 
@@ -294,7 +302,7 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
   - [Pinning a buffer to a project](#pinning-a-buffer-to-a-project)
   - [Mouse and keyboard](#mouse-and-keyboard)
   - [Customization](#customization)
-  - [Debugging with `tab-plus-dump-state'](#debugging-with-tab-plus-dump-state)
+  - [Debugging with `tab-plus-dump-state`](#debugging-with-tab-plus-dump-state)
   - [Limitations](#limitations)
   - [Troubleshooting](#troubleshooting)
   - [Credits and demo](#credits-and-demo)
@@ -338,6 +346,7 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
   - [tab-plus--tear-off-buffer](#tab-plus--tear-off-buffer)
   - [tab-plus--close-tear-off-view](#tab-plus--close-tear-off-view)
   - [tab-plus-tear-off-tab](#tab-plus-tear-off-tab)
+  - [tab-plus-tear-off-view](#tab-plus-tear-off-view)
   - [tab-plus--tab-context-menu](#tab-plus--tab-context-menu)
   - [tab-plus--buffer-in-multiple-views-p](#tab-plus--buffer-in-multiple-views-p)
   - [tab-plus--close-tab](#tab-plus--close-tab)
@@ -347,11 +356,18 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
   - [tab-plus--window-at-pointer](#tab-plus--window-at-pointer)
   - [tab-plus--move-buffer-to-window](#tab-plus--move-buffer-to-window)
   - [tab-plus-mouse-move-tab](#tab-plus-mouse-move-tab)
+- [Git State Management](#git-state-management)
+  - [tab-plus--parse-git-status](#tab-plus--parse-git-status)
+  - [tab-plus--git-sentinel](#tab-plus--git-sentinel)
+  - [tab-plus--git-refresh](#tab-plus--git-refresh)
+  - [tab-plus--git-state](#tab-plus--git-state)
+  - [tab-plus--git-refresh-after-save](#tab-plus--git-refresh-after-save)
+  - [tab-plus--git-marker](#tab-plus--git-marker)
 - [Group and Tab Selection](#group-and-tab-selection)
   - [tab-plus--add-view-button](#tab-plus--add-view-button)
   - [tab-plus--update-tab-line-visibility](#tab-plus--update-tab-line-visibility)
-  - [tab-plus--git-state](#tab-plus--git-state)
   - [tab-plus--format-tab](#tab-plus--format-tab)
+  - [tab-plus-select-group](#tab-plus-select-group)
   - [tab-plus--make-group-tab](#tab-plus--make-group-tab)
   - [tab-plus--make-view-category-tab](#tab-plus--make-view-category-tab)
   - [tab-plus--make-view-tab](#tab-plus--make-view-tab)
@@ -372,6 +388,7 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
   - [tab-plus--save-to-frame](#tab-plus--save-to-frame)
   - [tab-plus--rebuild-buffer-list-from-frame-params](#tab-plus--rebuild-buffer-list-from-frame-params)
   - [tab-plus--desktop-save-buffer-p](#tab-plus--desktop-save-buffer-p)
+  - [tab-plus--filter-help-echo](#tab-plus--filter-help-echo)
   - [tab-plus--add-on-filter-button](#tab-plus--add-on-filter-button)
   - [tab-plus--force-update](#tab-plus--force-update)
   - [tab-plus-select-filter-button](#tab-plus-select-filter-button)
@@ -399,7 +416,6 @@ Video of a recent version: https://youtu.be/7okzjW_fZGg
 (require 'seq)
 (require 'tab-line)
 
-(declare-function vc-git-state "vc-git")
 (declare-function project-root "project")
 (declare-function modus-themes-get-color-value "modus-themes")
 (defvar tab-plus-mode)
@@ -433,6 +449,12 @@ Installed as `tab-line-exclude-modes' while `tab-plus-mode' is enabled."
 
 (defcustom tab-plus-git-modified-marker (if window-system "" "◨")
   "Marker shown after the name of a file tab that differs from git.
+The default needs a Nerd Font symbols font in a graphical Emacs."
+  :type 'string
+  :group 'tab-plus)
+
+(defcustom tab-plus-git-needs-merge-marker (if window-system "" "⚠")
+  "Marker shown after the name of a file tab with unresolved merge conflicts.
 The default needs a Nerd Font symbols font in a graphical Emacs."
   :type 'string
   :group 'tab-plus)
@@ -1089,15 +1111,72 @@ desktop file, which can't hold a view's buffers.
       (tab-plus--tear-off-buffer buffer window))))
 ```
 
+## tab-plus-tear-off-view
+>Show the view NAME in a new frame, in the filter group of WINDOW.
+The new frame is named NAME.  If the selected frame was showing that view it
+switches to the previous view (or the next one, for the first view).
+
+Unlike a tear-off tab, the view is not removed when the new frame closes.
+```
+(defun tab-plus-tear-off-view (name &optional window)
+  "Show the view NAME in a new frame, in the filter group of WINDOW.
+The new frame is named NAME.  If the selected frame was showing that view it
+switches to the previous view (or the next one, for the first view)."
+  (interactive (list (completing-read "Tear off view: " (tab-plus-list-views) nil t)))
+  (let* ((view (or (tab-plus--get-view-by-name name)
+                   (error "No view was found named %s" name)))
+         (pos (cl-position view tab-plus-views))
+         (window (if (window-live-p window) window (selected-window)))
+         (orig-frame (window-frame window))
+         (group (window-parameter window 'tab-line-group)))
+    (when (< (length tab-plus-views) 2)
+      (user-error "Cannot tear off the only view"))
+    (with-selected-frame orig-frame
+      (when (eq view (tab-plus-get-current-view))
+        (tab-plus-switch-view-by-name
+         (tab-plus-view-name (nth (if (> pos 0) (1- pos) 1) tab-plus-views)))))
+    (let ((frame (make-frame `((name . ,name)))))
+      (with-selected-frame frame
+        (set-frame-parameter nil 'tab-line-sel-view pos)
+        (cond ((tab-plus-view-wstate view)
+               (window-state-put (tab-plus-view-wstate view) (frame-root-window) 'safe))
+              ((tab-plus-view-buffers view)
+               (switch-to-buffer (car (tab-plus-view-buffers view)))))
+        (dolist (w (window-list frame 'no-minibuf))
+          (set-window-parameter w 'tab-line-group group)
+          (set-window-parameter w 'tab-line-hscroll nil)))
+      (force-mode-line-update t)
+      (tab-line-force-update t)
+      (select-frame-set-input-focus frame)
+      (redisplay t)
+      frame)))
+```
+
 ## tab-plus--tab-context-menu
 >Pop up the context menu for a tab-line tab.
 
 Override original definition of tab-line-tab-context-menu
 Bind custom actions into the context menu if we are not in group mode
 ```
-(defun tab-plus--tab-context-menu (&optional _event)
+(defun tab-plus--tab-context-menu (&optional event)
   "Pop up the context menu for a tab-line tab."
   (interactive "e")
+
+  ;; The views row is entered from the groups row, so `tab-line-groups' is still set here;
+  ;; `tab-plus--get-tabs' gives views precedence and so do we.
+  (when (and (window-parameter nil 'tab-line-views)
+             (> (tab-plus-num-views) 1))
+    (let* ((posnp (event-start event))
+           (window (posn-window posnp))
+           (tab (get-pos-property 1 'tab (car (posn-string posnp))))
+           (name (alist-get 'view tab))
+           (menu (make-sparse-keymap (propertize "Context Menu" 'hide t))))
+      (when name
+        (define-key-after menu [tearoffview]
+          (list 'menu-item "Tear Off View"
+                (lambda () (interactive) (tab-plus-tear-off-view name window))
+                :help "Show this view in a new frame"))
+        (popup-menu menu))))
 
   (unless (or (window-parameter nil 'tab-line-groups)
 	      (window-parameter nil 'tab-line-views))
@@ -1341,6 +1420,135 @@ at the mouse-down event to the position at mouse-up event."
       (force-mode-line-update)))))
 ```
 
+# Git State Management
+
+Git state is gathered by an asynchronous `git status' per buffer.  The tab-line
+render only reads the cache (and starts a refresh when it is stale), so it never
+blocks on git.  When a refresh finishes with a changed state the sentinel asks
+for a redisplay of the tab lines.
+```
+(defvar-local tab-plus-git-state-cache nil
+  "Cons of (STATE . TIMESTAMP) from the last `tab-plus--git-state' check.
+STATE is `edited', `needs-merge', `up-to-date' or nil (untracked, ignored,
+not in a repository, or git failed).")
+
+(defvar-local tab-plus--git-process nil
+  "The in-flight `git status' process for this buffer, if any.")
+
+(defconst tab-plus-git-state-cache-ttl 120
+  "Seconds a cached result from `tab-plus--git-state' is considered fresh.")
+
+(defconst tab-plus--git-conflict-codes '("DD" "AU" "UD" "UA" "DU" "AA" "UU")
+  "Two-letter `git status --porcelain' codes for unmerged paths.")
+```
+
+## tab-plus--parse-git-status
+>Return the git state described by the porcelain `git status' OUTPUT.
+
+```
+(defun tab-plus--parse-git-status (output)
+  "Return the git state described by the porcelain `git status' OUTPUT."
+  (let ((line (car (split-string output "\n" t))))
+    (if (null line)
+	'up-to-date
+      (let ((code (substring line 0 (min 2 (length line)))))
+	(cond ((member code tab-plus--git-conflict-codes) 'needs-merge)
+	      ((member code '("??" "!!")) nil)
+	      (t 'edited))))))
+```
+
+## tab-plus--git-sentinel
+>Record the result of the finished git status PROC for BUFFER and redraw.
+
+```
+(defun tab-plus--git-sentinel (proc buffer)
+  "Record the result of the finished git status PROC for BUFFER and redraw."
+  (unless (process-live-p proc)
+    (let* ((pbuf (process-buffer proc))
+	   (state (and (buffer-live-p pbuf)
+		       (eq (process-status proc) 'exit)
+		       (zerop (process-exit-status proc))
+		       (tab-plus--parse-git-status
+			(with-current-buffer pbuf (buffer-string))))))
+      (when (buffer-live-p pbuf) (kill-buffer pbuf))
+      ;; A superseded process (killed on save) must not clobber the newer result.
+      (when (and (buffer-live-p buffer)
+		 (eq (buffer-local-value 'tab-plus--git-process buffer) proc))
+	(with-current-buffer buffer
+	  (let ((old (car tab-plus-git-state-cache)))
+	    (setq tab-plus--git-process nil
+		  tab-plus-git-state-cache (cons state (float-time)))
+	    (unless (eq old state)
+	      (force-mode-line-update t))))))))
+```
+
+## tab-plus--git-refresh
+>Start an asynchronous git status check for the file visited by BUFFER.
+
+```
+(defun tab-plus--git-refresh (buffer)
+  "Start an asynchronous git status check for the file visited by BUFFER."
+  (with-current-buffer buffer
+    (unless (process-live-p tab-plus--git-process)
+      (let ((file (buffer-file-name buffer)))
+	;; A deleted directory makes the process spawn signal; that must not abort the tab-line.
+	(condition-case nil
+	    (let ((default-directory (file-name-directory file)))
+	      (if (not (file-directory-p default-directory))
+		  (setq tab-plus-git-state-cache (cons nil (float-time)))
+		(setq tab-plus--git-process
+		      (make-process
+		       :name "tab-plus-git"
+		       :buffer (generate-new-buffer " *tab-plus-git*" t)
+		       :command (list "git" "--no-optional-locks" "status" "--porcelain=v1"
+				      "--" (file-local-name file))
+		       :connection-type 'pipe
+		       :noquery t
+		       :file-handler t
+		       :sentinel (lambda (proc _event)
+				   (tab-plus--git-sentinel proc buffer))))))
+	  (error (setq tab-plus-git-state-cache (cons nil (float-time)))))))))
+```
+
+## tab-plus--git-state
+>Return the cached git state of BUFFER.
+A stale cache is refreshed in the background.
+
+```
+(defun tab-plus--git-state (buffer)
+  "Return the cached git state of BUFFER.
+A stale cache is refreshed in the background."
+  (with-current-buffer buffer
+    (when (or (null tab-plus-git-state-cache)
+	      (>= (- (float-time) (cdr tab-plus-git-state-cache))
+		  tab-plus-git-state-cache-ttl))
+      (tab-plus--git-refresh buffer))
+    (car tab-plus-git-state-cache)))
+```
+
+## tab-plus--git-refresh-after-save
+>Re-check the git state of the saved buffer, dropping any check already running.
+
+```
+(defun tab-plus--git-refresh-after-save ()
+  "Re-check the git state of the saved buffer, dropping any check already running."
+  (when buffer-file-name
+    (when (process-live-p tab-plus--git-process)
+      (delete-process tab-plus--git-process))
+    (setq tab-plus--git-process nil)
+    (tab-plus--git-refresh (current-buffer))))
+```
+
+## tab-plus--git-marker
+>Return MARKER propertized on FACE, in COLOR when SELECTED-P and gray otherwise.
+
+```
+(defun tab-plus--git-marker (marker face selected-p color)
+  "Return MARKER propertized on FACE, in COLOR when SELECTED-P and gray otherwise."
+  (propertize (format "%s " marker) 'face
+	      `(:inherit ,face :foreground ,(if selected-p color "gray50") :height .9 :slant normal)))
+```
+
 # Group and Tab Selection
 
 ## tab-plus--add-view-button
@@ -1369,35 +1577,6 @@ parameter overrides the buffer-local value; `none' removes the line entirely.
                    (frame-selected-window frame))))
     (dolist (win (window-list frame 'never))
       (set-window-parameter win 'tab-line-format (if (eq win active) nil 'none)))))
-```
-
-Convenience wrapper for getting the git state which needs to be done in buffer
-but is  more accurate than vc-state. Cached with a short TTL since this is
-called from every tab-line render and `vc-git-state' shells out to git.
-```
-(defvar-local tab-plus-git-state-cache nil
-  "Cons of (STATE . TIMESTAMP) from the last `tab-plus--git-state' check.")
-
-(defconst tab-plus-git-state-cache-ttl 2
-  "Seconds a cached result from `tab-plus--git-state' is considered fresh.")
-```
-
-## tab-plus--git-state
->Find the git state for BUFFER.
-
-```
-(defun tab-plus--git-state (buffer)
-  "Find the git state for BUFFER."
-  (with-current-buffer buffer
-    (let ((now (float-time)))
-      (unless (and tab-plus-git-state-cache
-		   (< (- now (cdr tab-plus-git-state-cache)) tab-plus-git-state-cache-ttl))
-	(setq tab-plus-git-state-cache
-	      ;; A deleted directory makes git's process spawn signal; that must not abort the whole tab-line.
-	      (cons (and (file-directory-p default-directory)
-			 (ignore-errors (vc-git-state (buffer-file-name buffer))))
-		    now)))
-      (car tab-plus-git-state-cache))))
 ```
 
 ## tab-plus--format-tab
@@ -1452,12 +1631,9 @@ TABS contains the whole set of tabs."
 		     (propertize (format "%s " tab-plus-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))
 
 		  ((and buffer (buffer-file-name buffer)
-			(string= (tab-plus--git-state buffer) "edited"))
-		   (progn
-		     ;;		     (message "git modified: %s %s" buffer (vc-state (buffer-file-name buffer)))
-		     (if selected-p
-			 (propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "dark cyan" :height .9 :slant normal ))
-		       (propertize (format "%s " tab-plus-git-modified-marker) 'face `(:inherit ,face :foreground "gray50" :height .9 :slant normal ))))))
+			(pcase (tab-plus--git-state buffer)
+			  ('edited (tab-plus--git-marker tab-plus-git-modified-marker face selected-p "dark cyan"))
+			  ('needs-merge (tab-plus--git-marker tab-plus-git-needs-merge-marker face selected-p "dark orange"))))))
 
             (let* ((close (or (and (or buffer (assq 'close tab))
                                    tab-line-close-button-show
@@ -1480,6 +1656,40 @@ TABS contains the whole set of tabs."
 ```
 
 
+## tab-plus-select-group
+>Select the current GROUP to filter by.
+
+```
+(defun tab-plus-select-group (group)
+  "Select the current GROUP to filter by."
+  (interactive
+   (let* ((buffers (funcall tab-line-tabs-buffer-list-function))
+	  (groups (delq nil (mapcar #'car (seq-group-by #'tab-line-tabs-buffer-group-name
+							buffers)))))
+     (list
+      (completing-read
+       "Filter: "
+       (append
+	(when (tab-plus--buffer-project-root (current-buffer)) '("Project"))
+	'("Files" "All")
+	(when (tab-plus--find-first #'tab-plus--buffer-modified-file-p buffers) '("Modified"))
+	groups)
+       nil nil nil))))
+
+  (let ((name (substring-no-properties group)))
+    (set-window-parameter nil 'tab-line-groups nil)
+    (set-window-parameter nil 'tab-line-group name)
+    (set-window-parameter nil 'tab-line-hscroll nil)
+    ;; We have to switch buffers if the selected group doesn't match
+    ;; Otherwise `tab-plus--auto-track-selected-window' snaps the group back
+    ;; to the current buffer's group.
+    (let ((candidates (tab-plus--filter-buffers-by-group
+		       (funcall tab-line-tabs-buffer-list-function) name)))
+      (when (and candidates (not (memq (current-buffer) candidates)))
+	(let ((switch-to-buffer-obey-display-actions nil))
+	  (switch-to-buffer (car candidates)))))))
+```
+
 ## tab-plus--make-group-tab
 >Setup a tabgroup named GROUPNAME for SELECTED-GROUP.
 This formats the built tab structure for a group.
@@ -1495,9 +1705,7 @@ This formats the built tab structure for a group."
       (name . ,formatted-name)
       (selected . ,(equal selected-group groupname))
       (select . ,(lambda ()
-                   (set-window-parameter nil 'tab-line-groups nil)
-                   (set-window-parameter nil 'tab-line-group groupname)
-                   (set-window-parameter nil 'tab-line-hscroll nil))))))
+		   (tab-plus-select-group groupname))))))
 ```
 
 ## tab-plus--make-view-category-tab
@@ -1528,14 +1736,16 @@ This formats the built tab structure for a group."
     (if (equal viewname "default")
 	`(tab
 	  (name . ,formatted-name)
+	  (view . ,viewname)
 	  (selected . ,(equal selected-view viewname))
 	  (select . ,(lambda ()
 		       (tab-plus-switch-view-by-name viewname)
 		       (set-frame-parameter nil 'tab-line-sel-view new-view-pos)
-                       (set-window-parameter nil 'tab-line-hscroll nil))))
+		       (set-window-parameter nil 'tab-line-hscroll nil))))
 
       `(tab
 	(name . ,formatted-name)
+	(view . ,viewname)
 	(selected . ,(equal selected-view viewname))
 	(close . ,(lambda (&optional _buffer)
 		    (tab-plus-close-view-by-name viewname)))
@@ -1585,13 +1795,13 @@ ROOT must already be normalized with `tab-plus--normalize-root'."
     (if-let* ((pinned (buffer-local-value 'tab-plus-pinned-project buffer)))
         (equal (tab-plus--normalize-root pinned) root)
       (let ((path (or (buffer-file-name buffer)
-                      (buffer-local-value 'default-directory buffer)))
+		      (buffer-local-value 'default-directory buffer)))
             (cache (buffer-local-value 'tab-plus-project-membership-cache buffer)))
         (if (and cache (equal (car cache) path) (equal (cadr cache) root))
             (cddr cache)
           (let ((member (and path (file-in-directory-p path root) t)))
             (with-current-buffer buffer
-              (setq tab-plus-project-membership-cache (cons path (cons root member))))
+	      (setq tab-plus-project-membership-cache (cons path (cons root member))))
             member))))))
 ```
 
@@ -1605,8 +1815,9 @@ ROOT should be a project root.
 ROOT should be a project root."
   (interactive
    (list
-    (read-directory-name "Project Path: ")))
-  (setq-local tab-plus-pinned-project root))
+    (completing-read "Project: " (project-known-project-roots) nil nil
+                     nil 'file-name-history)))
+  (setq-local tab-plus-pinned-project (expand-file-name root)))
 ```
 
 ## tab-plus--filter-buffers-by-group
@@ -1792,8 +2003,8 @@ Deserialize a view, dropping buffers that desktop didn't recreate
 (defun tab-plus--convert-from-persist-format (view)
   "Deserialize the desktop and create a new tab for VIEW."
   (make-tab-plus-view :name (tab-plus-persist-view-name view)
-                      :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
-                      :wstate (tab-plus-persist-view-wstate view)))
+		      :buffers (delq nil (mapcar #'get-buffer (tab-plus-persist-view-buffernames view)))
+		      :wstate (tab-plus-persist-view-wstate view)))
 ```
 
 ## tab-plus--deserialize-views
@@ -1868,6 +2079,22 @@ use in doing relative open of resource files
   "RET" #'tab-plus-select-filter-button)
 ```
 
+## tab-plus--filter-help-echo
+>Return help text for the filter button, naming the project in Project mode.
+
+```
+(defun tab-plus--filter-help-echo ()
+  "Return help text for the filter button, naming the project in Project mode."
+  (let* ((group (window-parameter nil 'tab-line-group))
+         (root (and (equal group "Project")
+                    (tab-plus--buffer-project-root (current-buffer))))
+         (name (and root (file-name-nondirectory (directory-file-name root)))))
+    (format "Click to change tab filtering\nCurrent filter: %s"
+            (cond (name (format "Project (%s)" name))
+                  (group group)
+                  (t "All")))))
+```
+
 ## tab-plus--add-on-filter-button
 >Add on filter button at the front of the TABS list via advice.
 
@@ -1888,7 +2115,7 @@ use in doing relative open of resource files
 	 (propertize "▼"
 		     'face `(:box (:line-width (0 . 4) :color ,icon-color ))
 		     'keymap tab-plus-filter-button-map
-		     'help-echo "Click to change tab filtering"
+		     'help-echo (tab-plus--filter-help-echo)
 		     'follow-link 'ignore
 		     'display `(image :type png
 				      :file ,icon-name
@@ -2197,6 +2424,7 @@ assigned to and its project root."
     (window-buffer-change-functions . tab-plus--auto-track-selected-window)
     (desktop-after-read-hook . tab-plus--rebuild-buffer-list-from-frame-params)
     (desktop-save-hook . tab-plus--save-to-frame)
+    (after-save-hook . tab-plus--git-refresh-after-save)
     (enable-theme-functions . tab-plus--force-update))
   "Alist of (HOOK . FUNCTION) installed by `tab-plus-mode'.")
 
