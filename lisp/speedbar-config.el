@@ -23,7 +23,7 @@
 (defvar my-modeline-dedicated-window-modes)
 (defvar my-modeline-dedicated-label-functions)
 (defvar my-modeline-dedicated-help-functions)
-(declare-function my-modeline--icon-safe "modeline")
+(declare-function my-modeline-icon-safe "modeline")
 (declare-function my-modeline-dedicated-line "modeline")
 (declare-function nerd-icons-mdicon "nerd-icons")
 (declare-function dframe-close-frame "dframe")
@@ -550,7 +550,7 @@ the others just lose the leading << and trailing >>."
 
 (defun my-speedbar-modeline-label ()
   "Auto-update glyph and file count for the dedicated mode line."
-  (let ((icon (or (my-modeline--icon-safe
+  (let ((icon (or (my-modeline-icon-safe
                    #'nerd-icons-mdicon
                    (if speedbar-update-flag "nf-md-sync" "nf-md-sync_off")
                    :face (if speedbar-update-flag 'mode-line-emphasis 'shadow))
